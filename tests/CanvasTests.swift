@@ -137,6 +137,22 @@ struct CanvasTests {
             ("crop background pixels and editable coordinates", crop),
             ("border crop retains hidden raster and vectors across save and expansion", reframe),
             ("independent output sizing and coordinate mapping retain source pixels", outputSizing),
+            ("viewport crop previews anchor to base and retain full source", viewportCropAnchoring),
+            ("viewport width resize is one undo with prior history intact", viewportResizeHistory),
+            ("viewport cancellation restores complete state and undo/redo branches", viewportCancellation),
+            ("invalid viewport previews never mutate or commit a transaction", viewportInvalidPreviews),
+            ("viewport begins after committing pending text as a separate edit", viewportPendingText),
+            ("viewport rejects nested transactions and active drawing", viewportUnsafeBegin),
+            ("document replacement and undo cancel pending viewport previews", viewportReplacement),
+            ("normal and Actual presentation retain pixels vectors pan and history", presentationOutput),
+            ("presentation sizing preserves pending text and validates before mutation", presentationPendingText),
+            ("Actual edits keep normal undo output and normalized no-op equality", actualHistoryIsolation),
+            ("pre-Actual undo restores normal history while presenting full source", actualPreexistingHistory),
+            ("Actual geometry transforms retain source and normal output in history", actualTransformHistory),
+            ("Actual native drag snapshots cancel and undo without mode leakage", actualNativeState),
+            ("Actual pending text snapshots commit and cancel with normal history", actualPendingTextState),
+            ("Actual saved snapshots and lifecycle guards preserve presentation", actualLifecycleGuards),
+            ("viewport cancellation callback fires once on interruptions only", viewportCancellationCallback),
             ("serialization and rejection without mutation", serialization),
             ("undo/redo, grouping, layers and style", history),
             ("rotate, flip and resize preserve vectors/pixels", transforms),
@@ -313,6 +329,524 @@ struct CanvasTests {
         try expect(loaded.outputSize == c.outputSize && loaded.document == c.document, "Output size persists with hidden source")
         loaded.setSnapToNormalSize(); try expect(loaded.outputSize == loaded.canvasSize, "Set Snap to Normal Size restores source pixel density")
         loaded.rotate(clockwise: true); try expect(loaded.outputSize == loaded.canvasSize, "Rotated normal size follows swapped axes")
+    }
+    // Retained raster extends beyond the visible canvas, with a nonzero source
+    // offset, grouped vectors, text, selection and an unrelated crop overlay.
+    static func viewportCanvas() throws -> CanvasView {
+        let c = canvas(); c.setBackground(backdrop())
+        var shape = rectangle(CGRect(x: 40, y: 35, width: 20, height: 15))
+        var text = SketchElement(kind: .text)
+        text.text = "Source"; text.rect = CGRect(x: 65, y: 5, width: 30, height: 30)
+        shape.groupID = UUID(); text.groupID = shape.groupID
+        c.document.elements = [shape, text]; c.selection = [shape.id]
+        try expect(c.reframe(to: CGRect(x: 20, y: 10, width: 70, height: 60),
+                             outputSize: CGSize(width: 35, height: 30)), "Retained viewport fixture")
+        c.cropRect = CGRect(x: 3, y: 4, width: 40, height: 35)
+        c.editingUndoManager.removeAllActions()
+        return c
+    }
+    static func viewportCropAnchoring() throws {
+        let c = try viewportCanvas(), original = c.document
+        let saved = try c.snapshotDocumentData(), selected = c.selection, crop = c.cropRect
+        let reference = canvas(); try reference.loadDocument(data: saved)
+        reference.selection = selected; reference.cropRect = crop
+        var dirty = 0; c.onChange = { dirty += 1 }
+        try expect(c.beginViewportEdit(name: "Border Crop"), "Begin crop")
+        let steps = [CGRect(x: 8, y: 5, width: 52, height: 40),
+                     CGRect(x: -12, y: -6, width: 80, height: 65),
+                     CGRect(x: 6, y: 3, width: 55.5, height: 44.5)]
+        for rect in steps {
+            let output = CGSize(width: ceil(rect.width * 2), height: ceil(rect.height * 2))
+            try expect(c.previewViewportCrop(to: rect, outputSize: output), "Crop preview")
+            try reference.loadDocument(data: saved)
+            reference.selection = selected; reference.cropRect = crop
+            try expect(reference.reframe(to: rect, outputSize: output), "Independent one-step reference")
+            try expect(c.document == reference.document && c.snapshotDocumentData() == reference.snapshotDocumentData(),
+                       "Each crop uses original raster offset/coordinates, never earlier preview translations")
+            var elements = original.elements
+            for index in elements.indices { elements[index].translate(x: -rect.minX, y: -rect.minY) }
+            try expect(c.document.elements == elements && c.selection == selected && c.cropRect == nil &&
+                       dirty == 0 && !c.editingUndoManager.canUndo, "Previews preserve IDs/groups and remain silent")
+        }
+        let committed = try c.snapshotDocumentData(), final = c.document
+        c.endViewportEdit()
+        try expect(dirty == 1 && c.editingUndoManager.undoActionName == "Border Crop", "One crop gesture notification/history")
+        c.undo()
+        try expect(c.document == original && c.snapshotDocumentData() == saved && c.selection == selected &&
+                   c.cropRect == crop && !c.editingUndoManager.canUndo, "Undo restores complete crop base/source")
+        c.redo()
+        try expect(c.document == final && c.snapshotDocumentData() == committed && c.cropRect == nil,
+                   "Redo restores exact last preview including source retention")
+        let reopened = canvas(); try reopened.loadDocument(data: committed)
+        try expect(reopened.reframe(to: CGRect(x: -26, y: -13, width: 100, height: 80),
+                                    outputSize: CGSize(width: 100, height: 80)), "Expand final saved viewport")
+        let full = canvas(); full.setBackground(backdrop()); full.document.elements = original.elements
+        for index in full.document.elements.indices { full.document.elements[index].translate(x: 20, y: 10) }
+        try expect(reopened.document.elements == full.document.elements && reopened.imageData(format: "png") == full.imageData(format: "png"),
+                   "Saved crop gesture retains hidden photo pixels and editable graphics")
+    }
+    static func viewportResizeHistory() throws {
+        let c = try viewportCanvas()
+        c.setBackgroundColor(.clear); let prior = c.document
+        try expect(c.resizeImage(to: CGSize(width: 45, height: 30)), "Prior resize")
+        let original = c.document, saved = try c.snapshotDocumentData(), crop = c.cropRect, selected = c.selection
+        var dirty = 0; c.onChange = { dirty += 1 }
+        try expect(c.beginViewportEdit(name: "Resize Window"), "Begin width gesture")
+        for width in [40.2, 25, 50.1] {
+            try expect(c.previewViewportResize(to: CGSize(width: width, height: 30)), "Width preview")
+            try expect(c.outputSize.width == ceil(width) && c.outputSize.height == 30 &&
+                       c.document.size == original.size && c.document.backgroundPNG == original.backgroundPNG &&
+                       c.document.elements == original.elements && c.selection == selected && c.cropRect == crop &&
+                       dirty == 0 && c.editingUndoManager.undoActionName == "Resize Image", "Silent integral output-only preview")
+        }
+        let resized = c.document, resizedData = try c.snapshotDocumentData()
+        c.endViewportEdit(); c.endViewportEdit()
+        try expect(dirty == 1 && c.editingUndoManager.undoActionName == "Resize Window", "One width gesture edit")
+        c.undo(); try expect(c.document == original && c.snapshotDocumentData() == saved, "One Undo restores base")
+        c.undo(); try expect(c.document == prior, "Earlier output resize remains undoable")
+        c.redo(); try expect(c.document == original, "Prior resize redo")
+        c.redo(); try expect(c.document == resized && c.snapshotDocumentData() == resizedData, "Whole gesture redo")
+        c.undo(); c.undo(); c.undo()
+        try expect(c.document.backgroundColor == .white && !c.editingUndoManager.canUndo, "All earlier edits survive gesture")
+    }
+    static func viewportCancellation() throws {
+        let c = try viewportCanvas()
+        c.setBackgroundColor(.clear); _ = c.resizeImage(to: CGSize(width: 45, height: 30)); c.undo()
+        let saved = try c.snapshotDocumentData(), original = c.document, selected = c.selection, crop = c.cropRect
+        let undoName = c.editingUndoManager.undoActionName, redoName = c.editingUndoManager.redoActionName
+        var dirty = 0; c.onChange = { dirty += 1 }
+        for keyboardCancel in [false, true] {
+            try expect(c.beginViewportEdit(name: "Cancelled Border"), "Begin cancelled gesture")
+            try expect(c.previewViewportCrop(to: CGRect(x: 10, y: 8, width: 40, height: 35),
+                                             outputSize: CGSize(width: 80, height: 70)), "Cancelled crop preview")
+            try expect(c.previewViewportResize(to: CGSize(width: 21, height: 19)), "Switch to resize anchored at original state")
+            try expect(c.document.elements == original.elements && c.document.size == original.size && c.cropRect == crop,
+                       "Resize after crop also uses base state")
+            if keyboardCancel { c.cancelOperation(nil) } else { c.endViewportEdit(cancelled: true) }
+            try expect(c.document == original && c.snapshotDocumentData() == saved && c.selection == selected &&
+                       c.cropRect == crop && dirty == 0, "Cancel exactly restores document/pan/selection/crop silently")
+            try expect(c.editingUndoManager.canUndo && c.editingUndoManager.canRedo &&
+                       c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName,
+                       "Cancel preserves existing undo and redo branches")
+        }
+        c.redo(); try expect(c.outputSize == CGSize(width: 45, height: 30), "Existing redo remains usable")
+        c.undo(); c.undo(); try expect(c.document.backgroundColor == .white, "Existing undo remains usable")
+    }
+    static func viewportInvalidPreviews() throws {
+        let c = try viewportCanvas(), original = c.document, saved = try c.snapshotDocumentData()
+        let selected = c.selection, crop = c.cropRect
+        var dirty = 0; c.onChange = { dirty += 1 }
+        try expect(!c.previewViewportResize(to: CGSize(width: 30, height: 20)) &&
+                   !c.previewViewportCrop(to: CGRect(x: 1, y: 1, width: 30, height: 20),
+                                          outputSize: CGSize(width: 30, height: 20)), "Preview never implicitly begins a transaction")
+        let invalidSizes = [CGSize(width: CGFloat.nan, height: 20), CGSize(width: 20, height: CGFloat.infinity),
+                            CGSize(width: 0, height: 20), CGSize(width: -1, height: 20),
+                            CGSize(width: 16385, height: 1), CGSize(width: 16384, height: 16384),
+                            CGSize(width: 8000, height: 4000.1)]
+        let invalidRects = [CGRect.null, CGRect.infinite, CGRect(x: CGFloat.nan, y: 0, width: 20, height: 20),
+                            CGRect(x: 0, y: 0, width: -20, height: 20), CGRect(x: 0, y: 0, width: 0, height: 20),
+                            CGRect(x: 0, y: 0, width: 16384, height: 16384),
+                            CGRect(x: 1_000_001, y: 0, width: 20, height: 20),
+                            CGRect(x: 999_990, y: 0, width: 20, height: 20)]
+        try expect(c.beginViewportEdit(name: "Invalid Only"), "Begin validation transaction")
+        for size in invalidSizes {
+            try expect(!c.previewViewportResize(to: size) &&
+                       !c.previewViewportCrop(to: CGRect(x: 0, y: 0, width: 20, height: 20), outputSize: size), "Reject invalid output")
+        }
+        for rect in invalidRects {
+            try expect(!c.previewViewportCrop(to: rect, outputSize: CGSize(width: 20, height: 20)), "Reject invalid source rectangle/offset")
+        }
+        try expect(c.document == original && c.snapshotDocumentData() == saved && c.selection == selected && c.cropRect == crop &&
+                   dirty == 0 && !c.editingUndoManager.canUndo, "Invalid previews leave every state field and history intact")
+        c.endViewportEdit()
+        try expect(dirty == 0 && !c.editingUndoManager.canUndo, "Invalid-only gesture creates no undo/notification")
+        try expect(c.beginViewportEdit(name: "Valid Then Invalid") && c.previewViewportResize(to: CGSize(width: 31, height: 22)), "Begin fresh valid preview")
+        let preview = try c.snapshotDocumentData()
+        try expect(!c.previewViewportResize(to: invalidSizes.last!) && c.snapshotDocumentData() == preview && dirty == 0 &&
+                   !c.editingUndoManager.canUndo && !c.beginViewportEdit(name: "Nested"), "Invalid update keeps last preview and transaction open, never commits it")
+        c.endViewportEdit(cancelled: true)
+        try expect(try c.snapshotDocumentData() == saved, "Invalid update cannot replace the cancellation base")
+    }
+    static func viewportPendingText() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text)
+        text.text = "Before"; text.rect = CGRect(x: 10, y: 10, width: 80, height: 50)
+        c.document.elements = [text]; c.tool = .select
+        let original = c.document
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 30, y: 25), clicks: 2))
+        guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Viewport text editor") }
+        editor.insertText("Committed first", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        var dirty = 0; var reentrantBegins: [Bool] = []
+        c.onChange = { dirty += 1; reentrantBegins.append(c.beginViewportEdit(name: "Reentrant")) }
+        try expect(c.beginViewportEdit(name: "Crop After Typing"), "Begin commits pending text")
+        let typed = c.document
+        try expect(editor.superview == nil && !c.hasPendingTextChanges && typed.elements[0].text == "Committed first" &&
+                   dirty == 1 && reentrantBegins == [false] && c.editingUndoManager.undoActionName == "Edit Text", "Typing commits separately before snapshot; begin is not reentrant")
+        c.onChange = { dirty += 1 }
+        try expect(c.previewViewportCrop(to: CGRect(x: 5, y: 4, width: 90, height: 70), outputSize: CGSize(width: 45, height: 35)), "Crop typed text")
+        c.endViewportEdit(); let cropped = c.document
+        try expect(cropped.elements[0].text == "Committed first" && cropped.elements[0].bounds.origin == CGPoint(x: 5, y: 6) && dirty == 2,
+                   "Crop captures and translates committed text")
+        c.undo(); try expect(c.document == typed, "First Undo restores typed base")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Second Undo restores original text")
+        c.redo(); c.redo(); try expect(c.document == cropped, "Text and crop redo independently")
+        try expect(c.beginViewportEdit(name: "Return To Base") && c.previewViewportResize(to: CGSize(width: 20, height: 10)), "No-op gesture preview")
+        try expect(c.previewViewportResize(to: cropped.outputSize), "Return to original output")
+        let undoName = c.editingUndoManager.undoActionName, notifications = dirty
+        c.endViewportEdit()
+        try expect(c.document == cropped && c.editingUndoManager.undoActionName == undoName && dirty == notifications, "Return-to-base creates no extra undo")
+    }
+    static func viewportUnsafeBegin() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        let original = c.document
+        c.tool = .brush
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 10, y: 10)))
+        c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 30, y: 20)))
+        try expect(!c.beginViewportEdit(name: "Unsafe") && !c.previewViewportResize(to: CGSize(width: 50, height: 40)), "In-flight drawing cannot become a viewport base")
+        c.cancelOperation(nil)
+        try expect(c.document == original && !c.editingUndoManager.canUndo, "Rejected begin leaves drawing cancellation/history intact")
+        try expect(c.beginViewportEdit(name: "Safe"), "Begin after drawing cancelled")
+        try expect(!c.beginViewportEdit(name: "Nested"), "Reject nested begin")
+        try expect(c.previewViewportResize(to: CGSize(width: 50, height: 40)), "Outer transaction still works")
+        var cancelled = 0
+        c.onViewportEditCancelled = { cancelled += 1 }
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 10, y: 10)))
+        try expect(c.document == original && cancelled == 1 && !c.editingUndoManager.canUndo,
+                   "New canvas mouseDown cancels the external gesture before drawing")
+        c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 30, y: 20)))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 30, y: 20)))
+        try expect(c.document.elements.count == 1 && c.outputSize == original.outputSize, "New drawing never inherits half-preview output")
+        c.undo(); c.endViewportEdit(cancelled: true)
+        try expect(c.document == original && cancelled == 1, "Only new drawing is undoable; interruption cannot cancel twice")
+    }
+    static func viewportReplacement() throws {
+        for action in ["undo", "direct undo", "redo", "load", "assign", "mutation", "blank"] {
+            let c = try viewportCanvas()
+            c.setBackgroundColor(.clear)
+            _ = c.resizeImage(to: CGSize(width: 45, height: 30)); c.undo()
+            let base = c.document, source = try c.snapshotDocumentData()
+            try expect(c.beginViewportEdit(name: "Interrupted") &&
+                       c.previewViewportCrop(to: CGRect(x: 8, y: 5, width: 40, height: 35), outputSize: CGSize(width: 40, height: 35)), "Begin interrupted crop")
+            switch action {
+            case "undo": c.undo(); try expect(c.document.backgroundColor == .white && c.document.size == base.size, "Undo cancels preview before undoing prior edit")
+            case "direct undo":
+                c.editingUndoManager.undo()
+                try expect(c.document.backgroundColor == .white && c.document.size == base.size, "Direct UndoManager path also cancels preview")
+            case "redo": c.redo(); try expect(c.outputSize == CGSize(width: 45, height: 30) && c.document.elements == base.elements, "Redo cancels preview before replaying history")
+            case "load":
+                let preview = try c.snapshotDocumentData()
+                do { try c.loadDocument(data: Data("invalid".utf8)); throw Failure(description: "Invalid load should fail") }
+                catch is DecodingError { }
+                try expect(try c.snapshotDocumentData() == preview && !c.beginViewportEdit(name: "Still Active"), "Failed replacement preserves pending transaction")
+                try c.loadDocument(data: source, clearingUndo: false)
+                try expect(c.document == base && c.snapshotDocumentData() == source && c.editingUndoManager.canUndo && c.editingUndoManager.canRedo, "Validated load cancels transaction and keeps requested history")
+            case "assign":
+                c.document = SketchDocument(size: CGSize(width: 120, height: 90))
+                try expect(c.document.backgroundPNG == nil && c.document.elements.isEmpty && c.document.size.width == 120, "Direct document assignment survives old transaction")
+            case "mutation":
+                let reference = canvas(); try reference.loadDocument(data: c.snapshotDocumentData())
+                reference.document.backgroundColor = SketchColor(.blue)
+                c.document.backgroundColor = SketchColor(.blue)
+                try expect(c.snapshotDocumentData() == reference.snapshotDocumentData() && c.cropRect == nil,
+                           "Direct document mutation invalidates the base without corrupting the live retained pan offset")
+            default:
+                c.newBlank(size: CGSize(width: 120, height: 90)); let replacement = c.document
+                c.undo(); try expect(c.document == base && c.snapshotDocumentData() == source, "New canvas Undo restores pre-gesture base")
+                c.redo(); try expect(c.document == replacement, "New canvas redo")
+            }
+            let interrupted = try c.snapshotDocumentData()
+            c.endViewportEdit(cancelled: true); c.endViewportEdit()
+            try expect(c.snapshotDocumentData() == interrupted && !c.previewViewportResize(to: CGSize(width: 20, height: 20)) &&
+                       c.beginViewportEdit(name: "Fresh"), "Interrupted transaction cannot revive or block replacement/history")
+            c.endViewportEdit(cancelled: true)
+        }
+    }
+    static func presentationOutput() throws {
+        let c = try viewportCanvas()
+        try expect(c.reframe(to: CGRect(x: 0.5, y: 0.5, width: 60.25, height: 50.25), outputSize: CGSize(width: 30, height: 25)), "Fractional visible source")
+        c.editingUndoManager.removeAllActions(); c.setBackgroundColor(.clear); c.setBackgroundColor(.white); c.undo()
+        let original = c.document, saved = try c.snapshotDocumentData(), selected = c.selection, crop = c.cropRect
+        let normal = c.outputSize, fullSize = c.fullResolutionOutputSize, sourcePNG = c.document.backgroundPNG
+        let undoName = c.editingUndoManager.undoActionName, redoName = c.editingUndoManager.redoActionName
+        var dirty = 0; c.onChange = { dirty += 1 }; c.setZoom(1.5)
+        try expect(fullSize == CGSize(width: 60, height: 50), "Actual rounds visible source to nearest, not hidden full photo")
+        for _ in 0..<3 {
+            try expect(c.setPresentationOutputSize(fullSize), "Enter Actual")
+            try expect(c.outputSize == fullSize && c.frame.size == CGSize(width: 90, height: 75) &&
+                       c.document.backgroundPNG == sourcePNG && c.document.size == original.size &&
+                       c.document.elements == original.elements && c.selection == selected && c.cropRect == crop,
+                       "Actual changes native frame/output while retaining source/vector/overlay state")
+            let exported = NSBitmapImageRep(data: c.imageData(format: "png")!)!
+            try expect(exported.pixelsWide == 60 && exported.pixelsHigh == 50, "Actual uses nearest visible source pixels")
+            let originalExport = NSBitmapImageRep(data: c.imageData(format: "png", originalSize: true)!)!
+            try expect(originalExport.pixelsWide == 61 && originalExport.pixelsHigh == 51,
+                       "Original-size raster export still rounds source coordinates up independently of Actual")
+            try expect(c.setPresentationOutputSize(normal) && c.snapshotDocumentData() == saved && c.document == original,
+                       "Leaving Actual restores normal output and exact retained pan supplement")
+        }
+        try expect(dirty == 0 && c.editingUndoManager.canUndo && c.editingUndoManager.canRedo &&
+                   c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName, "Presentation never dirties or consumes history")
+        c.redo(); c.undo(); try expect(c.document == original, "Prior history still works after repeated Actual transitions")
+        let expanded = canvas(); try expanded.loadDocument(data: saved)
+        _ = expanded.reframe(to: CGRect(x: -20.5, y: -10.5, width: 100, height: 80), outputSize: CGSize(width: 100, height: 80))
+        try expect(try pixel(expanded, 10, 10).greenComponent > 0.9, "Hidden original pixels survive output mutations")
+        let plain = canvas(); plain.document.size = CGSize(width: 33.2, height: 21.4)
+        try expect(plain.fullResolutionOutputSize == CGSize(width: 33, height: 21), "Nearest source sizing also works without photo")
+        let fractional = plain.document
+        try expect(plain.setPresentationOutputSize(plain.fullResolutionOutputSize) &&
+                   plain.setPresentationOutputSize(fractional.outputSize) && plain.document == fractional,
+                   "Presentation can restore an exact fractional normal size with nil renderSize")
+        for (source, expected) in [(CGSize(width: 100.2, height: 100.8), CGSize(width: 100, height: 101)),
+                                   (CGSize(width: 100.8, height: 100.2), CGSize(width: 101, height: 100)),
+                                   (CGSize(width: 100.5, height: 1.2), CGSize(width: 101, height: 1))] {
+            plain.document.size = source
+            try expect(plain.fullResolutionOutputSize == expected, "Nearest source pixels distinguish below/above half on both axes and round ties up")
+        }
+        plain.document.renderSize = CGSize(width: 10, height: 10)
+        plain.document.size = CGSize(width: 0.2, height: 100.8)
+        try expect(plain.fullResolutionOutputSize == CGSize(width: 1, height: 101), "Actual clamps each rounded source dimension to at least one")
+        plain.document.size = CGSize(width: CGFloat.nan, height: CGFloat.infinity)
+        try expect(SketchDocument.validSize(plain.fullResolutionOutputSize), "Invalid transient source size returns a safe finite output")
+    }
+    static func presentationPendingText() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text)
+        text.text = "Before"; text.rect = CGRect(x: 10, y: 10, width: 80, height: 50)
+        c.document.elements = [text]; c.tool = .select
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 30, y: 25), clicks: 2))
+        guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Presentation text editor") }
+        editor.insertText("Pending", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let original = c.document, saved = try c.snapshotDocumentData(), selected = c.selection
+        var dirty = 0; c.onChange = { dirty += 1 }
+        let invalid = CGSize(width: 16384, height: 16384)
+        try expect(!c.setPresentationOutputSize(invalid) && !c.previewViewportResize(to: invalid) &&
+                   !c.previewViewportCrop(to: CGRect(x: 0, y: 0, width: 20, height: 20), outputSize: invalid), "Invalid sizes never implicitly begin or commit text")
+        try expect(c.setPresentationOutputSize(CGSize(width: 50.2, height: 40.2)) && c.outputSize == CGSize(width: 50.2, height: 40.2), "Presentation preserves requested valid size")
+        try expect(editor.string == "Pending" && editor.superview === c && window.firstResponder === editor &&
+                   c.hasPendingTextChanges && c.document.elements == original.elements && c.selection == selected &&
+                   dirty == 0 && !c.editingUndoManager.canUndo, "Presentation leaves native typing and document text untouched")
+        try expect(c.setPresentationOutputSize(original.outputSize) && c.snapshotDocumentData() == saved, "Normal restores pending snapshot exactly")
+        c.cancelOperation(nil)
+    }
+    static func actualHistoryIsolation() throws {
+        let c = try viewportCanvas(), normal = c.outputSize
+        let original = c.document, saved = try c.snapshotDocumentData()
+        var changes = 0, reentry = false, recursive = false
+        c.onChange = {
+            if reentry { recursive = true }; reentry = true; changes += 1
+            _ = c.setPresentationOutputSize(c.fullResolutionOutputSize)
+            reentry = false
+        }
+        try expect(c.beginActualPresentation(), "Begin transient Actual")
+        let actual = try c.snapshotDocumentData()
+        try expect(!c.beginActualPresentation() && c.snapshotDocumentData() == actual, "Nested Actual begin is rejected without mutation")
+        c.setBackgroundColor(.white); _ = c.resizeImage(to: normal)
+        try expect(changes == 0 && !c.editingUndoManager.canUndo && c.outputSize == c.fullResolutionOutputSize,
+                   "Normalized equality suppresses no-op history despite live Actual output")
+        c.duplicateSelection(); let edited = c.document.elements
+        try expect(changes == 1 && !recursive && c.outputSize == c.fullResolutionOutputSize, "One edit callback may reapply presentation without reentry")
+        c.endActualPresentation(); c.endActualPresentation(); c.onChange = { changes += 1 }
+        try expect(c.outputSize == normal && changes == 1, "Mode exit restores normal silently")
+        c.undo()
+        try expect(c.document == original && c.snapshotDocumentData() == saved && c.outputSize == normal,
+                   "Actual edit then exit then Undo restores normal output and all retained source")
+        c.redo()
+        let exported = NSBitmapImageRep(data: c.imageData(format: "png")!)!
+        try expect(c.document.elements == edited && c.outputSize == normal && exported.pixelsWide == 35 && exported.pixelsHigh == 30,
+                   "Redo cannot leak Actual output into normal export")
+    }
+    static func actualPreexistingHistory() throws {
+        let c = try viewportCanvas(), original = c.document, saved = try c.snapshotDocumentData()
+        _ = c.resizeImage(to: CGSize(width: 45, height: 40))
+        let resized = c.document
+        var changes = 0; c.onChange = { changes += 1 }
+        try expect(c.beginActualPresentation(), "Begin after normal resize")
+        c.undo()
+        var expected = original; expected.renderSize = nil
+        try expect(c.document == expected && c.outputSize == c.fullResolutionOutputSize && changes == 1,
+                   "Pre-Actual Undo restores source/content while retaining full live presentation")
+        c.endActualPresentation()
+        try expect(c.document == original && c.snapshotDocumentData() == saved && changes == 1, "Exit uses undone normal output, not original entry size")
+        c.redo()
+        try expect(c.document == resized && c.editingUndoManager.canUndo && !c.editingUndoManager.canRedo,
+                   "Normal resize -> Actual -> Undo -> leave -> Redo restores output and registers an inverse")
+        c.undo()
+        try expect(c.document == original && c.snapshotDocumentData() == saved && c.editingUndoManager.canRedo,
+                   "Resize remains undoable after Redo outside Actual")
+        c.redo(); try expect(c.document == resized && c.editingUndoManager.canUndo, "Repeated resize history stays reversible")
+        try expect(c.beginActualPresentation(), "Re-enter Actual")
+        c.undo(); c.redo()
+        try expect(c.outputSize == c.fullResolutionOutputSize, "Both old Undo and Redo stay in Actual")
+        c.endActualPresentation(); try expect(c.document == resized, "Redo while Actual updates retained normal output")
+    }
+    static func actualTransformHistory() throws {
+        let actions: [(String, (CanvasView) -> Void)] = [
+            ("rotate", { $0.rotate(clockwise: true) }), ("flip", { $0.flip(horizontal: true) }),
+            ("crop", { _ = $0.reframe(to: CGRect(x: 5, y: 3, width: 50, height: 40)) }),
+            ("resize", { _ = $0.resizeImage(to: CGSize(width: 47, height: 33)) })
+        ]
+        for (name, action) in actions {
+            let c = try viewportCanvas(), original = c.document, saved = try c.snapshotDocumentData()
+            let reference = canvas(); try reference.loadDocument(data: saved); action(reference)
+            let transformed = reference.document, transformedData = try reference.snapshotDocumentData()
+            try expect(c.beginActualPresentation(), "Begin Actual \(name)")
+            action(c)
+            try expect(c.outputSize == c.fullResolutionOutputSize && c.document.elements == transformed.elements &&
+                       c.document.backgroundPNG == transformed.backgroundPNG, "\(name) transforms source while retaining Actual display")
+            c.undo(); try expect(c.outputSize == c.fullResolutionOutputSize && c.document.elements == original.elements, "\(name) Undo while Actual")
+            c.redo(); c.endActualPresentation()
+            try expect(c.document == transformed && c.snapshotDocumentData() == transformedData, "\(name) normal dimensions/source exactly match independent normal edit")
+            c.undo(); try expect(c.document == original && c.snapshotDocumentData() == saved, "\(name) Undo after exit restores original normal source")
+            c.redo(); try expect(c.document == transformed && c.snapshotDocumentData() == transformedData, "\(name) Redo after exit has normal output")
+            try expect(c.beginActualPresentation(), "Begin before controller exit \(name)")
+            c.undo(); c.endActualPresentation()
+            try expect(c.document == original && c.snapshotDocumentData() == saved,
+                       "\(name) exit retains the normal output restored by source Undo")
+            c.redo()
+            try expect(c.document == transformed && c.snapshotDocumentData() == transformedData && c.editingUndoManager.canUndo,
+                       "\(name) Redo after exit recovers normalized source history and remains undoable")
+            c.undo()
+            try expect(c.document == original && c.snapshotDocumentData() == saved,
+                       "\(name) inverse history restores source and normal output after exit")
+        }
+    }
+    static func actualNativeState() throws {
+        for mode in ["pan", "move", "draw", "erase"] {
+            let c = try viewportCanvas(); let window = host(c); defer { window.close() }
+            c.tool = mode == "draw" ? .brush : (mode == "erase" ? .eraser : .select)
+            let original = c.document, saved = try c.snapshotDocumentData(), selected = c.selection, crop = c.cropRect
+            try expect(c.beginActualPresentation(), "Begin Actual native \(mode)")
+            let actual = try c.snapshotDocumentData()
+            let start = CGPoint(x: 30, y: 32), end = CGPoint(x: 40, y: 42)
+            if mode == "pan" { c.keyDown(with: try key(c, 49)) }
+            c.mouseDown(with: try mouse(c, .leftMouseDown, start))
+            c.mouseDragged(with: try mouse(c, .leftMouseDragged, end))
+            c.cancelOperation(nil)
+            try expect(c.snapshotDocumentData() == actual && c.selection == selected && c.cropRect == crop &&
+                       !c.editingUndoManager.canUndo, "Cancelled native \(mode) uses full raw gesture state without history")
+            try drag(c, from: start, to: end)
+            if mode == "pan" { c.keyUp(with: try key(c, 49, type: .keyUp)) }
+            try expect(c.editingUndoManager.canUndo && c.outputSize == c.fullResolutionOutputSize, "Native \(mode) edit preserves Actual mode")
+            c.endActualPresentation(); let edited = c.document, editedData = try c.snapshotDocumentData()
+            c.undo()
+            try expect(c.document == original && c.snapshotDocumentData() == saved && c.selection == selected && c.cropRect == crop,
+                       "Native \(mode) history restores normal output plus complete source/selection/crop")
+            c.redo(); try expect(c.document == edited && c.snapshotDocumentData() == editedData && c.outputSize == original.outputSize,
+                                "Native \(mode) redo does not restore transient Actual renderSize")
+        }
+    }
+    static func actualPendingTextState() throws {
+        for startsActual in [false, true] {
+            for cancelAfterExit in [false, true] {
+                let c = canvas(); let window = host(c); defer { window.close() }
+                var text = SketchElement(kind: .text)
+                text.text = "Before"; text.rect = CGRect(x: 10, y: 10, width: 80, height: 50)
+                c.document.elements = [text]; c.tool = .select
+                _ = c.resizeImage(to: CGSize(width: 50, height: 40)); c.editingUndoManager.removeAllActions()
+                let original = c.document
+                if startsActual { try expect(c.beginActualPresentation(), "Begin before editor") }
+                c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 30, y: 25), clicks: 2))
+                if !startsActual { try expect(c.beginActualPresentation(), "Begin with unchanged pending editor") }
+                guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Actual text editor") }
+                try expect(!c.hasPendingTextChanges, "Actual presentation alone never marks pending text changed")
+                editor.insertText("Typed in Actual", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+                let pending = try SketchDocument.decode(c.snapshotDocumentData())
+                try expect(pending.outputSize == c.fullResolutionOutputSize && pending.elements[0].text == "Typed in Actual" &&
+                           c.hasPendingTextChanges, "Recovery exports raw Actual output and pending text, independent of normalized history")
+                if cancelAfterExit {
+                    c.endActualPresentation(); c.cancelOperation(nil)
+                    try expect(c.document == original && !c.editingUndoManager.canUndo && !c.hasPendingTextChanges,
+                               "Cancelling an editor captured in Actual after exit cannot restore Actual output")
+                } else {
+                    c.commitPendingTextEditing(); let actual = c.document
+                    c.endActualPresentation(); let edited = c.document
+                    try expect(actual.outputSize == c.fullResolutionOutputSize && edited.outputSize == original.outputSize,
+                               "Native text commit retains live Actual until silent exit")
+                    c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Actual text Undo restores normal output")
+                    c.redo(); try expect(c.document == edited, "Actual text Redo restores normal output")
+                }
+            }
+        }
+        let unchanged = canvas(); let window = host(unchanged); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Same"; text.rect = CGRect(x: 10, y: 10, width: 80, height: 50)
+        unchanged.document.elements = [text]; unchanged.tool = .select
+        _ = unchanged.setPresentationOutputSize(CGSize(width: 50, height: 40))
+        unchanged.mouseDown(with: try mouse(unchanged, .leftMouseDown, CGPoint(x: 30, y: 25), clicks: 2))
+        try expect(unchanged.beginActualPresentation(), "Begin Actual with unchanged text")
+        unchanged.commitPendingTextEditing(); unchanged.endActualPresentation()
+        try expect(!unchanged.editingUndoManager.canUndo, "Committing unchanged pre-Actual text creates no undo")
+        let typing = canvas(); let typingWindow = host(typing); defer { typingWindow.close() }
+        _ = typing.setPresentationOutputSize(CGSize(width: 50, height: 40)); let beforeTyping = typing.document
+        try expect(typingWindow.makeFirstResponder(typing) && typing.beginActualPresentation(), "Justype Actual focus")
+        let character = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+            windowNumber: typingWindow.windowNumber, context: nil, characters: "T", charactersIgnoringModifiers: "t",
+            isARepeat: false, keyCode: 17)!
+        typing.keyDown(with: character)
+        let pendingTyping = try SketchDocument.decode(typing.snapshotDocumentData())
+        try expect(pendingTyping.outputSize == typing.fullResolutionOutputSize && pendingTyping.elements.last?.text == "T",
+                   "Actual Justype retains full live output and native pending text")
+        typing.endActualPresentation(); typing.commitPendingTextEditing(); let typed = typing.document
+        typing.undo(); try expect(typing.document == beforeTyping && !typing.editingUndoManager.canUndo, "Justype creation captured in Actual undoes normally after exit")
+        typing.redo(); try expect(typing.document == typed && typing.outputSize == beforeTyping.outputSize, "Actual Justype redo keeps normal export size")
+    }
+    static func actualLifecycleGuards() throws {
+        let c = try viewportCanvas(), saved = try c.snapshotDocumentData(), original = c.document
+        var changes = 0, cancellations = 0
+        c.onChange = { changes += 1 }; c.onViewportEditCancelled = { cancellations += 1 }
+        try expect(c.beginViewportEdit(name: "Before Actual") && c.previewViewportResize(to: CGSize(width: 20, height: 15)), "Start viewport")
+        let preview = try c.snapshotDocumentData()
+        try expect(!c.beginActualPresentation() && c.snapshotDocumentData() == preview && cancellations == 0,
+                   "Actual begin cannot silently cancel/commit an active viewport")
+        c.endViewportEdit(cancelled: true)
+        try expect(c.beginActualPresentation() && !c.beginViewportEdit(name: "Unsafe Actual"), "Viewport edit is guarded under Actual")
+        c.endViewportEdit(cancelled: true)
+        try expect(cancellations == 1 && changes == 0 && c.outputSize == c.fullResolutionOutputSize, "Rejected viewport cancellation cannot change Actual or notify")
+        let actual = try c.snapshotDocumentData(), committed = try c.documentData()
+        let actualDocument = try SketchDocument.decode(actual)
+        try expect(actual == committed && actualDocument.outputSize == c.fullResolutionOutputSize && actualDocument.size == original.size,
+                   "Save/recovery retain full Actual output with original source coordinates")
+        do { try c.loadDocument(data: Data("invalid".utf8)); throw Failure(description: "Invalid load should fail") }
+        catch is DecodingError { }
+        c.endActualPresentation()
+        try expect(c.document == original && c.snapshotDocumentData() == saved && changes == 0, "Failed load retains transient normal output for exit")
+        for replacement in ["load", "assign", "blank", "background"] {
+            try c.loadDocument(data: saved)
+            try expect(c.beginActualPresentation(), "Begin before \(replacement)")
+            switch replacement {
+            case "load": try c.loadDocument(data: actual)
+            case "assign":
+                var new = SketchDocument(size: CGSize(width: 120, height: 90)); new.renderSize = CGSize(width: 83, height: 43)
+                c.document = new
+            case "blank": c.newBlank(size: CGSize(width: 120, height: 90))
+            default: c.setBackground(backdrop(CGSize(width: 120, height: 90)))
+            }
+            let replaced = c.document
+            c.endActualPresentation()
+            try expect(c.document == replaced && c.beginActualPresentation(), "\(replacement) clears old Actual retention so exit cannot revive it")
+            c.endActualPresentation()
+        }
+    }
+    static func viewportCancellationCallback() throws {
+        let c = try viewportCanvas(), original = c.document
+        var callbacks = 0, observed: [SketchDocument] = []
+        c.onViewportEditCancelled = {
+            callbacks += 1; observed.append(c.document)
+            c.endViewportEdit(cancelled: true)
+        }
+        try expect(c.beginViewportEdit(name: "Commit") && c.previewViewportResize(to: CGSize(width: 40, height: 30)), "Begin callback commit")
+        c.endViewportEdit(); c.endViewportEdit(cancelled: true)
+        try expect(callbacks == 0, "Normal completion and late cancel never notify cancellation")
+        try expect(c.beginViewportEdit(name: "Cancel") && c.previewViewportResize(to: CGSize(width: 20, height: 10)), "Begin callback cancellation")
+        c.endViewportEdit(cancelled: true)
+        try expect(callbacks == 1 && observed.last == c.document, "Cancel restores before callback and clears transaction before recursive cancel")
+        try expect(c.beginViewportEdit(name: "Undo Interruption") && c.previewViewportResize(to: CGSize(width: 20, height: 10)), "Begin before Undo")
+        c.undo(); try expect(callbacks == 2 && c.document == original, "Undo cancels external gesture exactly once")
+        try expect(c.beginViewportEdit(name: "Direct Replacement") && c.previewViewportResize(to: CGSize(width: 20, height: 10)), "Begin before direct replacement")
+        let replacement = SketchDocument(size: CGSize(width: 120, height: 90))
+        c.document = replacement
+        try expect(callbacks == 3 && observed.last == replacement && c.document == replacement,
+                   "didSet cancellation notifies shell without overwriting incoming document")
+        c.endViewportEdit(cancelled: true); try expect(callbacks == 3, "Replacement clears stale transaction")
     }
     static func serialization() throws {
         let c = canvas()

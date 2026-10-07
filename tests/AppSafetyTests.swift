@@ -4,6 +4,12 @@
 #if APP_SAFETY_TESTS
 import AppKit
 import UniformTypeIdentifiers
+import ObjectiveC
+
+private enum AppSafetyClipboard { static var board: NSPasteboard? }
+private extension NSPasteboard {
+    @objc class func appSafetyGeneralPasteboard() -> NSPasteboard { AppSafetyClipboard.board! }
+}
 
 final class AppSafetyWindow: NSWindow {
     var simulatedSheet: NSWindow?
@@ -234,6 +240,9 @@ enum AppSafetyTests {
                 app.timer?.invalidate()
                 app.historyFollowTimer?.invalidate()
                 app.dragPreviewTimer?.invalidate()
+                app.navigatorTimer?.invalidate()
+                app.navigatorWindow?.orderOut(nil)
+                app.navigatorWindow?.close()
                 app.window.delegate = nil
                 app.window.close()
                 app.historyWindow?.delegate = nil
@@ -1709,6 +1718,508 @@ enum AppSafetyTests {
                    store.entries[0].text.contains("Export should leave me typing"),
                    "History snapshot keeps the normal output dimensions and pending editable annotation")
     }
+    // Exercise the actual shell APIs without ordering the main window or its
+    // navigator. A deliberately nonuniform source/output pair detects geometry
+    // flattening and accidental use of presentation pixels as source pixels.
+    static func viewportFixture(_ app: AppDelegate, drawing: Bool = true) throws {
+        app.canvas.newBlank(size: CGSize(width: 300, height: 180))
+        if drawing {
+            app.canvas.setBackground(try image(size: CGSize(width: 300, height: 180)))
+            var element = SketchElement(kind: .rectangle)
+            element.rect = CGRect(x: 45, y: 30, width: 24, height: 18)
+            element.color = SketchColor(.red); element.groupID = UUID()
+            app.canvas.document.elements = [element]; app.canvas.selection = [element.id]
+        }
+        try expect(app.canvas.setPresentationOutputSize(CGSize(width: 150, height: 90)), "Viewport fixture output")
+        app.setCanvasDisplayZoom(1, label: "Test")
+        app.canvas.editingUndoManager.removeAllActions()
+        app.dirty = false; app.window.isDocumentEdited = false
+        try expect(!app.window.isVisible, "Viewport fixtures must remain hidden")
+    }
+    static func actualViewportHistory() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        app.canvas.setBackgroundColor(.yellow); app.canvas.setBackgroundColor(.green); app.canvas.undo()
+        let before = try app.canvas.snapshotDocumentData(), document = app.canvas.document
+        let selection = app.canvas.selection, frame = app.window.frame, zoom = app.canvas.zoom
+        let history = app.canvas.editingUndoManager
+        let undo = history.undoActionName, redo = history.redoActionName
+        app.dirty = false; app.window.isDocumentEdited = false
+        try expect(app.canToggleActualSize && history.canUndo && history.canRedo, "Actual entry with existing Undo and Redo")
+        app.toggleActualSize()
+        try expect(app.isActualSize && app.canvas.outputSize == CGSize(width: 300, height: 180) && app.canvas.zoom == 1,
+                   "Actual mode presents source resolution")
+        try expect(app.canvas.canvasSize == document.size && app.canvas.document.backgroundPNG == document.backgroundPNG &&
+                   app.canvas.document.elements == document.elements && app.canvas.selection == selection,
+                   "Actual mode retains raw backdrop, editable paths, groups, IDs and selection")
+        try expect(!app.dirty && !app.window.isDocumentEdited && history.undoActionName == undo && history.redoActionName == redo,
+                   "Mode entry must not add Undo, clear Redo or mark the drawing edited")
+        try expect(app.navigatorWindow != nil && app.navigatorWindow?.isVisible == false &&
+                   app.window.childWindows?.contains(where: { $0 === app.navigatorWindow }) != true,
+                   "Hidden fixture navigator must never be ordered or attached as a visible child")
+        app.toggleActualSize()
+        try expect(try !app.isActualSize && app.canvas.snapshotDocumentData() == before && app.canvas.zoom == zoom && app.window.frame == frame,
+                   "Normal return restores complete document/output, zoom and window frame")
+        app.undo()
+        try expect(app.canvas.document.backgroundColor == .white && !history.canUndo,
+                   "First Undo after a mode roundtrip reaches the existing edit, with no mode Undo")
+        app.redo()
+        try expect(app.canvas.document == document && history.canRedo, "Roundtrip preserves the existing Redo chain")
+    }
+    static func actualSaveThenNormal() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let normal = app.canvas.document
+        let target = fixture.file("ActualSave").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = target; app.toggleActualSize()
+        try expect(app.save() && !app.dirty && app.actualView?.savedWhileActive == true, "Save while Actual records its presentation")
+        let saved = try SkitchFile.read(target)
+        try expect(saved.document.outputSize == normal.size && saved.document.backgroundPNG == normal.backgroundPNG &&
+                   saved.document.elements == normal.elements, "Actual Save preserves source and editable geometry")
+        app.leaveActualSize()
+        try expect(app.canvas.document == normal && app.currentURL == target && app.dirty && app.window.isDocumentEdited &&
+                   !app.canvas.editingUndoManager.canUndo,
+                   "Restoring normal output after Actual Save marks the output difference dirty without a mode Undo")
+        try expect(app.save() && SkitchFile.read(target).document == normal, "Normal-size subsequent Save persists restored output")
+    }
+    static func actualRejectedReplacement() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app); app.toggleActualSize()
+        app.canvas.setBackgroundColor(.yellow)
+        let before = try app.canvas.snapshotDocumentData(), generation = app.documentGeneration
+        let undo = app.canvas.editingUndoManager.undoActionName
+        let valid = fixture.file("ActualCancelled")
+        try SketchDocument(size: CGSize(width: 123, height: 99)).encoded().write(to: valid)
+        answer(.alertSecondButtonReturn); app.openURL(valid)
+        try expect(try app.isActualSize && app.canvas.snapshotDocumentData() == before && app.documentGeneration == generation &&
+                   app.canvas.editingUndoManager.undoActionName == undo, "Cancelled Open preserves Actual mode and document/history")
+        let invalid = fixture.file("ActualInvalid")
+        var rejected = SketchDocument(); rejected.version = 99
+        try JSONEncoder().encode(rejected).write(to: invalid)
+        answer(.alertThirdButtonReturn)
+        AppSafetyAlert.answers.append(.init(title: SketchDocumentError.unsupportedVersion.localizedDescription, response: .alertFirstButtonReturn))
+        app.openURL(invalid)
+        try expect(try app.isActualSize && app.canvas.snapshotDocumentData() == before && app.documentGeneration == generation &&
+                   app.dirty && app.canvas.editingUndoManager.undoActionName == undo,
+                   "Validated-before-replacement Open must preserve Actual state even after Discard was chosen")
+        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
+        try expect(try app.isActualSize && app.canvas.snapshotDocumentData() == before, "Cancelled capture preserves Actual mode")
+        let panels = NSApp.windows.count
+        app.resize()
+        let menu = NSMenuItem(title: "Resize", action: #selector(AppDelegate.resize), keyEquivalent: "")
+        try expect(!app.validateMenuItem(menu) && app.resizeButton?.isEnabled == false && NSApp.windows.count == panels && app.isActualSize,
+                   "Numeric Resize stays disabled and creates no panel in Actual mode")
+    }
+    static func actualSuccessfulReplacement() throws {
+        for replacement in ["new", "native", "raster", "capture"] {
+            try autoreleasepool {
+                let fixture = try Fixture(), app = fixture.app
+                try viewportFixture(app); app.toggleActualSize()
+                let generation = app.documentGeneration
+                switch replacement {
+                case "new": app.newFile()
+                case "native":
+                    var document = SketchDocument(size: CGSize(width: 123, height: 99))
+                    document.renderSize = CGSize(width: 61, height: 49)
+                    let target = fixture.file("ActualNative").deletingPathExtension().appendingPathExtension("skitch")
+                    try SkitchFile(document: document, metadata: .init()).write(to: target)
+                    app.openURL(target)
+                    try expect(app.canvas.document == document, "Native Open retains saved output instead of applying raster fit")
+                case "raster":
+                    let target = fixture.file("ActualRaster").deletingPathExtension().appendingPathExtension("tiff")
+                    guard let bytes = try image(size: CGSize(width: 80, height: 60)).tiffRepresentation else {
+                        throw Failure(description: "Raster replacement fixture")
+                    }
+                    try bytes.write(to: target); app.openURL(target)
+                default:
+                    app.receiveCapture(.success(try image(size: CGSize(width: 80, height: 60))))
+                }
+                try expect(!app.isActualSize && app.actualView == nil && app.documentGeneration != generation &&
+                           !app.canvas.editingUndoManager.canUndo && app.navigatorWindow?.isVisible != true,
+                           "Successful \(replacement) replacement exits Actual mode and clears old undo")
+                let after = try app.canvas.snapshotDocumentData()
+                app.leaveActualSize()
+                try expect(try app.canvas.snapshotDocumentData() == after, "Old normal viewport cannot restore across \(replacement) generation")
+            }
+        }
+    }
+    static func borderResizeLifecycle() throws {
+        for corner in CanvasCorner.allCases {
+            try autoreleasepool {
+                let fixture = try Fixture(), app = fixture.app
+                try viewportFixture(app)
+                let before = try app.canvas.snapshotDocumentData(), source = app.canvas.document
+                let left = corner == .topLeft || corner == .bottomLeft
+                let width: CGFloat = left ? 130 : 170
+                try expect(app.beginWindowGesture(.corner(corner), flags: []), "Begin normal corner transaction")
+                try expect(!app.canToggleActualSize && !app.beginWindowGesture(.edge(.left)), "Active border transaction excludes mode changes and nesting")
+                app.previewBorderGesture(delta: CGPoint(x: 10, y: 90), flags: [])
+                app.previewBorderGesture(delta: CGPoint(x: 20, y: 127), flags: [.shift])
+                try expect(app.canvas.outputSize == CGSize(width: width, height: (width * 0.6).rounded()) &&
+                           app.canvas.document.elements == source.elements && app.canvas.document.backgroundPNG == source.backgroundPNG &&
+                           !app.canvas.editingUndoManager.canUndo,
+                           "Normal corner is width-driven, ignores vertical sizing delta/Shift unlock, and previews without Undo")
+                app.endWindowGesture()
+                let after = try app.canvas.snapshotDocumentData()
+                try expect(app.canvas.editingUndoManager.undoActionName == "Resize Image", "Corner completion registers the resize")
+                app.undo()
+                try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo,
+                           "Multiple corner previews produce exactly one Undo")
+                app.redo(); try expect(try app.canvas.snapshotDocumentData() == after, "Corner Redo restores final preview")
+            }
+        }
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app, drawing: false)
+        try expect(app.beginWindowGesture(.corner(.bottomRight)), "Begin empty corner")
+        app.previewBorderGesture(delta: CGPoint(x: 20, y: 37), flags: [])
+        try expect(app.canvas.outputSize == CGSize(width: 170, height: 127), "Empty canvas corner changes axes independently")
+        app.endWindowGesture(cancelled: true)
+        try expect(app.canvas.outputSize == CGSize(width: 150, height: 90) && !app.canvas.editingUndoManager.canUndo,
+                   "Cancelled empty resize leaves no Undo")
+    }
+    static func borderCropPanLifecycle() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        try pan(app, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 90, y: 20))
+        let before = try app.canvas.snapshotDocumentData(), source = app.canvas.document
+        let frame = app.window.frame, selection = app.canvas.selection
+        let pixels = app.canvas.imageData(format: "png")
+        let graph = try JSONSerialization.jsonObject(with: before) as! [String: Any]
+        try expect(graph["canvasPanBackground"] != nil, "Border fixture must include offscreen pan pixels")
+        app.canvas.editingUndoManager.removeAllActions()
+        try expect(app.beginWindowGesture(.edge(.left)), "Begin symmetric crop")
+        app.previewBorderGesture(delta: CGPoint(x: 5, y: 99), flags: [.option])
+        app.previewBorderGesture(delta: CGPoint(x: 15, y: 99), flags: [.option])
+        try expect(app.canvas.canvasSize == CGSize(width: 240, height: 180) && app.canvas.outputSize == CGSize(width: 120, height: 90) &&
+                   app.canvas.document.elements[0].bounds.minX == source.elements[0].bounds.minX - 30 &&
+                   app.canvas.document.elements[0].rect == source.elements[0].rect &&
+                   app.canvas.selection == selection, "Option-left crops both edges at output/source density and translates the editable annotation")
+        app.endWindowGesture(cancelled: true)
+        try expect(try app.canvas.snapshotDocumentData() == before && app.canvas.imageData(format: "png") == pixels &&
+                   app.window.frame == frame && !app.canvas.editingUndoManager.canUndo,
+                   "Crop cancellation restores full pan graph, pixels, selection/window and history")
+        try expect(app.beginWindowGesture(.edge(.left)), "Restart crop after Cancel")
+        app.previewBorderGesture(delta: CGPoint(x: CGFloat.nan, y: 0), flags: [.option])
+        try expect(try app.canvas.snapshotDocumentData() == before, "Invalid crop preview cannot mutate state")
+        app.previewBorderGesture(delta: CGPoint(x: 15, y: 0), flags: [.option])
+        app.endWindowGesture()
+        let after = try app.canvas.snapshotDocumentData()
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.canvas.imageData(format: "png") == pixels &&
+                   !app.canvas.editingUndoManager.canUndo, "Committed crop is one Undo including hidden source pixels")
+        app.redo(); try expect(try app.canvas.snapshotDocumentData() == after, "Crop Redo retains the complete cropped pan state")
+    }
+    static func rasterFitAndCameraOutput() throws {
+        let fixture = try Fixture(), app = fixture.app
+        guard let capacity = app.maximumNormalCanvas else { throw Failure(description: "Hidden fixture needs a screen capacity") }
+        let size = CGSize(width: ceil(capacity.width + 300), height: ceil(capacity.height + 150))
+        try expect(SketchDocument.validSize(size), "Bounded large raster fixture")
+        let raster = try image(size: size)
+        app.receiveCapture(.success(raster), discardAlreadyApproved: true)
+        let background = app.canvas.document.backgroundPNG
+        try expect(app.canvas.canvasSize == size && app.canvas.outputSize.width < size.width && app.canvas.outputSize.height < size.height &&
+                   app.isLargeShot && !app.canvas.editingUndoManager.canUndo,
+                   "Ordinary capture fits output to the screen while retaining raw source dimensions")
+        app.dragOriginalControl.state = .off; try expect(!app.dragAtOriginalSize, "Large-shot unchecked drag uses normal output")
+        app.dragOriginalControl.state = .on; try expect(app.dragAtOriginalSize, "Large-shot checked drag uses source output")
+        app.toggleActualSize(); app.dragOriginalControl.state = .off
+        try expect(app.dragAtOriginalSize && app.canvas.document.backgroundPNG == background,
+                   "Actual drag forces original size without replacing source pixels")
+        AppSafetyCaptureCoordinator.holdCapture = true
+        app.cameraSnap()
+        try expect(AppSafetyCaptureCoordinator.requests.last == "camera" && AppSafetyCaptureCoordinator.captureCallbacks.count == 1,
+                   "Camera test must use the wired callback")
+        let callback = AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()
+        answer(.alertThirdButtonReturn)
+        callback(.success(raster))
+        // Capture adapters currently deliver synchronously; queued main-actor
+        // delivery is also accepted without a desktop capture request.
+        try waitForMain("Camera completion", until: { !app.isActualSize })
+        try expect(app.canvas.canvasSize == size && app.canvas.outputSize == size && app.canvas.document.backgroundPNG == background,
+                   "Camera fitOutput:false exits Actual and retains full output instead of automatic screen fitting")
+        app.dragOriginalControl.state = .off
+        try expect(!app.dragAtOriginalSize, "Normal mode does not force full-size drag solely because it followed Actual")
+    }
+    static func actualEditUndoNormalOutput() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let before = try app.canvas.snapshotDocumentData()
+        app.toggleActualSize(); app.canvas.setBackgroundColor(.yellow); app.leaveActualSize()
+        let edited = try app.canvas.snapshotDocumentData()
+        try expect(app.canvas.outputSize == CGSize(width: 150, height: 90), "Actual edit exits to prior normal output")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.canvas.outputSize == CGSize(width: 150, height: 90) &&
+                   !app.isActualSize && !app.canvas.editingUndoManager.canUndo,
+                   "Undo of an Actual edit after exit cannot resurrect transient full-size output")
+        app.redo()
+        try expect(try app.canvas.snapshotDocumentData() == edited && app.canvas.outputSize == CGSize(width: 150, height: 90),
+                   "Redo of an Actual edit remains normalized to normal output")
+    }
+    static func actualPriorResizeHistory() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let normal = try app.canvas.snapshotDocumentData(), source = app.canvas.document
+        let selection = app.canvas.selection, frame = app.window.frame
+        let history = app.canvas.editingUndoManager
+        func expectPixels(_ size: CGSize, _ message: String) throws {
+            guard let data = app.canvas.imageData(format: "png"), let bitmap = NSBitmapImageRep(data: data) else {
+                throw Failure(description: "Resize history PNG fixture")
+            }
+            try expect(bitmap.pixelsWide == Int(size.width) && bitmap.pixelsHigh == Int(size.height) &&
+                       app.canvas.document.backgroundPNG == source.backgroundPNG &&
+                       app.canvas.document.elements == source.elements && app.canvas.selection == selection,
+                       message)
+        }
+        try expect(app.canvas.resizeImage(to: CGSize(width: 120, height: 72)), "Seed normal resize Undo")
+        let resized = try app.canvas.snapshotDocumentData()
+        try expectPixels(CGSize(width: 120, height: 72), "Normal resize changes exported pixels while retaining source and editable geometry")
+        app.toggleActualSize(); app.undo()
+        try expect(app.isActualSize && app.canvas.outputSize == source.size && !history.canUndo && history.canRedo,
+                   "Undo in Actual updates persistent normal output without losing full-resolution presentation or Redo")
+        try expectPixels(source.size, "Actual Undo still exports full-resolution pixels without scaling annotations")
+        app.leaveActualSize()
+        try expect(try !app.isActualSize && app.canvas.snapshotDocumentData() == normal && app.window.frame == frame &&
+                   !history.canUndo && history.canRedo,
+                   "Leaving Actual restores the normal output reached by Undo rather than the entry output, preserving Redo")
+        try expectPixels(CGSize(width: 150, height: 90), "Actual exit exports the restored 150-pixel normal output")
+        app.redo()
+        try expect(try app.canvas.snapshotDocumentData() == resized && history.canUndo && !history.canRedo,
+                   "Redo after Actual exit restores the original 120-pixel resize as the only edit")
+        try expectPixels(CGSize(width: 120, height: 72), "Redo restores resized export pixels with full source retained")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == normal && !history.canUndo && history.canRedo,
+                   "A second Undo returns to 150 pixels without consuming or inserting mode history")
+        try expectPixels(CGSize(width: 150, height: 90), "Final Undo restores normal export pixels and selection")
+    }
+    static func shiftCornerResetBaseline() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let normal = try app.canvas.snapshotDocumentData(), source = app.canvas.document
+        app.setCanvasDisplayZoom(2, label: "Test")
+        app.setWindowFrame(CGRect(x: 250, y: 200, width: 1400, height: 1000))
+        guard let scroll = app.canvas.enclosingScrollView else { throw Failure(description: "Shift corner viewport") }
+        app.window.contentView?.layoutSubtreeIfNeeded()
+        let oldFrame = app.window.frame
+        let chrome = CGSize(width: oldFrame.width - scroll.contentView.bounds.width,
+                            height: oldFrame.height - scroll.contentView.bounds.height)
+        let expected = CGSize(width: max(app.window.minSize.width, chrome.width + 300 + 20),
+                              height: max(app.window.minSize.height, chrome.height + 180 + 20))
+        try expect(!app.isLargeShot, "Shift reset fixture must be eligible for normal-size reset")
+        try expect(app.beginWindowGesture(.corner(.bottomRight), flags: [.shift]), "Begin Shift corner reset")
+        guard let gesture = app.windowGesture else { throw Failure(description: "Shift corner baseline") }
+        let reset = try app.canvas.snapshotDocumentData(), fittedFrame = app.window.frame
+        try expect(app.canvas.outputSize == source.size && app.canvas.zoom == 1 &&
+                   abs(fittedFrame.width - expected.width) < 0.5 && abs(fittedFrame.height - expected.height) < 0.5 &&
+                   fittedFrame.size != oldFrame.size && gesture.windowFrame == fittedFrame &&
+                   gesture.outputSize == source.size && gesture.zoom == 1,
+                   "Shift resets full normal output and fits the window before recording the drag baseline")
+        app.previewBorderGesture(delta: CGPoint(x: 20, y: 99), flags: [.shift])
+        try expect(app.canvas.outputSize == CGSize(width: 320, height: 192) &&
+                   app.canvas.document.backgroundPNG == source.backgroundPNG && app.canvas.document.elements == source.elements,
+                   "Corner preview starts at reset output and zoom, retaining full source and editable geometry")
+        app.endWindowGesture(cancelled: true)
+        try expect(try app.canvas.snapshotDocumentData() == reset && app.window.frame == fittedFrame,
+                   "Escape restores the fitted Shift baseline rather than the preceding smaller output or oversized window")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == normal && !app.canvas.editingUndoManager.canUndo,
+                   "Shift normal-size reset remains one Undo; canceled corner preview adds none")
+        app.redo()
+        try expect(try app.canvas.snapshotDocumentData() == reset && !app.canvas.editingUndoManager.canRedo,
+                   "Redo restores only the Shift output reset")
+        try expect(!app.window.isVisible, "Shift sizing must never order the hidden test window")
+    }
+    static func largeRasterBorderHistoryRestoresWindow() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        app.canvas.setBackground(try image(size: CGSize(width: 3000, height: 2000)))
+        try expect(app.canvas.setPresentationOutputSize(CGSize(width: 1350, height: 900)), "Large native document output")
+        app.setCanvasDisplayZoom(1, label: "Test")
+        app.sizeNormalWindowToCanvas(); app.updateStatus()
+        app.canvas.editingUndoManager.removeAllActions()
+        let before = try app.canvas.snapshotDocumentData(), source = app.canvas.document
+        let frame = app.window.frame, history = app.canvas.editingUndoManager
+        var windowFailures: [String] = []
+        func recordWindowRestore(_ route: String) {
+            if app.window.frame.size != frame.size || abs(app.window.frame.minX - frame.minX) >= 0.5 ||
+                abs(app.window.frame.maxY - frame.maxY) >= 0.5 {
+                windowFailures.append("\(route): expected \(frame), got \(app.window.frame)")
+            }
+        }
+        func expectVisible(_ message: String) throws {
+            try expect(app.canvas.visibleRect.contains(app.canvas.bounds.insetBy(dx: 0.5, dy: 0.5)) &&
+                       !app.canvasBorder.isHidden && !app.window.isVisible,
+                       message)
+        }
+        try expectVisible("Fitted large-source output must be fully visible with crop border available in the hidden fixture")
+        try expect(app.beginWindowGesture(.corner(.bottomRight)), "Begin large-source corner shrink")
+        app.previewBorderGesture(delta: CGPoint(x: -80, y: -70), flags: [])
+        app.endWindowGesture()
+        let resized = try app.canvas.snapshotDocumentData(), resizedFrame = app.window.frame
+        try expect(app.canvas.outputSize == CGSize(width: 1270, height: 847) && resizedFrame.width < frame.width &&
+                   resizedFrame.height < frame.height && history.canUndo && !history.canRedo &&
+                   history.undoActionName == "Resize Image", "Large source corner produces one proportional output resize")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.window.frame.size == frame.size &&
+                   abs(app.window.frame.minX - frame.minX) < 0.5 && abs(app.window.frame.maxY - frame.maxY) < 0.5 &&
+                   !history.canUndo && history.canRedo,
+                   "App Undo restores 1350x900 output and fitted window at the same top-left, without another history entry")
+        try expectVisible("Undo must reveal the entire restored canvas and crop border instead of leaving a shrunk scrolling viewport")
+        app.redo()
+        try expect(try app.canvas.snapshotDocumentData() == resized && history.canUndo && !history.canRedo,
+                   "App Redo restores the exact resized document and single resize history entry")
+        if app.window.frame.size != resizedFrame.size {
+            windowFailures.append("Menu Redo: expected size \(resizedFrame.size), got \(app.window.frame.size)")
+        }
+        try expect(app.canvas.document.backgroundPNG == source.backgroundPNG && app.canvas.document.elements == source.elements &&
+                   app.canvas.canvasSize == CGSize(width: 3000, height: 2000),
+                   "App Redo retains the original 3000x2000 pixels and editable geometry")
+        try expectVisible("Redo keeps the smaller output completely visible with crop border available")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before &&
+                   !history.canUndo && history.canRedo, "Repeated Undo restores the original fitted window without stack drift")
+        recordWindowRestore("Second menu Undo")
+        try expectVisible("Repeated Undo keeps the full restored output and border visible")
+        try expect(app.window.makeFirstResponder(app.canvas), "Focus canvas for keyboard history dispatch")
+        func historyKey(redo: Bool) throws {
+            guard let event = NSEvent.keyEvent(with: .keyDown, location: .zero,
+                modifierFlags: redo ? [.command, .shift] : [.command], timestamp: 0,
+                windowNumber: app.window.windowNumber, context: nil, characters: redo ? "Z" : "z",
+                charactersIgnoringModifiers: "z", isARepeat: false, keyCode: 6) else {
+                throw Failure(description: "Internal canvas history key event")
+            }
+            try expect(app.canvas.performKeyEquivalent(with: event), "Canvas must consume its focused history shortcut")
+        }
+        try historyKey(redo: true)
+        try expect(try app.canvas.snapshotDocumentData() == resized &&
+                   history.canUndo && !history.canRedo,
+                   "Canvas Command-Shift-Z must refit the resized window through the launched history callback")
+        if app.window.frame.size != resizedFrame.size {
+            windowFailures.append("Keyboard Redo: expected size \(resizedFrame.size), got \(app.window.frame.size)")
+        }
+        try expectVisible("Keyboard Redo keeps the entire canvas and crop border available")
+        try historyKey(redo: false)
+        try expect(try app.canvas.snapshotDocumentData() == before &&
+                   !history.canUndo && history.canRedo,
+                   "Canvas Command-Z restores fitted normal output at the original top-left without extra Undo")
+        recordWindowRestore("Keyboard Undo")
+        try expectVisible("Keyboard Undo must reveal the full restored output and crop border")
+        try expect(windowFailures.isEmpty, "Window restoration must not drift across menu/keyboard history: " + windowFailures.joined(separator: "; "))
+    }
+    static func borderSaveThenCancel() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let before = try app.canvas.snapshotDocumentData()
+        app.currentURL = fixture.file("BorderSave").deletingPathExtension().appendingPathExtension("skitch")
+        try expect(app.beginWindowGesture(.corner(.bottomRight)), "Begin border edit before Save")
+        app.previewBorderGesture(delta: CGPoint(x: 40, y: 100), flags: [])
+        let preview = try app.canvas.snapshotDocumentData()
+        try expect(preview != before && app.save(), "Save must accept the current viewport preview")
+        let saved = try SkitchFile.read(app.currentURL!)
+        try expect(app.windowGesture == nil && saved.canvasData == preview && !app.dirty,
+                   "Save closes/commits border transaction before serializing the exact live state")
+        app.endWindowGesture(cancelled: true)
+        try expect(try app.canvas.snapshotDocumentData() == saved.canvasData && !app.dirty && !app.window.isDocumentEdited,
+                   "Escape after successful Save cannot restore an older viewport while falsely clean")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.dirty && app.window.isDocumentEdited &&
+                   !app.canvas.editingUndoManager.canUndo, "Saved border change remains exactly one undoable, dirty-on-Undo edit")
+    }
+    static func borderInterruptedByCommands() throws {
+        for command in ["paste", "wipe"] {
+            try autoreleasepool {
+                let fixture = try Fixture(), app = fixture.app
+                try viewportFixture(app)
+                let before = try app.canvas.snapshotDocumentData(), frame = app.window.frame
+                try expect(app.beginWindowGesture(.corner(.bottomRight)), "Begin interrupted border gesture")
+                app.previewBorderGesture(delta: CGPoint(x: 60, y: 100), flags: [])
+                if command == "paste" {
+                    // Redirect only this synchronous command to an isolated board;
+                    // neither read nor modify the user's system clipboard.
+                    let board = NSPasteboard.withUniqueName()
+                    guard let general = class_getClassMethod(NSPasteboard.self, NSSelectorFromString("generalPasteboard")),
+                          let replacement = class_getClassMethod(NSPasteboard.self, NSSelectorFromString("appSafetyGeneralPasteboard")) else {
+                        throw Failure(description: "Isolated general-pasteboard test adapter")
+                    }
+                    let original = method_getImplementation(general)
+                    AppSafetyClipboard.board = board
+                    method_setImplementation(general, method_getImplementation(replacement))
+                    defer {
+                        method_setImplementation(general, original); AppSafetyClipboard.board = nil; board.releaseGlobally()
+                    }
+                    board.setString("Paste during border drag", forType: .string)
+                    app.window.makeFirstResponder(app.canvas); app.paste()
+                    try expect(app.canvas.document.elements.count == 2 && app.canvas.document.elements.last?.text == "Paste during border drag",
+                               "Paste interruption must perform a real editable text paste")
+                } else {
+                    app.wipe()
+                    try expect(app.canvas.document.elements.isEmpty && app.canvas.document.backgroundPNG != nil,
+                               "First Wipe interruption removes drawing while retaining the snap")
+                }
+                try expect(app.windowGesture == nil && app.canvas.outputSize == CGSize(width: 150, height: 90) && app.window.frame == frame,
+                           "\(command) cancels both Canvas preview and shell window geometry")
+                let after = try app.canvas.snapshotDocumentData()
+                app.endWindowGesture(cancelled: true)
+                try expect(try app.canvas.snapshotDocumentData() == after, "Late mouse-up/Escape cannot revert \(command)")
+                app.undo()
+                try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo,
+                           "\(command) records its own edit without leaving a border Undo")
+            }
+        }
+    }
+    static func actualNavigatorAndGates() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let menu = NSMenuItem(title: "Actual", action: #selector(AppDelegate.toggleActualSize), keyEquivalent: "")
+        for blocked in ["frame", "termination"] {
+            let before = try app.canvas.snapshotDocumentData()
+            app.frameMode = blocked == "frame"; app.terminationStarted = blocked == "termination"
+            app.updateViewportChrome()
+            try expect(!app.canToggleActualSize && !app.validateMenuItem(menu) && app.actualButton?.isEnabled == false,
+                       "Actual button and menu both reject \(blocked)")
+            app.toggleActualSize()
+            try expect(try !app.isActualSize && app.canvas.snapshotDocumentData() == before, "Blocked \(blocked) toggle cannot mutate output")
+            app.frameMode = false; app.terminationStarted = false
+        }
+        app.canvas.document.size = CGSize(width: 2000, height: 1500)
+        try expect(app.canvas.setPresentationOutputSize(CGSize(width: 500, height: 375)), "Scrollable navigator fixture")
+        app.updateViewportChrome(); app.toggleActualSize()
+        guard let scroll = app.canvas.enclosingScrollView, let panel = app.navigatorWindow,
+              let navigate = app.navigator.onNavigate else { throw Failure(description: "Actual navigator launch wiring") }
+        try expect(!panel.isVisible && panel.frame.minX == app.window.frame.minX - panel.frame.width + 5 &&
+                   panel.frame.minY == app.window.frame.minY + 30, "Hidden child navigator stays beside the parent's left edge")
+        let before = try app.canvas.snapshotDocumentData()
+        func dragNavigator(to point: CGPoint) throws {
+            guard let rect = NavigatorGeometry.imageRect(documentSize: app.navigator.documentSize, bounds: app.navigator.bounds) else {
+                throw Failure(description: "Navigator thumbnail geometry")
+            }
+            for (type, pointer) in [(NSEvent.EventType.leftMouseDown, CGPoint(x: rect.midX, y: rect.midY)),
+                                    (.leftMouseDragged, point), (.leftMouseUp, point)] {
+                let location = app.navigator.convert(pointer, to: nil)
+                guard let event = NSEvent.mouseEvent(with: type, location: location, modifierFlags: [], timestamp: 0,
+                    windowNumber: panel.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1) else {
+                    throw Failure(description: "Internal navigator event allocation")
+                }
+                switch type {
+                case .leftMouseDown: app.navigator.mouseDown(with: event)
+                case .leftMouseDragged: app.navigator.mouseDragged(with: event)
+                default: app.navigator.mouseUp(with: event)
+                }
+            }
+        }
+        try dragNavigator(to: CGPoint(x: 100_000, y: 100_000))
+        let visible = app.canvas.visibleRect
+        try expect(visible.minX >= 0 && visible.minY >= 0 && visible.maxX <= app.canvas.bounds.maxX + 0.5 &&
+                   visible.maxY <= app.canvas.bounds.maxY + 0.5 && app.navigator.viewport == visible,
+                   "Navigator drag through wired onNavigate clamps to the current visible canvas and synchronizes overview highlight: \(visible), canvas \(app.canvas.bounds), highlight \(app.navigator.viewport)")
+        try dragNavigator(to: CGPoint(x: -100_000, y: -100_000))
+        try expect(app.canvas.visibleRect.origin == .zero && app.navigator.viewport == app.canvas.visibleRect &&
+                   scroll.contentView.bounds.origin == .zero, "Navigator clamps negative origin at top left")
+        try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo,
+                   "Overview navigation changes viewport only, not serialized document/history")
+        app.leaveActualSize(); let origin = scroll.contentView.bounds.origin
+        navigate(CGPoint(x: 500, y: 500))
+        try expect(scroll.contentView.bounds.origin == origin, "Stale navigator callback cannot move the normal viewport")
+    }
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -1722,6 +2233,20 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("Actual mode preserves raw source, geometry, selection and existing Undo/Redo without ordering a navigator", actualViewportHistory),
+            ("Actual Save then Normal restores output and marks the unsaved size difference dirty", actualSaveThenNormal),
+            ("cancelled/invalid Open and capture preserve Actual; numeric Resize is denied", actualRejectedReplacement),
+            ("successful New/native/raster/capture replacement exits Actual across generations", actualSuccessfulReplacement),
+            ("normal corners are width-driven, blank axes independent, with one resize Undo", borderResizeLifecycle),
+            ("Option crop Cancel/Undo/Redo retains hidden pan pixels, selection and editable geometry", borderCropPanLifecycle),
+            ("ordinary raster fitting and camera full output retain raw source and drag original-size gates", rasterFitAndCameraOutput),
+            ("Undo/Redo after Actual edit and exit cannot restore transient full output", actualEditUndoNormalOutput),
+            ("normal resize Undo in Actual survives exit, Redo and Undo with correct export pixels", actualPriorResizeHistory),
+            ("Shift corner resets output and fits the window before the cancelable drag baseline", shiftCornerResetBaseline),
+            ("large-source corner Undo/Redo restores fitted window, full visible canvas and crop border", largeRasterBorderHistoryRestoresWindow),
+            ("Save commits border preview so later Escape cannot create a false-clean mismatch", borderSaveThenCancel),
+            ("Paste/Wipe cancel border Canvas and window together before recording their own edit", borderInterruptedByCommands),
+            ("Actual button/menu gating and hidden navigator clamped viewport callback", actualNavigatorAndGates),
             ("native sheet text commands target the sheet field editor", sheetEditingCommands),
             ("native Export cancellation/success, original size and SVG preserve editing", exportSizingLifecycle),
             ("dirty typing protects New and Quit", dirtyTyping),

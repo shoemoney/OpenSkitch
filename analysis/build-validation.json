@@ -1,13 +1,16 @@
 {
-  "verified_at": "2026-10-07T09:50:00.439797+00:00",
-  "checkpoint_state": "final_sizing_build_suites_startup_desktop_verified_original_parity_unverified",
-  "checkpoint_id": "sizing-repaint-65aa79791b",
+  "verified_at": "2026-10-07T11:00:47.408288+00:00",
+  "checkpoint_state": "current_build_full_suites_startup_and_scoped_desktop_verified",
+  "checkpoint_id": "actual-final-e4f568549f",
   "architectures": {
     "arm64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "39bfc6b59248e95666304649c8a78bbb427b2fbec5ff0669ca86dc6086a85086",
-        "Sources/Canvas.swift": "9fe32eeb979b68707be6bf231cccddc2d2472084a62f75e5912103ceed1318a9",
+        "Sources/App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
+        "Sources/AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
+        "Sources/Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+        "Sources/CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
+        "Sources/CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
         "Sources/DocumentModel.swift": "8136ab9d62943f880ffe947c862566c15b5a95be43ab0250a8aba40652330d6b",
         "Sources/ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
@@ -26,8 +29,11 @@
         "Sources/SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
         "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
         "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
-        "tests/AppSafetyTests.swift": "f86d77c8abf1776a01883ed2e0509fd3d7a0bcdd3cac4009091f3a00390895cf",
-        "tests/CanvasTests.swift": "f0b22f8f420a515c59d02280b0a575c918fbddded578747d11902c9976e9302e",
+        "Sources/WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
+        "tests/AppSafetyTests.swift": "94e7e0d8cd6fd9bef8ab4f6e3ac56269db5d16ff9cee9c80270873475803fc32",
+        "tests/CanvasBorderTests.swift": "2671d327f49d32768daab0930cfec3c8d9c1d4d7edf71e6e93266ffb88dd4f9c",
+        "tests/CanvasNavigatorTests.swift": "6b1d85d1cef78b046cbeaebed510cfb8021ddd381d37c01c6265e573324234c8",
+        "tests/CanvasTests.swift": "925ce5a86bdda43dc4223388f406c28ec195acb3036d9d938dbf1a00bf8b4598",
         "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/ExportAccessoryTests.swift": "498bbb04954409f0eb5675533ef6eba4b51250fb4a3beeee727a4a3e95353a5b",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
@@ -43,10 +49,17 @@
         "tests/SVGExportTests.swift": "e09426f11116af736a7efcd1d3114ed5a441471495f21539620f2de67b00f6d9",
         "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
         "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
-        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2"
+        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2",
+        "tests/WindowSizingTests.swift": "b29a7617863352e212dd0f17e1cd4720649c2f5330f3aa86984abaf901a3e2c8"
       },
       "suite_results": {
-        "canvas": 44,
+        "window_sizing": 538,
+        "canvas_navigator": 212,
+        "canvas_border": 127,
+        "resize_panel": 89,
+        "export_accessory": 118,
+        "image_export": 14,
+        "canvas": 60,
         "vector_geometry": 15,
         "stroke_fitting": 20,
         "publishing": 160,
@@ -56,41 +69,36 @@
         "skitch_file": 20,
         "capture": 154,
         "photo_browser": 19,
-        "app_safety": 43,
+        "app_safety": 57,
         "history_store": 55,
         "history_browser": 19,
         "history_remote_deletion": 129,
-        "legacy_history_importer": 67,
-        "resize_panel": 89,
-        "export_accessory": 118,
-        "image_export": 14
+        "legacy_history_importer": 67
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.3wzd4ort",
+      "snapshot": "build/test-snapshot.jv9do7oe",
       "source_manifest": {
-        "path": "build/test-snapshot.3wzd4ort/source-manifest.json",
-        "sha256": "615a7038076373d6c5ba347bcf8ce20fd1a167ecd6661324db422427b09048ed"
+        "path": "build/test-snapshot.jv9do7oe/source-manifest.json",
+        "sha256": "29e411b034cff4fee6b1abb5b1470ab8fa76abe9ca4ac4c08425aad03a6c7094"
       },
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.3qRXCr",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.cuBFvS",
       "native_appkit_idle_termination": {
         "passed": true,
-        "evidence_path": "build/sizing-repaint-verification/arm64.log"
+        "evidence_path": "build/actual-verification/arm64.log"
       },
-      "raw_log": "build/sizing-repaint-verification/arm64.log",
-      "raw_log_sha256": "a05664b257c0992556d7b535362a2d78e56cf314181d5b87aeb2521a79830536",
-      "snapshot_scope": "sizing-repaint-65aa79791b",
-      "output_capture": "Complete accumulated tool output retained, including all suite summaries and runner success.",
-      "svg_webkit_pixels": {
-        "shadow_changed_pixels": 770,
-        "text_outline_changed_pixels": 958,
-        "wrapped_text_mismatched_ink_pixels": 0
-      }
+      "raw_log": "build/actual-verification/arm64.log",
+      "raw_log_sha256": "0791023b5c2bad9e5239561986e34ee1f2246ee80d5c2a0ca5b20f1d7863ce16",
+      "snapshot_scope": "actual-final-e4f568549f",
+      "output_capture": "Complete redirected stdout/stderr retained, all summaries and runner success present."
     },
     "x86_64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "39bfc6b59248e95666304649c8a78bbb427b2fbec5ff0669ca86dc6086a85086",
-        "Sources/Canvas.swift": "9fe32eeb979b68707be6bf231cccddc2d2472084a62f75e5912103ceed1318a9",
+        "Sources/App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
+        "Sources/AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
+        "Sources/Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+        "Sources/CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
+        "Sources/CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
         "Sources/DocumentModel.swift": "8136ab9d62943f880ffe947c862566c15b5a95be43ab0250a8aba40652330d6b",
         "Sources/ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
@@ -109,8 +117,11 @@
         "Sources/SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
         "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
         "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
-        "tests/AppSafetyTests.swift": "f86d77c8abf1776a01883ed2e0509fd3d7a0bcdd3cac4009091f3a00390895cf",
-        "tests/CanvasTests.swift": "f0b22f8f420a515c59d02280b0a575c918fbddded578747d11902c9976e9302e",
+        "Sources/WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
+        "tests/AppSafetyTests.swift": "94e7e0d8cd6fd9bef8ab4f6e3ac56269db5d16ff9cee9c80270873475803fc32",
+        "tests/CanvasBorderTests.swift": "2671d327f49d32768daab0930cfec3c8d9c1d4d7edf71e6e93266ffb88dd4f9c",
+        "tests/CanvasNavigatorTests.swift": "6b1d85d1cef78b046cbeaebed510cfb8021ddd381d37c01c6265e573324234c8",
+        "tests/CanvasTests.swift": "925ce5a86bdda43dc4223388f406c28ec195acb3036d9d938dbf1a00bf8b4598",
         "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/ExportAccessoryTests.swift": "498bbb04954409f0eb5675533ef6eba4b51250fb4a3beeee727a4a3e95353a5b",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
@@ -126,10 +137,17 @@
         "tests/SVGExportTests.swift": "e09426f11116af736a7efcd1d3114ed5a441471495f21539620f2de67b00f6d9",
         "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
         "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
-        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2"
+        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2",
+        "tests/WindowSizingTests.swift": "b29a7617863352e212dd0f17e1cd4720649c2f5330f3aa86984abaf901a3e2c8"
       },
       "suite_results": {
-        "canvas": 44,
+        "window_sizing": 538,
+        "canvas_navigator": 212,
+        "canvas_border": 127,
+        "resize_panel": 89,
+        "export_accessory": 118,
+        "image_export": 14,
+        "canvas": 60,
         "vector_geometry": 15,
         "stroke_fitting": 20,
         "publishing": 160,
@@ -139,35 +157,27 @@
         "skitch_file": 20,
         "capture": 154,
         "photo_browser": 19,
-        "app_safety": 43,
+        "app_safety": 57,
         "history_store": 55,
         "history_browser": 19,
         "history_remote_deletion": 129,
-        "legacy_history_importer": 67,
-        "resize_panel": 89,
-        "export_accessory": 118,
-        "image_export": 14
+        "legacy_history_importer": 67
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.q9ob50fq",
+      "snapshot": "build/test-snapshot.i52s_nrh",
       "source_manifest": {
-        "path": "build/test-snapshot.q9ob50fq/source-manifest.json",
-        "sha256": "615a7038076373d6c5ba347bcf8ce20fd1a167ecd6661324db422427b09048ed"
+        "path": "build/test-snapshot.i52s_nrh/source-manifest.json",
+        "sha256": "29e411b034cff4fee6b1abb5b1470ab8fa76abe9ca4ac4c08425aad03a6c7094"
       },
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.IvAZHL",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.xw0np3",
       "native_appkit_idle_termination": {
         "passed": true,
-        "evidence_path": "build/sizing-repaint-verification/x86_64.log"
+        "evidence_path": "build/actual-verification/x86_64.log"
       },
-      "raw_log": "build/sizing-repaint-verification/x86_64.log",
-      "raw_log_sha256": "5935f3c18b6fb960b1286170d84084c95e31824dbcc4ef2f2aa71672e4aa288a",
-      "snapshot_scope": "sizing-repaint-65aa79791b",
-      "output_capture": "Complete accumulated tool output retained, including all suite summaries and runner success.",
-      "svg_webkit_pixels": {
-        "shadow_changed_pixels": 770,
-        "text_outline_changed_pixels": 958,
-        "wrapped_text_mismatched_ink_pixels": 0
-      }
+      "raw_log": "build/actual-verification/x86_64.log",
+      "raw_log_sha256": "9b5d48d7cb7232781bd10765f5b81a06f467b406f41dfd3f73713851592152cb",
+      "snapshot_scope": "actual-final-e4f568549f",
+      "output_capture": "Complete redirected stdout/stderr retained, all summaries and runner success present."
     }
   },
   "build": {
@@ -176,10 +186,13 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.TqVSEA",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.BBVUqf",
     "source_sha256": {
-      "App.swift": "39bfc6b59248e95666304649c8a78bbb427b2fbec5ff0669ca86dc6086a85086",
-      "Canvas.swift": "9fe32eeb979b68707be6bf231cccddc2d2472084a62f75e5912103ceed1318a9",
+      "App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
+      "AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
+      "Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+      "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
+      "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
       "DocumentModel.swift": "8136ab9d62943f880ffe947c862566c15b5a95be43ab0250a8aba40652330d6b",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
@@ -198,27 +211,28 @@
       "SVGExport.swift": "4a061e7d170cfee030809da25c18b160baa9982f79f6b64aef9ec4f84e460ccf",
       "SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
-      "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521"
+      "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
+      "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7"
     },
-    "binary_sha256": "65aa79791be22253c11d13f2e4bcc8e6ba407f5e01b466077ed4c83b31ee728f"
+    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "f8778f153440aebc7dd19372e29a63c9fa0d68df68383e048d0863bda02806c7",
+  "build_manifest_sha256": "b120a82d6a2d2ecb9a88fefb9b873b7058f96dfa88232cb86ffbf981e1f56faa",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "full_suite_results_path": "build/sizing-repaint-verification/results.json",
-  "full_suite_results_sha256": "6c449456e5816166cff31381b74194e7413366f143470fee160802c5f87f1ed7",
+  "full_suite_results_path": "build/actual-verification/results.json",
+  "full_suite_results_sha256": "0a2636d46350b5a4dd17880130043de043fb1b03c3802c20191b67f9f12aa4c3",
   "native_startup_smoke": {
-    "binary_sha256": "65aa79791be22253c11d13f2e4bcc8e6ba407f5e01b466077ed4c83b31ee728f",
-    "verified_at": "2026-10-07T09:42:43.733388+00:00",
+    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
+    "verified_at": "2026-10-07T10:47:12.429702+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "8bb46a028806cabf4dee7311ef1a73cbfb630d11b4eaf26e317a56308e1f0982"
+      "editable_sha256": "531c15ec5da45ea523bb326a9c0895574ded90788ef1dfad0fcb60d33d677c98"
     },
     "x86_64": {
       "passed": true,
@@ -226,14 +240,13 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "28d84860bac9f673238264564103fc98270bebc6369704d5f521a289cfb27e65"
+      "editable_sha256": "6046558b3cca6117f59eaf9e2e0a0387b6c84ba3ec7d0873cc66788509cf1a86"
     }
   },
   "validation_tools_sha256": {
-    "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "eebf54acbce69d971be1effc3132ba6c4934a5adc780884af65886e677dce69f",
-    "tools/test.py": "1fb076ba208432bda28da9ab781c1ab13e64bd28d85a270d42699ad798f348df",
-    "tools/build.sh": "fda09ceef759dd80d504d813bd0119e793cafd28e681cc339d866df359155640"
+    "tools/test.py": "1db3a8cbaaafce660aa8eb7d93ef0c36e339d62d15a161667e6a36fa64c46497",
+    "tools/build.sh": "fda09ceef759dd80d504d813bd0119e793cafd28e681cc339d866df359155640",
+    "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9"
   },
   "full_original_parity": false,
   "desktop_checks": [
@@ -394,9 +407,7 @@
         "Complete original preset/preferences/services behavior"
       ],
       "reason_superseded": "Mode change was functionally correct but the height row repainted only after interaction; replacement calls layout/display after mode change."
-    }
-  ],
-  "current_desktop_checks": [
+    },
     {
       "id": "native-sizing-final",
       "build_binary_sha256": "65aa79791be22253c11d13f2e4bcc8e6ba407f5e01b466077ed4c83b31ee728f",
@@ -404,7 +415,7 @@
       "passed": true,
       "evidence_path": "build/sizing-desktop-proof.json",
       "evidence_sha256": "3addb6eece10070fa9f2c3dcd158803a7b8f2775a4de8e4a316c7b355cd54379",
-      "checkpoint_scope": "current_exact_tested_binary",
+      "checkpoint_scope": "historical_exact_tested_binary",
       "checks": [
         "native_reopen_saved_output290x210",
         "crop_mode_immediately_draws_width_and_height_labels_fields",
@@ -420,50 +431,8 @@
         "export_defaults_restored_PNG_quality70_originalFalse"
       ],
       "screenshots": "Actual native screenshots displayed inline; no filesystem screenshot claimed.",
-      "exported_files": [
-        {
-          "path": "/Users/shoemoney/Projects/skitch-redux/build/Sizing-final-normal.png",
-          "sha256": "f3d0cbb892f1afc64c01c2afdc964a415d8e589c2e3c689d27b8ebe877f5382d",
-          "bytes": 12369,
-          "pixel_size": [
-            290,
-            210
-          ]
-        },
-        {
-          "path": "/Users/shoemoney/Projects/skitch-redux/build/Sizing-final-original.png",
-          "sha256": "0410b140c98671a34c4b2c6846486c323337681465cc99bf7b3791bf65c82b03",
-          "bytes": 25413,
-          "pixel_size": [
-            580,
-            420
-          ]
-        },
-        {
-          "path": "/Users/shoemoney/Projects/skitch-redux/build/Sizing-final-restored.png",
-          "sha256": "f3d0cbb892f1afc64c01c2afdc964a415d8e589c2e3c689d27b8ebe877f5382d",
-          "bytes": 12369,
-          "pixel_size": [
-            290,
-            210
-          ]
-        }
-      ],
       "native_file_path": "/Users/shoemoney/Projects/skitch-redux/build/Sizing Proof.skitch",
       "native_file_sha256": "ac01f3c5ecf7db62914a444eb70c6abb40922b556e57da76a012ad292c3ce83e",
-      "independent_saved_file_inspection": {
-        "source_size": [
-          580,
-          420
-        ],
-        "output_size": [
-          290,
-          210
-        ],
-        "editable_elements": 1,
-        "element_kind": "arrow",
-        "passed": true
-      },
       "historical_quality_gif_validation_proof_path": "build/sizing-desktop-before-repaint.json",
       "historical_quality_gif_validation_proof_sha256": "3ea4b204fd726207fbf36b6bf259df5758dbbc9f56718e6fe92d8a06714120ee",
       "historical_quality_gif_validation_binary_sha256": "61e6d63a6d7a5086f9b50bd766089c7c3d819f556f6766a77a84b1686a4e0e6b",
@@ -483,12 +452,152 @@
       "full_original_parity": false
     }
   ],
+  "current_desktop_checks": [
+    {
+      "id": "native-actual-border-final",
+      "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
+      "architecture": "arm64",
+      "passed": true,
+      "evidence_path": "build/actual-desktop-proof.json",
+      "evidence_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
+      "checkpoint_scope": "current_exact_e4_listed_native_checks_only",
+      "checks": [
+        "Imported 3000x2000 synthetic PNG fitted normal output to 1356x904.",
+        "Corner drag changed output to 1276x851; keyboard Undo restored 1356x904 and full window canvas with gold border handles and no scrollbars; Redo restored 1276x851; Undo restored normal output.",
+        "Left border crop changed output to 1336x904; native Save retained full 3000x2000 pan source with negative horizontal offset. Undo restored full source.",
+        "Drew arrow and saved normal document at 1356x904.",
+        "Actual Size showed 3000x2000, disabled zoom and Resize controls, exposed both scroll axes, and hid normal border handles.",
+        "Scroll Right and Scroll Down accessibility actions changed horizontal and vertical scroll values from zero to 0.8220597196831201 and 0.8206770356816102.",
+        "Saved native file during Actual Size at full 3000x2000 output.",
+        "Normal View restored 1356x904 and displayed Unsaved changes after full-size save.",
+        "Saved separate final normal file; reopened through native Open dialog; output 1356x904 and arrow visible.",
+        "Reopened file entered Actual Size at 3000x2000, returned to normal without dirty state; Select click on arrow displayed editable selection handles."
+      ],
+      "artifacts": [
+        {
+          "path": "build/Actual-crop-native.skitch",
+          "sha256": "ca55f79bc709c655c925699f3303bd7f7faf9770298ab303fdb49e446c31af74",
+          "bytes": 900201,
+          "source_size": [
+            2955.7522123893805,
+            2000
+          ],
+          "output_size": [
+            1336,
+            904
+          ],
+          "element_count": 0,
+          "background": {
+            "sha256": "0459568ec07c8423d752a601e7b08e82378a337fd719019476e6f1993d39ed38",
+            "pixels": [
+              2956,
+              2000
+            ]
+          },
+          "pan_background": {
+            "source_size": [
+              3000,
+              2000
+            ],
+            "offset": [
+              -44.24778761061947,
+              0
+            ],
+            "source": {
+              "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+              "pixels": [
+                3000,
+                2000
+              ]
+            }
+          }
+        },
+        {
+          "path": "build/Actual-normal-native.skitch",
+          "sha256": "343018ca57f6dad821e0f68ce9fac96624a794df4fbf7c7adf7c15b941d4f846",
+          "bytes": 634157,
+          "source_size": [
+            3000,
+            2000
+          ],
+          "output_size": [
+            1356,
+            904
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+            "pixels": [
+              3000,
+              2000
+            ]
+          },
+          "pan_background": null
+        },
+        {
+          "path": "build/Actual-full-native.skitch",
+          "sha256": "c255894bac722fab4b10848effbe0e4c92b2dff15c6dec19396a350b22a130ac",
+          "bytes": 634081,
+          "source_size": [
+            3000,
+            2000
+          ],
+          "output_size": [
+            3000,
+            2000
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+            "pixels": [
+              3000,
+              2000
+            ]
+          },
+          "pan_background": null
+        },
+        {
+          "path": "build/Actual-final-normal.skitch",
+          "sha256": "343018ca57f6dad821e0f68ce9fac96624a794df4fbf7c7adf7c15b941d4f846",
+          "bytes": 634157,
+          "source_size": [
+            3000,
+            2000
+          ],
+          "output_size": [
+            1356,
+            904
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+            "pixels": [
+              3000,
+              2000
+            ]
+          },
+          "pan_background": null
+        }
+      ],
+      "limits": [
+        "Navigator non-key child window was not exposed in CUA main-window screenshot/accessibility capture; its native visual and desktop interaction remain unverified.",
+        "No physical Intel desktop testing; x86_64 suites and startup run under Rosetta.",
+        "No original 32-bit app runtime comparison, capture/camera/Photos permission changes or publishing performed in this desktop check."
+      ],
+      "screenshots": "Actual native CUA screenshots displayed inline; no filesystem screenshot or native navigator visual verification claimed.",
+      "original_parity": "unverified",
+      "full_original_parity": false,
+      "new_sftp_upload_claimed": false
+    }
+  ],
   "desktop_checkpoint": {
-    "status": "verified_for_listed_scope",
-    "build_binary_sha256": "65aa79791be22253c11d13f2e4bcc8e6ba407f5e01b466077ed4c83b31ee728f",
-    "evidence_path": "build/sizing-desktop-proof.json",
-    "evidence_sha256": "3addb6eece10070fa9f2c3dcd158803a7b8f2775a4de8e4a316c7b355cd54379",
-    "note": "Actual current native sizing/export/save/reopen/readability proof; JPEG10/100,GIF,invalid-zero observations retain preceding61e6 scope. Original runtime parity unverified."
+    "status": "verified_listed_native_checks",
+    "build_binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
+    "proof_path": "build/actual-desktop-proof.json",
+    "proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
+    "native_navigator_visual_verified": false,
+    "original_parity": "unverified",
+    "full_original_parity": false
   },
   "historical_validations": [
     {
@@ -606,6 +715,49 @@
       "native_file_sha256": "ac01f3c5ecf7db62914a444eb70c6abb40922b556e57da76a012ad292c3ce83e",
       "full_original_parity": false,
       "reason_superseded": "Mode change was functionally correct but the height row repainted only after interaction; replacement calls layout/display after mode change."
+    },
+    {
+      "id": "sizing-repaint-65aa79791b",
+      "scope": "historical_exact_tested_sizing_binary",
+      "binary_sha256": "65aa79791be22253c11d13f2e4bcc8e6ba407f5e01b466077ed4c83b31ee728f",
+      "validation_sha256_when_current": "0417568f8df14c2385272ccc9a496ca674c4a29af50d159ffd2d33cd7f4e82ed",
+      "build_manifest_sha256_when_current": "f8778f153440aebc7dd19372e29a63c9fa0d68df68383e048d0863bda02806c7",
+      "full_suite_results_path": "build/sizing-repaint-verification/results.json",
+      "full_suite_results_sha256": "6c449456e5816166cff31381b74194e7413366f143470fee160802c5f87f1ed7",
+      "native_startup_smoke_results_path": "build/startup-smoke-65aa79791b/results.json",
+      "native_startup_smoke_results_sha256": "4c316eec8a11973d7d11d6d8fd69366d07c17bdaeb03325347938e04767c5308",
+      "desktop_proof_path": "build/sizing-desktop-proof.json",
+      "desktop_proof_sha256": "3addb6eece10070fa9f2c3dcd158803a7b8f2775a4de8e4a316c7b355cd54379",
+      "arm64_snapshot": "build/test-snapshot.3wzd4ort",
+      "x86_64_snapshot": "build/test-snapshot.q9ob50fq",
+      "full_original_parity": false
+    },
+    {
+      "id": "actual-build-2db0cd835d",
+      "scope": "historical_exact2db0cd83_build_and_passed_full_runs; nativeUndo_window_layout_bug_supersedes_source",
+      "binary_sha256": "2db0cd835dd4261f5cb6581e034a72359cacc4742146e868d1c8ef1383b1b40a",
+      "validation_sha256_when_current": "5c4a816d48681252a7a04d0f4534b677fbae11db30daa9b7f29c9e527f4f6447",
+      "suite_count_per_architecture": 21,
+      "app_safety_checks": 56,
+      "native_startup_smoke_results_path": "build/startup-smoke-2db0cd835d/results.json",
+      "native_startup_smoke_results_sha256": "44c63c83359b44708cc769fac3776018387d5ce740fb73df2d49d3dc11bb31a5",
+      "full_original_parity": false,
+      "native_undo_bug": "Corner output1251x834 Undo restores1331x887 output, but window remains too small, leaving hidden crop borders and scrollbars. Replacement App Undo/Redo fits window when output changes while preserving top-left; original runtime parity unverified.",
+      "arm64_snapshot": "build/test-snapshot.vhfd3si6",
+      "arm64_source_manifest_path": "build/test-snapshot.vhfd3si6/source-manifest.json",
+      "arm64_source_manifest_sha256": "0c4a922612290fd10b8234aa8ef13086f90a32dea81a75904f546e5272037057",
+      "arm64_log_path": "build/actual-before-window-undo-verification/arm64.log",
+      "arm64_log_sha256": "fa0b765e84948b0c485fd523c2e85e1a2ac84d0f4f42e2e76c38c3028fd1d5ef",
+      "arm64_full_suites_passed": true,
+      "x86_64_snapshot": "build/test-snapshot._n2wnaio",
+      "x86_64_source_manifest_path": "build/test-snapshot._n2wnaio/source-manifest.json",
+      "x86_64_source_manifest_sha256": "0c4a922612290fd10b8234aa8ef13086f90a32dea81a75904f546e5272037057",
+      "x86_64_log_path": "build/actual-before-window-undo-verification/x86_64.log",
+      "x86_64_log_sha256": "7f0edb6797a1093ab9872094697fb4062645ffa66c0312b68d075259f6d99972",
+      "x86_64_full_suites_passed": true,
+      "build_manifest_path": "build/actual-before-window-undo-verification/build-manifest.json",
+      "build_manifest_sha256": "c230956d4e1a45301acd1641b4e6d9e0501bde626d331aaacb772a786b69b757",
+      "native_window_Undo_final_pass_claimed": false
     }
   ],
   "superseded_validation": {
@@ -626,7 +778,7 @@
     "browser_checks": 19,
     "remote_deletion_fake_checks": 129,
     "legacy_importer_synthetic_checks": 67,
-    "app_safety_checks": 43,
+    "app_safety_checks": 57,
     "real_legacy_index_available": false,
     "remote_deletion_available_current_host": false,
     "remote_destination_binding_present": false,
@@ -660,11 +812,11 @@
     "Original Original Size semantics after retained crop/pan, exact encoder/palette defaults, Drag Me destination and temporary control-collapse behavior",
     "Complete original presets/preferences/legacy service workflows"
   ],
-  "current_source_validation_status": "current_frozen_source_test_tools_build_and_proofs_verified",
-  "full_suite_results_status": "complete_raw_logs_authoritative_results_and_exact_snapshots_verified",
-  "native_startup_smoke_evidence": "build/startup-smoke-65aa79791b",
-  "native_startup_smoke_results_path": "build/startup-smoke-65aa79791b/results.json",
-  "native_startup_smoke_results_sha256": "4c316eec8a11973d7d11d6d8fd69366d07c17bdaeb03325347938e04767c5308",
+  "current_source_validation_status": "current_frozen_source_test_tools_build_and_both_full_suites_verified",
+  "full_suite_results_status": "complete_logs_and_authoritative_results_verified_current_source_test_tool_hashes_match",
+  "native_startup_smoke_evidence": "build/startup-smoke-e4f568549f",
+  "native_startup_smoke_results_path": "build/startup-smoke-e4f568549f/results.json",
+  "native_startup_smoke_results_sha256": "802839d14eb2dd0a224f6efbb8691ead5d26dedddbd7f5a9e103b840816ec69b",
   "unchanged_core_source_sha256_since_sizing_before_repaint": {
     "Sources/App.swift": "39bfc6b59248e95666304649c8a78bbb427b2fbec5ff0669ca86dc6086a85086",
     "Sources/Canvas.swift": "9fe32eeb979b68707be6bf231cccddc2d2472084a62f75e5912103ceed1318a9",
@@ -703,6 +855,42 @@
     "historical_quality_gif_validation_proof_path": "build/sizing-desktop-before-repaint.json",
     "historical_quality_gif_validation_proof_sha256": "3ea4b204fd726207fbf36b6bf259df5758dbbc9f56718e6fe92d8a06714120ee",
     "original_parity": "unverified",
-    "full_original_parity": false
+    "full_original_parity": false,
+    "checkpoint_scope": "historical_exact_65aa7979_sizing_checkpoint"
+  },
+  "build_checkpoint_scope": "current_e4_build_and_tests_verified",
+  "native_startup_smoke_scope": "current_exact_e4_binary_both_architectures",
+  "build_log_path": "build/actual-verification/build.log",
+  "build_log_sha256": "c1ba3dee90ff2e799101e07e2ebd2a1c5d5f561b5b05774006b767ee4330aa41",
+  "current_full_suite_validation": {
+    "status": "passed_both_architectures",
+    "checks_per_architecture": 2070,
+    "suites": 21,
+    "results_path": "build/actual-verification/results.json",
+    "results_sha256": "0a2636d46350b5a4dd17880130043de043fb1b03c3802c20191b67f9f12aa4c3"
+  },
+  "current_native_startup_validation": {
+    "status": "passed_both_architectures",
+    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10"
+  },
+  "actual_border_fidelity_notes": [
+    "Undo/Redo inside Actual presentation is intended to preserve functional normal-output history; literal entry-output restoration after history changes must not be asserted. Original runtime semantics remain unverified.",
+    "Navigator is a non-key child left of the parent, adapted to180point width and readable20point header from original80point thumbnail. Entry moves parent on-screen; exit restores stored window.",
+    "Standard native window resizing is viewport-only; equivalence to generic original window resizing remains unverified."
+  ],
+  "actual_border_verification_scope": {
+    "window_sizing_pure_geometry_checks": 538,
+    "navigator_geometry_synthetic_events_offscreen_checks": 212,
+    "border_synthetic_event_checks": 127,
+    "canvas_checks": 60,
+    "app_safety_checks": 57,
+    "native_navigator_visual_verified": false,
+    "native_desktop_report_status": "verified_listed_native_checks",
+    "original_parity": "unverified",
+    "full_original_parity": false,
+    "Undo_contract": "Current normal output history survives Actual Undo/exit/Redo; literal entry-output restore after history changes is not claimed. Original runtime Undo semantics unverified.",
+    "native_window_Undo_defect": "Historical2db output Undo left window too small. Current e4 native keyboard Undo restores1356x904 with full window, gold crop border and no scrollbars; Redo1276x851 and Undo1356x904 verified. Original runtime equivalence unverified.",
+    "native_desktop_proof_path": "build/actual-desktop-proof.json",
+    "native_desktop_proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f"
   }
 }

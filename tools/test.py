@@ -35,6 +35,9 @@ def suite(name, sources, test, define=None, arguments=()):
     return name
 
 suites = [
+    ("window-sizing-tests", ["WindowSizing.swift"], "WindowSizingTests.swift", "WINDOW_SIZING_TESTS", ()),
+    ("canvas-navigator-tests", ["CanvasNavigator.swift"], "CanvasNavigatorTests.swift", "CANVAS_NAVIGATOR_TESTS", ()),
+    ("canvas-border-tests", ["WindowSizing.swift", "CanvasBorderView.swift"], "CanvasBorderTests.swift", "CANVAS_BORDER_TESTS", ()),
     ("resize-panel-tests", ["ResizePanel.swift"], "ResizePanelTests.swift", "RESIZE_PANEL_TESTS", ()),
     ("export-accessory-tests", ["ExportAccessory.swift"], "ExportAccessoryTests.swift", "EXPORT_ACCESSORY_TESTS", ()),
     ("image-export-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "ImageExport.swift"], "ImageExportTests.swift", "IMAGE_EXPORT_TESTS", ()),

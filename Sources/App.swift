@@ -73,6 +73,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let dragSizeLabel = NSTextField(labelWithString: "")
     var dragExportView: DragExportView?
     var dragPreviewTimer: Timer?
+    var actualButton: NSButton?
+    var resizeButton: NSButton?
+    let navigator = CanvasNavigator(frame: NSRect(x: 0, y: 0, width: 180, height: 170))
+    var navigatorWindow: NSPanel?
+    let canvasBorder = CanvasBorderView(frame: .zero)
+    struct ActualViewState {
+        let generation: UUID
+        let outputSize: CGSize
+        let zoom: CGFloat
+        let windowFrame: CGRect
+        let scrollOrigin: CGPoint
+        var savedWhileActive = false
+    }
+    var actualView: ActualViewState?
+    var isActualSize: Bool { actualView != nil }
+    struct WindowGesture {
+        let generation: UUID
+        let outputSize: CGSize
+        let sourceSize: CGSize
+        let zoom: CGFloat
+        let windowFrame: CGRect
+        let handle: CanvasBorderHandle
+    }
+    var windowGesture: WindowGesture?
+    var adjustingWindowFrame = false
+    var navigatorTimer: Timer?
     var toolButtons: [SketchTool: NSButton] = [:]
     var currentURL: URL?
     var documentGeneration = UUID()
@@ -114,6 +140,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         buildMenus(); buildWindow()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
+        canvas.onViewportEditCancelled = { [weak self] in self?.endWindowGesture(cancelled: true) }
+        canvas.onHistoryRestored = { [weak self] previous in self?.finishHistoryResize(previousOutput: previous) }
         canvas.onOpenDocument = { [weak self] url in self?.openURL(url) }
         canvas.onToolChange = { [weak self] tool in
             guard let self else { return }
@@ -132,6 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         updateStatus()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in self?.saveRecovery() } }
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
+        window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
             try hotkeys.install(globalScreen: { [weak self] in self?.screenSnap() }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.fullscreenSnap() }, globalFrame: { [weak self] in self?.frameSnap() }, globalCamera: { [weak self] in self?.cameraSnap() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
@@ -182,7 +211,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationWillTerminate(_ notification: Notification) {
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
-        timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); try? hotkeys.unregister()
+        timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); try? hotkeys.unregister()
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -230,13 +259,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:))
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         drag.prepare = { [weak self] in
-            guard let self, let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragOriginalControl.state == .on, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
+            guard let self, let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragAtOriginalSize, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
             let name = self.safeName(), generation = self.documentGeneration
             return DragExportView.Payload(data: data, name: name, format: self.dragFormat, delivered: { [weak self] url in
                 self?.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
             })
         }
-        let bottom = stack([nameField, zoomControl, button("Resize…", #selector(resize)), button("Export…", #selector(exportFile)), button("Share…", #selector(share(_:))), drag], horizontal: true)
+        let actual = button("Actual Size", #selector(toggleActualSize)); actual.font = .systemFont(ofSize: 20); actualButton = actual
+        let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
+        let bottom = stack([nameField, zoomControl, actual, numericResize, button("Export…", #selector(exportFile)), button("Share…", #selector(share(_:))), drag], horizontal: true)
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20)
         for item in dragFormatControl.itemArray { item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)]) }
@@ -245,7 +276,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         dragFormatControl.selectItem(at: (0..<dragFormatControl.numberOfItems).contains(choice) ? choice : 0)
         dragOriginalControl.font = .systemFont(ofSize: 20)
         dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
-        dragOriginalControl.state = UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool == true ? .on : .off
+        dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
         dragSizeLabel.font = .systemFont(ofSize: 20); dragSizeLabel.lineBreakMode = .byTruncatingTail
         let options = stack([label("Drag Me format"), dragFormatControl, dragOriginalControl, dragSizeLabel], horizontal: true)
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
@@ -258,6 +289,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), options.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 42),
             status.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), status.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10)
         ])
+        content.addSubview(canvasBorder)
+        canvasBorder.onBegin = { [weak self] handle, flags in self?.beginWindowGesture(handle, flags: flags) ?? false }
+        canvasBorder.onDrag = { [weak self] delta, flags in self?.previewBorderGesture(delta: delta, flags: flags) }
+        canvasBorder.onEnd = { [weak self] cancelled in self?.endWindowGesture(cancelled: cancelled) }
+        navigator.onNavigate = { [weak self] origin in
+            guard let self, self.isActualSize, let scroll = self.canvas.enclosingScrollView else { return }
+            scroll.contentView.scroll(to: origin); scroll.reflectScrolledClipView(scroll.contentView)
+            self.updateViewportChrome()
+        }
+        scroll.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(canvasViewportChanged), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
         canvas.strokeColor = colorWell.color; canvas.strokeWidth = 5
         canvas.strokeSmoothing = StrokeSmoothing(rawValue: UserDefaults.standard.string(forKey: "PencilSmoothing") ?? "medium") ?? .medium
         setTool(.arrow)
@@ -271,7 +313,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let appMenu = menu("Skitch Redux", items: [("About Skitch Redux", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit Skitch Redux", #selector(quit), "q")])
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
-        let image = menu("Image", items: [("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
+        let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Toggle Text Outline", #selector(toggleOutline), "")])
         let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
         let drawing = menu("Drawing", items: [])
@@ -289,6 +331,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleActualSize) { menuItem.state = isActualSize ? .on : .off; return canToggleActualSize }
+        if menuItem.action == #selector(resize) { return !isActualSize && !frameMode }
         if menuItem.action == #selector(changeSmoothing(_:)) {
             menuItem.state = (menuItem.representedObject as? String) == canvas.strokeSmoothing.rawValue ? .on : .off
         }
@@ -310,7 +354,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func toggleFill(_ sender: NSButton) { canvas.filled = sender.state == .on; canvas.applyStyleToSelection() }
     @objc func toggleShadow(_ sender: NSButton) { canvas.shadowed = sender.state == .on; canvas.applyStyleToSelection() }
     @objc func changeZoom(_ sender: NSPopUpButton) {
-        guard let scale = sender.selectedItem?.representedObject as? Double else { return }
+        guard !isActualSize, let scale = sender.selectedItem?.representedObject as? Double else { return }
         canvas.setZoom(CGFloat(scale)); updateStatus()
     }
     func fitCanvasToWindow() {
@@ -328,6 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         item.tag = 999; item.representedObject = Double(canvas.zoom); zoomControl.menu?.insertItem(item, at: 0); zoomControl.select(item)
     }
     func changed() {
+        if isActualSize { _ = canvas.setPresentationOutputSize(canvas.fullResolutionOutputSize); scheduleNavigatorImage() }
         if !restoring { dirty = true }
         window?.isDocumentEdited = dirty; updateStatus()
         historyFollowTimer?.invalidate()
@@ -336,7 +381,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             historyFollowTimer = timer; RunLoop.main.add(timer, forMode: .common)
         }
     }
-    func updateStatus() { let s = canvas.outputSize; status.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; scheduleDragPreview() }
+    func updateStatus() { let s = canvas.outputSize; status.stringValue = "\(Int(ceil(s.width))) × \(Int(ceil(s.height))) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
         let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
         return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
@@ -360,7 +405,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func updateDragPreview() {
         dragPreviewTimer?.invalidate(); dragPreviewTimer = nil
-        let original = dragOriginalControl.state == .on
+        let original = dragAtOriginalSize
         let size = original && canvas.document.backgroundPNG != nil ? canvas.canvasSize : canvas.outputSize
         if let data = try? exportData(format: dragFormat, originalSize: original, jpegQuality: dragQuality) {
             dragSizeLabel.stringValue = "\(Int(size.width)) × \(Int(size.height)) · " + ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
@@ -384,7 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return false
     }
-    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; followHistory(); currentArchiveID = nil; leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
+    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; followHistory(); currentArchiveID = nil; endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
     @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if p.runModal() == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
@@ -393,6 +438,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             followHistory()
             if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) {
                 let file = try SkitchFile.read(url)
+                endWindowGesture(cancelled: true); leaveActualSize()
                 try canvas.loadDocument(data: file.canvasData); legacyMetadata = file.metadata
                 // Bundled samples stay intact; ordinary drawings save in place.
                 currentURL = url.path.contains(".app/Contents/Resources/") ? nil : url
@@ -401,11 +447,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
                     throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
                 }
+                endWindowGesture(cancelled: true); leaveActualSize()
                 canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); legacyMetadata = .init(); currentURL = nil }
-            currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions(); fitCanvasToWindow(); nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
+            currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions()
+            if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) { fitCanvasToWindow() } else { adoptRasterViewport() }
+            nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
         } catch { self.error(error) }
     }
     func save(forceChoose: Bool = false) -> Bool {
+        endWindowGesture()
         var url = forceChoose ? nil : currentURL
         if url == nil { let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".skitch"; p.allowedContentTypes = [UTType(filenameExtension: "skitch") ?? .data, UTType(filenameExtension: "skitchredux") ?? .data]; if p.runModal() != .OK { return false }; url = p.url }
         do {
@@ -413,6 +463,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot)
             try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: url)
             canvas.commitPendingTextEditing(); currentURL = url; dirty = false; window.isDocumentEdited = false; updateStatus()
+            if isActualSize { actualView?.savedWhileActive = true }
             archive(try HistoryStore.Snapshot(canvasData: snapshot, metadata: legacyMetadata, preview: canvas.imageData(format: "png")), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
             return true
         } catch { self.error(error); return false }
@@ -531,6 +582,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func restoreHistoryEditorState(_ state: HistoryEditorState) throws {
         _ = try CanvasView.validatedDocumentData(state.data)
         canvas.commitPendingTextEditing()
+        endWindowGesture(cancelled: true); leaveActualSize()
         let inverse = try historyEditorState()
         followHistory(); leaveFrame()
         restoring = true
@@ -738,7 +790,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self.receiveCapture(result, expectedGeneration: generation)
         }
     }
-    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil) {
+    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil, fitOutput: Bool = true) {
         guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
         switch result { case .success(let image):
             var proposed = CGRect(origin: .zero, size: image.size)
@@ -750,7 +802,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // here so timed, camera and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
-            followHistory(); currentArchiveID = nil; canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; fitCanvasToWindow(); nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {
@@ -767,6 +819,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func enterFrame(keepingAnnotations: Bool) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
+        endWindowGesture(cancelled: true); leaveActualSize()
         canvas.commitPendingTextEditing()
         if !frameMode {
             frameWindowWasOpaque = window.isOpaque
@@ -876,7 +929,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let generation = documentGeneration
         capture.captureCamera { [weak self] result in
             guard let self, self.documentGeneration == generation else { return }
-            self.receiveCapture(result, expectedGeneration: generation)
+            self.receiveCapture(result, expectedGeneration: generation, fitOutput: false)
         }
     }
     @objc func webSnap() {
@@ -900,6 +953,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleOutline() { canvas.outlined.toggle(); canvas.applyTextStyleToSelection() }
     @objc func resize() {
+        guard !isActualSize, !frameMode else { return }
         let generation = documentGeneration
         let panel = ResizePanel(size: canvas.outputSize) { [weak self] size, crop, anchor in
             guard let self, self.documentGeneration == generation else { return }
@@ -920,8 +974,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         (window?.attachedSheet ?? NSApp.keyWindow ?? window)?.firstResponder as? NSTextView
     }
     var activeUndoManager: UndoManager { activeTextEditor?.undoManager ?? canvas.editingUndoManager }
-    @objc func undo() { if let editor = activeTextEditor { editor.undoManager?.undo() } else { canvas.undo() } }
-    @objc func redo() { if let editor = activeTextEditor { editor.undoManager?.redo() } else { canvas.redo() } }
+    @objc func undo() {
+        if let editor = activeTextEditor { editor.undoManager?.undo(); return }
+        endWindowGesture(cancelled: true)
+        canvas.undo()
+    }
+    @objc func redo() {
+        if let editor = activeTextEditor { editor.undoManager?.redo(); return }
+        endWindowGesture(cancelled: true)
+        canvas.redo()
+    }
     @objc func cut() { if let editor = activeTextEditor { editor.cut(nil) } else { canvas.copySelection(); canvas.deleteSelection() } }
     @objc func copyArtwork() { if let editor = activeTextEditor { editor.copy(nil) } else { canvas.copySelection() } }
     @objc func copyImage() { NSPasteboard.general.clearContents(); NSPasteboard.general.writeObjects([canvas.renderedImage()]) }

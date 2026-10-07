@@ -46,11 +46,25 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     var document = SketchDocument() {
         didSet {
+            // A replacement supplied by the shell invalidates the preview's base.
+            // Internal viewport assignments preserve it until endViewportEdit.
+            let replacement = !applyingViewportState && documentMutationDepth == 0 && !isFinishingText
+            if replacement { actualNormalOutputSize = nil; resetGesture() }
             if !settingPanBackground && oldValue.backgroundPNG != document.backgroundPNG { panBackground = nil }
             updateCanvasSize(); needsDisplay = true
+            if replacement, viewportEdit != nil {
+                // The incoming document is authoritative; cancel the shell gesture
+                // without restoring the old document over its replacement.
+                invalidatingViewportDocument = true
+                defer { invalidatingViewportDocument = false }
+                endViewportEdit(cancelled: true)
+            }
         }
     }
     var onChange: (() -> Void)?
+    /// Called after an in-flight viewport edit has been cancelled and cleared.
+    var onViewportEditCancelled: (() -> Void)?
+    var onHistoryRestored: ((CGSize) -> Void)?
     var onToolChange: ((SketchTool) -> Void)?
     var onColorChange: ((NSColor) -> Void)?
     /// Original resource stems: wipe_brushlayer, wipe_snap, wipe_already_blank.
@@ -68,10 +82,24 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     var hasPendingTextChanges: Bool {
         guard textEditor != nil, let before = textBeforeEditing else { return false }
-        return documentIncludingPendingText() != before.document
+        var pending = state
+        pending.document = documentIncludingPendingText()
+        return undoState(pending).document != undoState(before).document
     }
     var canvasSize: NSSize { document.size }
     var outputSize: NSSize { document.outputSize }
+    /// Actual presents the currently visible source coordinates, not the retained
+    /// photo's hidden extent. Original documentPixelSize rounds to the nearest
+    /// source pixel; original-size raster export independently rounds up.
+    var fullResolutionOutputSize: CGSize {
+        func nearestSize(_ size: CGSize) -> CGSize? {
+            guard size.width.isFinite, size.height.isFinite else { return nil }
+            let pixels = CGSize(width: max(1, floor(size.width + 0.5)),
+                                height: max(1, floor(size.height + 0.5)))
+            return SketchDocument.validSize(pixels) ? pixels : nil
+        }
+        return nearestSize(document.size) ?? nearestSize(outputSize) ?? CGSize(width: 1, height: 1)
+    }
     var displayScale: CGSize { CGSize(width: outputSize.width / canvasSize.width * zoom,
                                      height: outputSize.height / canvasSize.height * zoom) }
     private var minimumDisplayScale: CGFloat { min(displayScale.width, displayScale.height) }
@@ -100,6 +128,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var togglingPencil = false
     private var panBackground: PanBackground?
     private var settingPanBackground = false
+    private var viewportEdit: ViewportEdit?
+    private var applyingViewportState = false
+    private var beginningViewportEdit = false
+    private var actualNormalOutputSize: CGSize?
+    private var documentMutationDepth = 0
+    private var invalidatingViewportDocument = false
     private var dragMode: DragMode = .none
     private var resizingHandle: Int?
     private var resizeBounds: CGRect = .zero
@@ -144,6 +178,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
         var selection: Set<UUID>
         var cropRect: CGRect?
         var panBackground: PanBackground?
+        // Gesture rollback uses the live presentation; history uses this normal
+        // output captured at the same time, even if a later transform changes it.
+        var normalOutputSize: CGSize?
+    }
+    private struct ViewportEdit {
+        var before: EditorState
+        var name: String
     }
 
     override init(frame frameRect: NSRect) {
@@ -162,7 +203,21 @@ final class CanvasView: NSView, NSTextViewDelegate {
         updateCanvasSize()
     }
     private var state: EditorState {
-        EditorState(document: document, selection: selection, cropRect: cropRect, panBackground: panBackground)
+        EditorState(document: document, selection: selection, cropRect: cropRect,
+                    panBackground: panBackground, normalOutputSize: actualNormalOutputSize)
+    }
+    private func undoState(_ value: EditorState) -> EditorState {
+        var result = value
+        if let normal = result.normalOutputSize {
+            result.document.renderSize = normal == result.document.size ? nil : normal
+            result.normalOutputSize = nil
+        }
+        return result
+    }
+    private func mutateDocument(_ body: () -> Void) {
+        documentMutationDepth += 1
+        defer { documentMutationDepth -= 1 }
+        body()
     }
     private func updateCanvasSize() {
         let size = intrinsicContentSize
@@ -175,7 +230,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     private func recordUndo(_ before: EditorState, name: String) {
-        guard before.document != document || before.panBackground != panBackground else { return }
+        let before = undoState(before), after = undoState(state)
+        guard before.document != after.document || before.panBackground != after.panBackground else { return }
         let explicitGroup = !editingUndoManager.isUndoing && !editingUndoManager.isRedoing
         if explicitGroup { editingUndoManager.beginUndoGrouping() }
         editingUndoManager.registerUndo(withTarget: self) { canvas in canvas.restore(before, name: name) }
@@ -184,23 +240,129 @@ final class CanvasView: NSView, NSTextViewDelegate {
         onChange?()
     }
     private func restore(_ restored: EditorState, name: String) {
+        endViewportEdit(cancelled: true)
         finishTextEditing()
         let inverse = state
-        document = restored.document
-        panBackground = restored.panBackground
-        selection = restored.selection
-        cropRect = restored.cropRect
+        restoreEditorState(restored)
         recordUndo(inverse, name: name)
     }
     private func edit(_ name: String, _ body: () -> Void) {
+        endViewportEdit(cancelled: true)
         finishTextEditing()
         let before = state
-        body()
+        mutateDocument {
+            if actualNormalOutputSize != nil {
+                document.renderSize = undoState(before).document.renderSize
+                body()
+                actualNormalOutputSize = document.outputSize
+                reapplyActualPresentation()
+            } else { body() }
+        }
         recordUndo(before, name: name)
     }
-    func undo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.undo() }
-    func redo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.redo() }
+    func undo() {
+        endViewportEdit(cancelled: true); finishTextEditing(); if dragMode != .none { cancelOperation(nil) }
+        let previous = outputSize; editingUndoManager.undo(); onHistoryRestored?(previous)
+    }
+    func redo() {
+        endViewportEdit(cancelled: true); finishTextEditing(); if dragMode != .none { cancelOperation(nil) }
+        let previous = outputSize; editingUndoManager.redo(); onHistoryRestored?(previous)
+    }
     func setZoom(_ value: CGFloat) { zoom = value }
+
+    /// The shell owns the gesture until endViewportEdit. Pending typing is a
+    /// separate edit, committed before taking the full canvas/source snapshot.
+    @discardableResult
+    func beginViewportEdit(name: String) -> Bool {
+        guard actualNormalOutputSize == nil, viewportEdit == nil, !beginningViewportEdit, !isFinishingText,
+              dragMode == .none, gestureState == nil, preview == nil, !drawingPencil,
+              !editingUndoManager.isUndoing, !editingUndoManager.isRedoing,
+              SketchDocument.validSize(canvasSize), SketchDocument.validSize(outputSize) else { return false }
+        beginningViewportEdit = true
+        defer { beginningViewportEdit = false }
+        finishTextEditing()
+        guard actualNormalOutputSize == nil, viewportEdit == nil, dragMode == .none,
+              SketchDocument.validSize(canvasSize), SketchDocument.validSize(outputSize) else { return false }
+        viewportEdit = ViewportEdit(before: state, name: name)
+        return true
+    }
+
+    @discardableResult
+    func previewViewportResize(to size: CGSize) -> Bool {
+        guard let transaction = viewportEdit, SketchDocument.validSize(size) else { return false }
+        var resized = transaction.before
+        let pixels = integralSize(size)
+        resized.document.renderSize = pixels == resized.document.size ? nil : pixels
+        applyViewportState(resized)
+        return true
+    }
+
+    /// Rectangles are in the source coordinate system captured at begin, even
+    /// after earlier previews have moved the raster and annotations.
+    @discardableResult
+    func previewViewportCrop(to rect: CGRect, outputSize: CGSize) -> Bool {
+        guard let transaction = viewportEdit, SketchDocument.validSize(outputSize),
+              let cropped = reframedState(from: transaction.before, to: rect,
+                                          outputSize: integralSize(outputSize)) else { return false }
+        applyViewportState(cropped)
+        return true
+    }
+
+    func endViewportEdit(cancelled: Bool = false) {
+        guard let transaction = viewportEdit else { return }
+        viewportEdit = nil
+        if cancelled {
+            if !invalidatingViewportDocument { applyViewportState(transaction.before) }
+            onViewportEditCancelled?()
+        }
+        else { recordUndo(transaction.before, name: transaction.name) }
+    }
+
+    /// Non-transient sizing for auto-fit. Actual's retained normal output is owned
+    /// exclusively by begin/endActualPresentation and document history.
+    @discardableResult
+    func setPresentationOutputSize(_ size: CGSize) -> Bool {
+        guard viewportEdit == nil, SketchDocument.validSize(size) else { return false }
+        mutateDocument { document.renderSize = size == document.size ? nil : size }
+        return true
+    }
+
+    @discardableResult
+    func beginActualPresentation() -> Bool {
+        guard actualNormalOutputSize == nil, viewportEdit == nil, !beginningViewportEdit, !isFinishingText,
+              dragMode == .none, gestureState == nil, preview == nil, !drawingPencil,
+              !editingUndoManager.isUndoing, !editingUndoManager.isRedoing,
+              SketchDocument.validSize(canvasSize), SketchDocument.validSize(outputSize) else { return false }
+        actualNormalOutputSize = outputSize
+        reapplyActualPresentation()
+        return true
+    }
+
+    func endActualPresentation() {
+        guard let normal = actualNormalOutputSize else { return }
+        if dragMode != .none { cancelOperation(nil) }
+        actualNormalOutputSize = nil
+        _ = setPresentationOutputSize(normal)
+    }
+
+    private func reapplyActualPresentation() {
+        guard actualNormalOutputSize != nil else { return }
+        _ = setPresentationOutputSize(fullResolutionOutputSize)
+    }
+
+    private func applyViewportState(_ value: EditorState) {
+        applyingViewportState = true; settingPanBackground = true
+        document = value.document
+        settingPanBackground = false; applyingViewportState = false
+        panBackground = value.panBackground
+        selection = value.selection; cropRect = value.cropRect
+    }
+    private func restoreEditorState(_ value: EditorState) {
+        let restored = undoState(value)
+        if actualNormalOutputSize != nil { actualNormalOutputSize = restored.document.outputSize }
+        applyViewportState(restored)
+        reapplyActualPresentation()
+    }
     @discardableResult
     func resizeImage(to size: CGSize) -> Bool {
         guard SketchDocument.validSize(size) else { return false }
@@ -215,6 +377,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     func newBlank(size: NSSize) {
         guard SketchDocument.validSize(size) else { return }
+        endActualPresentation()
         edit("New Canvas") {
             document = SketchDocument(size: integralSize(size)); panBackground = nil
             selection.removeAll(); cropRect = nil
@@ -228,6 +391,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         guard SketchDocument.validSize(size) else { return }
         let normalized = NSImage(cgImage: cg, size: size)
         guard let png = SketchRenderer.png(image: normalized) else { return }
+        endActualPresentation()
         edit("Set Background") {
             document.size = size; document.renderSize = nil; document.backgroundPNG = png; panBackground = nil
             selection.removeAll(); cropRect = nil
@@ -502,7 +666,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             background = visible
         } else { background = transformedBackground(matrix, size: size) }
         if document.backgroundPNG != nil && background == nil { return }
-        let output = document.renderSize
+        let output = undoState(state).document.renderSize
         edit(name) {
             settingPanBackground = true
             document.backgroundPNG = background; document.size = size
@@ -526,18 +690,43 @@ final class CanvasView: NSView, NSTextViewDelegate {
     /// every editable object. The original ActionCropResize never deletes graphics.
     @discardableResult
     func reframe(to rect: CGRect, outputSize requestedOutput: CGSize? = nil, name: String = "Crop") -> Bool {
+        guard viewportEdit == nil, let reframed = reframedState(from: undoState(state), to: rect, outputSize: requestedOutput) else { return false }
+        if rect == document.canvasRect && (requestedOutput == nil || requestedOutput == outputSize) { cropRect = nil; return true }
+        edit(name) {
+            var committed = reframed
+            // edit commits typing first; translate the resulting text as well.
+            committed.document.elements = document.elements
+            committed.selection = selection
+            for index in committed.document.elements.indices {
+                committed.document.elements[index].translate(x: -rect.minX, y: -rect.minY)
+            }
+            applyViewportState(committed)
+        }
+        return true
+    }
+    private func reframedState(from before: EditorState, to rect: CGRect,
+                               outputSize requestedOutput: CGSize?) -> EditorState? {
         guard rect.origin.x.isFinite, rect.origin.y.isFinite,
               abs(rect.origin.x) <= 1_000_000, abs(rect.origin.y) <= 1_000_000,
-              rect.width.isFinite, rect.height.isFinite, rect.width > 0, rect.height > 0 else { return false }
+              rect.width.isFinite, rect.height.isFinite, rect.width > 0, rect.height > 0 else { return nil }
         let viewport = rect
-        guard SketchDocument.validSize(viewport.size) else { return false }
-        if viewport == document.canvasRect && (requestedOutput == nil || requestedOutput == outputSize) { cropRect = nil; return true }
-        let scale = CGSize(width: outputSize.width / canvasSize.width, height: outputSize.height / canvasSize.height)
-        let output = requestedOutput ?? integralSize(CGSize(width: viewport.width * scale.width, height: viewport.height * scale.height))
-        guard SketchDocument.validSize(output) else { return false }
-        var source = panBackground
-        if source == nil, let png = document.backgroundPNG {
-            source = PanBackground(sourcePNG: png, sourceSize: document.size, offset: .zero)
+        guard SketchDocument.validSize(viewport.size) else { return nil }
+        let scale = CGSize(width: before.document.outputSize.width / before.document.size.width,
+                           height: before.document.outputSize.height / before.document.size.height)
+        let output = requestedOutput ?? (viewport == before.document.canvasRect ? before.document.outputSize :
+            integralSize(CGSize(width: viewport.width * scale.width, height: viewport.height * scale.height)))
+        guard SketchDocument.validSize(output) else { return nil }
+        var result = before
+        result.cropRect = nil
+        if viewport == before.document.canvasRect {
+            if output != before.document.outputSize {
+                result.document.renderSize = output == viewport.size ? nil : output
+            }
+            return result
+        }
+        var source = before.panBackground
+        if source == nil, let png = before.document.backgroundPNG {
+            source = PanBackground(sourcePNG: png, sourceSize: before.document.size, offset: .zero)
         }
         var visiblePNG: Data?
         if var moved = source {
@@ -546,19 +735,16 @@ final class CanvasView: NSView, NSTextViewDelegate {
                   let image = NSImage(data: moved.sourcePNG),
                   let png = SketchRenderer.bitmap(size: viewport.size, draw: {
                     SketchRenderer.drawImage(image, in: CGRect(origin: moved.offset, size: moved.sourceSize))
-                  })?.representation(using: .png, properties: [:]) else { return false }
+                  })?.representation(using: .png, properties: [:]) else { return nil }
             visiblePNG = png; source = moved
         }
-        edit(name) {
-            settingPanBackground = true
-            document.size = viewport.size; document.renderSize = output == viewport.size ? nil : output; document.backgroundPNG = visiblePNG
-            settingPanBackground = false; panBackground = source
-            for index in document.elements.indices {
-                document.elements[index].translate(x: -viewport.minX, y: -viewport.minY)
-            }
-            cropRect = nil
+        result.document.size = viewport.size
+        result.document.renderSize = output == viewport.size ? nil : output
+        result.document.backgroundPNG = visiblePNG; result.panBackground = source
+        for index in result.document.elements.indices {
+            result.document.elements[index].translate(x: -viewport.minX, y: -viewport.minY)
         }
-        return true
+        return result
     }
     /// Canvas dimensions use border-crop semantics; image resizing is separate.
     func resizeCanvas(to size: NSSize) { _ = reframe(to: CGRect(origin: .zero, size: size), name: "Resize Canvas") }
@@ -625,7 +811,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     func loadDocument(data: Data, clearingUndo: Bool = true) throws {
         let file = try Self.decodeValidatedCanvasFile(data)
+        endViewportEdit(cancelled: true)
         finishTextEditing()
+        endActualPresentation()
         document = file.document
         panBackground = file.canvasPanBackground
         selection.removeAll(); cropRect = nil; preview = nil
@@ -997,6 +1185,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         return element
     }
     override func mouseDown(with event: NSEvent) {
+        endViewportEdit(cancelled: true)
+        documentMutationDepth += 1
+        defer { documentMutationDepth -= 1 }
         finishTextEditing()
         window?.makeFirstResponder(self)
         currentModifiers = event.modifierFlags
@@ -1053,6 +1244,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
+        documentMutationDepth += 1
+        defer { documentMutationDepth -= 1 }
         if dragMode != .pan { autoscroll(with: event) }
         var point = documentPoint(event)
         lastMousePoint = point
@@ -1109,6 +1302,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
+        documentMutationDepth += 1
+        defer { documentMutationDepth -= 1 }
         // ToolBrush and ToolEraser do not add the zero-pressure release event.
         if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
         switch dragMode {
@@ -1256,12 +1451,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
         isFinishingText = true
         let before = textBeforeEditing
         if cancel, let before {
-            document = before.document; selection = before.selection
-            panBackground = before.panBackground
+            restoreEditorState(before)
         } else {
             document = documentIncludingPendingText()
             if !document.elements.contains(where: { $0.id == id }) { selection.remove(id) }
         }
+        reapplyActualPresentation()
         let returnFocusToCanvas = window?.firstResponder === editor
         editor.delegate = nil
         textEditor = nil; editingTextID = nil; textBeforeEditing = nil
@@ -1273,7 +1468,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     private func startTyping(with event: NSEvent) -> Bool {
-        guard window?.firstResponder === self, textEditor == nil, dragMode == .none, !spaceHeld,
+        guard viewportEdit == nil, window?.firstResponder === self, textEditor == nil, dragMode == .none, !spaceHeld,
               event.modifierFlags.intersection([.command, .control]).isEmpty,
               let characters = event.characters, !characters.isEmpty,
               characters.unicodeScalars.allSatisfy({
@@ -1294,7 +1489,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let y = min(max(0, anchor.y), max(0, canvasSize.height - min(element.fontSize * 1.5, canvasSize.height)))
         element.rect = CGRect(x: x, y: y, width: min(360, canvasSize.width - x), height: min(90, canvasSize.height - y))
         let before = state
-        document.elements.append(element); selection = [element.id]
+        mutateDocument { document.elements.append(element) }; selection = [element.id]
         beginTextEditing(element.id, before: before)
         // Forward the original event through native text input, including composed
         // characters, rather than assigning its string and bypassing typing undo.
@@ -1347,12 +1542,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
         super.keyUp(with: event)
     }
     override func cancelOperation(_ sender: Any?) {
+        if viewportEdit != nil { endViewportEdit(cancelled: true); return }
         // Programmatic cancellation retains explicit abandonment semantics; the
         // native editor/keyboard Escape handlers above commit the text instead.
         if textEditor != nil { finishTextEditing(cancel: true); return }
         if let before = gestureState {
-            document = before.document; panBackground = before.panBackground
-            selection = before.selection; cropRect = before.cropRect
+            restoreEditorState(before)
             if dragMode == .sampleColor, let previous = gestureColor, SketchColor(previous) != SketchColor(strokeColor) {
                 strokeColor = previous; onColorChange?(previous)
             }
