@@ -197,6 +197,7 @@ struct CanvasTests {
             ("Default Skitch Style restores face and effects while preserving mixed sizes", defaultTextStyle),
             ("text context routes Font without disrupting Control eraser", textContextStyle),
             ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
+            ("recovered native text completion keys preserve pending edits and history", textCompletionKeys),
             ("natural text layout grows shrinks and preserves source geometry through Undo", naturalTextLayout),
             ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
             ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
@@ -1639,6 +1640,62 @@ struct CanvasTests {
         try expect(c.document == snapshot, "Completion preserves pending snapshot exactly")
         c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One Undo restores text and placement together")
         c.redo(); try expect(c.document == snapshot, "Redo restores text and placement")
+    }
+    static func textCompletionKeys() throws {
+        // Independent original machine-code masks: 0x80000 Option, 0x200000
+        // numericPad, and device-only flags below 0x10000. Command is 0x100000.
+        let cases: [(String, UInt16, UInt, Bool)] = [
+            ("Escape", 53, 0, true), ("modified Escape", 53, 0x140000, true),
+            ("Option Return", 36, 0x80000, true), ("Shift Option Return", 36, 0xa0000, true),
+            ("Command Option Return", 36, 0x180000, true),
+            ("ordinary Return", 36, 0, false), ("Shift Return", 36, 0x20000, false),
+            ("Command Return", 36, 0x100000, false), ("Control Return", 36, 0x40000, false),
+            ("numericPad Return keycode", 36, 0x200000, false),
+            ("bare Enter", 76, 0, true), ("device-only Enter", 76, 0x80, true),
+            ("keypad Enter", 76, 0x200000, true), ("Shift keypad Enter", 76, 0x220000, true),
+            ("Command keypad Enter", 76, 0x300000, true),
+            ("Shift Enter without keypad flag", 76, 0x20000, false),
+            ("Command Enter without keypad flag", 76, 0x100000, false),
+            ("Caps Lock Enter without keypad flag", 76, 0x10000, false)
+        ]
+        try expect(NSEvent.ModifierFlags.option.rawValue == 0x80000 && NSEvent.ModifierFlags.numericPad.rawValue == 0x200000 && NSEvent.ModifierFlags.command.rawValue == 0x100000,
+                   "Modern AppKit names match the recovered original masks")
+        for (name, code, raw, commits) in cases {
+            let c = canvas(NSSize(width: 700, height: 400)); let window = host(c); defer { window.close() }
+            var text = SketchElement(kind: .text); text.text = "Before"
+            text.rect = CGRect(x: 50, y: 50, width: 250, height: 70); text.color = SketchColor(.blue)
+            c.document.elements = [text]; c.tool = .select
+            let before = c.document
+            c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 60, y: 60), clicks: 2))
+            let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+            editor.insertText("Pending", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+            let typing = editor.undoManager
+            try expect(c.convertSelectedTextFonts({ _ in NSFont(name: "Courier-Bold", size: 34) }, outline: false, shadow: true), "Stage typography for \(name)")
+            let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+            grip.mouseDragged(with: TextGripDragEvent(20, 12))
+            let pending = try SketchDocument.decode(c.snapshotDocumentData())
+            let characters = code == 53 ? "\u{1b}" : (code == 76 ? "\u{3}" : "\r")
+            let event = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: NSEvent.ModifierFlags(rawValue: raw), timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: characters, charactersIgnoringModifiers: characters,
+                isARepeat: false, keyCode: code)!
+            editor.keyDown(with: event)
+            if commits {
+                try expect(editor.superview == nil && grip.superview == nil && window.firstResponder === c && c.activeEditorUndoManager == nil,
+                           "\(name) completes and returns focus to canvas")
+                try expect(c.document == pending && !c.hasPendingTextChanges, "\(name) preserves words typography color effects and grip movement")
+                c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "\(name) commits exactly one drawing Undo")
+                c.redo(); try expect(c.document == pending, "\(name) Redo restores the complete edit")
+            } else {
+                try expect(editor.superview === c && grip.superview === c && window.firstResponder === editor && editor.undoManager === typing,
+                           "\(name) retains native text input focus and history")
+                try expect(c.document == before && !c.editingUndoManager.canUndo && c.hasPendingTextChanges,
+                           "\(name) never commits pending work")
+                if code == 36 && raw == 0 {
+                    try expect(editor.string == "Pending\n", "Ordinary Return inserts a native line break")
+                }
+                c.cancelOperation(nil); try expect(c.document == before && !c.editingUndoManager.canUndo, "Cancel after \(name) restores source")
+            }
+        }
     }
     static func naturalTextLayout() throws {
         let c = canvas(NSSize(width: 1400, height: 600)); let window = host(c); defer { window.close() }

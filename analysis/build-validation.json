@@ -1,18 +1,18 @@
 {
-  "verified_at": "2026-10-07T21:52:58.475080+00:00",
-  "checkpoint_id": "text-layout-0ff1651294",
-  "checkpoint_state": "apple_silicon_text_layout_build_suites_startup_and_listed_native_checks_verified",
+  "verified_at": "2026-10-07T22:00:57.208250+00:00",
+  "checkpoint_id": "text-keys-1b065ff2ff",
+  "checkpoint_state": "apple_silicon_text_keys_build_suites_startup_and_listed_native_checks_verified",
   "build": {
     "architectures": [
       "arm64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.oDMQXC",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.IHilvb",
     "source_sha256": {
       "App.swift": "55a249976fcaabdbe5c2f3aa65ff2a6d47d10aad689ee3b11327193da6efd6df",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
-      "Canvas.swift": "55ea469a56365c62aba5cfac60efd761d5f0c4f61a82414b3b87f4282406b2e2",
+      "Canvas.swift": "c3aacbc83e304fdf7984fac778ea268a0ce0a02059e937b00801edeeac17c552",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -82,44 +82,44 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "0ff165129494795236510f9d9fa3229fcd425927df1a8ec0649e7eea00de26f3"
+    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "c0cc0313ea126a5fd2f7590e3677ee9092c7206cc8f37a2d001f23775ed3c61b",
+  "build_manifest_sha256": "bc6a8f816ecadaf30bd855110a3a72a749ffe177777ce2ef008edaa188dc82ac",
   "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/text-layout-verification/build.log",
-  "build_log_sha256": "a9aa7a115a5335f3663c10b0d3403ea4647de52548a926e87cbc002690a75359",
+  "build_log_path": "build/text-keys-verification/build.log",
+  "build_log_sha256": "fb0a2ff0799297cbc174e9508886cc9ad2186a8b3de81c6253b3118ec8b2d9bb",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.gyj4tdq6",
-      "log_path": "build/text-layout-verification/arm64.log",
-      "log_sha256": "13d772131fb32313abf85638e32ea679aba57dca26cae6063a76d3dc9e732fdb",
-      "checks": 2544,
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.aswjhxya",
+      "log_path": "build/text-keys-verification/arm64.log",
+      "log_sha256": "04a24633480c23ea6dddac25c6e02644491af4efc3c10a63b796e4920419f59b",
+      "checks": 2545,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/text-layout-verification/results.json",
-  "full_suite_results_sha256": "79b0974a373b2f3718b8ee160abf45cb4bd273e74962578f57e154b06e940767",
+  "full_suite_results_path": "build/text-keys-verification/results.json",
+  "full_suite_results_sha256": "224ef5baf46da11ee99bce6211bbb09b61e99f10ac5016768b86423ca1491b63",
   "native_startup_smoke": {
-    "binary_sha256": "0ff165129494795236510f9d9fa3229fcd425927df1a8ec0649e7eea00de26f3",
-    "verified_at": "2026-10-07T21:49:40.721680+00:00",
+    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a",
+    "verified_at": "2026-10-07T21:57:11.554121+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 22421,
       "editable_bytes": 29793,
-      "editable_sha256": "9e2b307275357351e28521d20459139cc2dbd881d5ea27f7df84b54523524317"
+      "editable_sha256": "def6d5f003cb9e4ccba0e4e0d2030794740ae0309dc40748c27a12fbc5c68bc9"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-0ff1651294/results.json",
-  "native_startup_smoke_results_sha256": "cc6f31392cdc30ec870053b80b8dad0b2862f6163ea773c64c45eafab69f1c10",
+  "native_startup_smoke_results_path": "build/startup-smoke-1b065ff2ff/results.json",
+  "native_startup_smoke_results_sha256": "812a2f2e80eb5f2d606b42e13551f64a255df1c5d083a69d6e5d619fca2bfa23",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
     "tools/build.sh": "5674d47adcee941cd07546dacc8c9e66cd5d1c962283fec1417c00d19abd2488",
@@ -131,67 +131,57 @@
     "architectures": [
       "arm64"
     ],
-    "checks_per_architecture": 2544,
+    "checks_per_architecture": 2545,
     "suites": 24,
-    "results_path": "build/text-layout-verification/results.json",
-    "results_sha256": "79b0974a373b2f3718b8ee160abf45cb4bd273e74962578f57e154b06e940767"
+    "results_path": "build/text-keys-verification/results.json",
+    "results_sha256": "224ef5baf46da11ee99bce6211bbb09b61e99f10ac5016768b86423ca1491b63"
   },
   "current_native_startup_validation": {
     "status": "passed_arm64",
-    "binary_sha256": "0ff165129494795236510f9d9fa3229fcd425927df1a8ec0649e7eea00de26f3",
-    "startup_log_path": "build/text-layout-verification/startup.log",
-    "startup_log_sha256": "c55b40fd0aa9c623d50c49cd8dd59e7c03fbd83accaa15d36c6806995b16c5cc"
+    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a",
+    "startup_log_path": "build/text-keys-verification/startup.log",
+    "startup_log_sha256": "48a8b452ed7cd89002240c50522e1cddb45bb3bcf4b96bb2a4dc443ef741e25a"
   },
   "current_desktop_checks": [
     {
-      "name": "Older drawing opens with all labels and original effects visible, and remains unchanged on disk",
+      "name": "Prior drawing opens with preserved words, fonts/effects and alpha and remains unchanged on disk",
       "passed": true,
-      "evidence": "build/text-layout-verification/opened.png"
+      "evidence": "build/text-keys-verification/opened.png"
     },
     {
-      "name": "Beginning native editing fits the original words without a model edit",
+      "name": "Ordinary Return creates a new line and keeps native annotation focus",
       "passed": true,
-      "evidence": "build/text-layout-verification/initial-fit.png"
+      "evidence": "build/text-keys-verification/return-newline.png"
     },
     {
-      "name": "Longer words grow the native box horizontally without automatic wrapping",
+      "name": "Command Return stays in native text editing without committing",
       "passed": true,
-      "evidence": "build/text-layout-verification/long-line.png"
+      "evidence": "build/text-keys-verification/command-return.png"
     },
     {
-      "name": "Explicit newlines including trailing empty row grow height and shrink width",
+      "name": "Option Return commits the annotation and returns focus to canvas",
       "passed": true,
-      "evidence": "build/text-layout-verification/multiline.png"
+      "evidence": "build/text-keys-verification/option-return.png"
     },
     {
-      "name": "Shorter words shrink width and height",
+      "name": "One drawing Undo restores the pre-editor words and bounds; Redo restores the completed edit",
       "passed": true,
-      "evidence": "build/text-layout-verification/short-line.png"
+      "evidence": "build/text-keys-verification/option-undo.png"
     },
     {
-      "name": "Typing Undo restores multiline words and stable box margins",
+      "name": "Keypad Enter commits the second annotation and returns focus to canvas",
       "passed": true,
-      "evidence": "build/text-layout-verification/typing-undo.png"
+      "evidence": "build/text-keys-verification/keypad-enter.png"
     },
     {
-      "name": "Typing Redo restores short words and stable box margins",
+      "name": "One drawing Undo restores the second annotation while preserving the first completed edit; Redo restores both",
       "passed": true,
-      "evidence": "build/text-layout-verification/typing-redo.png"
+      "evidence": "build/text-keys-verification/keypad-undo.png"
     },
     {
-      "name": "Escape commits multiline content as one drawing edit",
+      "name": "Separate native Save As and Open preserve both completed annotations, fitted bounds, styles and alpha",
       "passed": true,
-      "evidence": "build/text-layout-verification/committed.png"
-    },
-    {
-      "name": "One drawing Undo restores original words and imported bounds; Redo restores the fitted edit",
-      "passed": true,
-      "evidence": "build/text-layout-verification/canvas-undo.png"
-    },
-    {
-      "name": "Separate native Save As and Open preserve multiline text, fitted bounds, styles and alpha",
-      "passed": true,
-      "evidence": "build/text-layout-verification/reopened.png"
+      "evidence": "build/text-keys-verification/reopened.png"
     }
   ],
   "historical_validations": [
@@ -959,10 +949,69 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "text-layout-0ff1651294",
+      "binary_sha256": "0ff165129494795236510f9d9fa3229fcd425927df1a8ec0649e7eea00de26f3",
+      "full_suite_results_path": "build/text-layout-verification/results.json",
+      "full_suite_results_sha256": "79b0974a373b2f3718b8ee160abf45cb4bd273e74962578f57e154b06e940767",
+      "desktop_checks": [
+        {
+          "name": "Older drawing opens with all labels and original effects visible, and remains unchanged on disk",
+          "passed": true,
+          "evidence": "build/text-layout-verification/opened.png"
+        },
+        {
+          "name": "Beginning native editing fits the original words without a model edit",
+          "passed": true,
+          "evidence": "build/text-layout-verification/initial-fit.png"
+        },
+        {
+          "name": "Longer words grow the native box horizontally without automatic wrapping",
+          "passed": true,
+          "evidence": "build/text-layout-verification/long-line.png"
+        },
+        {
+          "name": "Explicit newlines including trailing empty row grow height and shrink width",
+          "passed": true,
+          "evidence": "build/text-layout-verification/multiline.png"
+        },
+        {
+          "name": "Shorter words shrink width and height",
+          "passed": true,
+          "evidence": "build/text-layout-verification/short-line.png"
+        },
+        {
+          "name": "Typing Undo restores multiline words and stable box margins",
+          "passed": true,
+          "evidence": "build/text-layout-verification/typing-undo.png"
+        },
+        {
+          "name": "Typing Redo restores short words and stable box margins",
+          "passed": true,
+          "evidence": "build/text-layout-verification/typing-redo.png"
+        },
+        {
+          "name": "Escape commits multiline content as one drawing edit",
+          "passed": true,
+          "evidence": "build/text-layout-verification/committed.png"
+        },
+        {
+          "name": "One drawing Undo restores original words and imported bounds; Redo restores the fitted edit",
+          "passed": true,
+          "evidence": "build/text-layout-verification/canvas-undo.png"
+        },
+        {
+          "name": "Separate native Save As and Open preserve multiline text, fitted bounds, styles and alpha",
+          "passed": true,
+          "evidence": "build/text-layout-verification/reopened.png"
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
-  "text_verification_scope": "Exact Apple Silicon build: listed native natural text growth/shrinkage, explicit rows, typing and drawing Undo/Redo, separate Save As/reopen and preserved prior drawing. Full Fonts layout/direct choices, transformed live editor presentation and original i386 runtime comparison remain unverified.",
+  "text_verification_scope": "Exact Apple Silicon build: listed native Return/Command Return continuation, Option Return/keypad Enter completion, separate annotation drawing Undo/Redo, native Save As/reopen and preserved prior drawing. Full Fonts layout/direct choices, transformed live editor presentation and original i386 runtime comparison remain unverified.",
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
@@ -1011,10 +1060,11 @@
     "Current minimum-window, color/pending-text and Close/Hide proof remains pinned to earlier exact binaries; no original-runtime equivalence claim.",
     "Rename desktop checks cover app identity, commands and existing drawing Open; earlier detailed workflow proofs have not all been repeated on the renamed binary.",
     "Original runtime text-effect equivalence and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native effects/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
-    "Original runtime layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Listed native natural sizing/edit/Undo/save/reopen checks passed on arm64 only."
+    "Original runtime layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native natural sizing/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
+    "Original runtime keyboard/layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts workflows remain unverified. Listed native Return/Command Return continuation, Option Return/keypad Enter completion, drawing Undo/Redo and Save As/reopen checks passed on arm64 only."
   ],
-  "current_desktop_proof_path": "build/text-layout-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "1c7fd86d66888154a7c5f4fe58386f6a6540429bd257298d81390eb5a76843fa",
+  "current_desktop_proof_path": "build/text-keys-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "82a8f3433acff4a91e4096152ecea9eae05d60f8f0a4b7e4694efc291916b01b",
   "architecture_policy": "Apple Silicon arm64 only; prior Intel results remain historical, with no current Intel build/test requirement.",
   "recovered_text_effects": {
     "path": "build/text-effects-verification/original-recovery.json",
@@ -1024,6 +1074,11 @@
   "recovered_text_geometry": {
     "path": "build/text-layout-verification/original-recovery.json",
     "sha256": "341cd15adb343d544f035e468a7e8bce898fed7044a0ad900d3a766ded8df661",
+    "original_runtime_verified": false
+  },
+  "recovered_text_keys": {
+    "path": "build/text-keys-verification/original-recovery.json",
+    "sha256": "8cdd1c6aa7a7bbf2099f5634c902f614297c441d85c08d6ed674534accc7b871",
     "original_runtime_verified": false
   }
 }

@@ -138,9 +138,13 @@ private final class SketchTextEditor: NSTextView {
     }
     @objc private func showTextStyle() { (delegate as? CanvasView)?.onTextStyleRequested?() }
     override func keyDown(with event: NSEvent) {
-        // Original SkitchTextFieldEditor_keyDown: handles Escape before NSTextView
-        // completion handling, then textDidEndEditing: saves the field contents.
-        if event.keyCode == 53, let canvas = delegate as? CanvasView {
+        // SkitchTextFieldEditor keyDown: (0x1cae8). The original 0x200000
+        // flag is numericPad, not Command; keypad Enter carries it normally.
+        let flags = event.modifierFlags
+        let finish = event.keyCode == 53 ||
+            (event.keyCode == 36 && flags.contains(.option)) ||
+            (event.keyCode == 76 && (flags.contains(.numericPad) || flags.rawValue < 0x10000))
+        if finish, let canvas = delegate as? CanvasView {
             canvas.commitPendingTextEditing(); return
         }
         super.keyDown(with: event)
@@ -1823,10 +1827,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) { finishTextEditing() }
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            finishTextEditing(); return true
-        }
-        if commandSelector == #selector(NSResponder.insertNewline(_:)),
-           NSApp.currentEvent?.modifierFlags.contains(.command) == true {
             finishTextEditing(); return true
         }
         return false
