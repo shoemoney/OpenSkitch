@@ -1,0 +1,11 @@
+{
+  "public_url": "https://shoemoney.com/imgs/skitch-redux-test-5926ba502bab.png",
+  "remote_folder": "/var/www/shoemoney.com/shared/imgs",
+  "ssh_alias": "shoemoney.com",
+  "http_status": 200,
+  "content_type": "image/png",
+  "size_bytes": 46785,
+  "sha256": "7694cc09e6c42b5b1e007e24f3923810a21e94a88989a75ad928814217cc04fa",
+  "public_download_matches": true,
+  "transport": "SFTP using configured SSH key"
+}

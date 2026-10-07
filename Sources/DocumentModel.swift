@@ -1,0 +1,334 @@
+import AppKit
+
+/// Document coordinates are pixels with a top-left origin, independent of display zoom.
+enum SketchTool: String, CaseIterable, Codable {
+    case select, arrow, line, rectangle, ellipse, brush, text, fill, eraser, crop
+}
+
+struct SketchColor: Codable, Equatable {
+    var red: CGFloat
+    var green: CGFloat
+    var blue: CGFloat
+    var alpha: CGFloat
+
+    init(_ color: NSColor) {
+        let rgb = color.usingColorSpace(.deviceRGB) ?? .black
+        red = rgb.redComponent; green = rgb.greenComponent
+        blue = rgb.blueComponent; alpha = rgb.alphaComponent
+    }
+    var nsColor: NSColor { NSColor(deviceRed: red, green: green, blue: blue, alpha: alpha) }
+    static let white = SketchColor(.white)
+    static let clear = SketchColor(.clear)
+}
+
+/// Keeping the affine matrix editable preserves shapes/text during rotation and flipping.
+struct SketchTransform: Codable, Equatable {
+    var a: CGFloat = 1
+    var b: CGFloat = 0
+    var c: CGFloat = 0
+    var d: CGFloat = 1
+    var tx: CGFloat = 0
+    var ty: CGFloat = 0
+    static let identity = SketchTransform()
+    var cg: CGAffineTransform { CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }
+    func applying(_ point: CGPoint) -> CGPoint { point.applying(cg) }
+    /// Apply this matrix first, then the world-space matrix.
+    func followed(by next: SketchTransform) -> SketchTransform {
+        SketchTransform(a: next.a * a + next.c * b, b: next.b * a + next.d * b,
+                        c: next.a * c + next.c * d, d: next.b * c + next.d * d,
+                        tx: next.a * tx + next.c * ty + next.tx,
+                        ty: next.b * tx + next.d * ty + next.ty)
+    }
+    static func translation(x: CGFloat, y: CGFloat) -> SketchTransform { SketchTransform(tx: x, ty: y) }
+}
+
+struct SketchElement: Codable, Equatable, Identifiable {
+    enum Kind: String, Codable { case arrow, line, rectangle, ellipse, brush, text, raster, path }
+    var id = UUID()
+    var kind: Kind
+    var points: [CGPoint] = []
+    var rect: CGRect = .zero
+    var color = SketchColor(.systemRed)
+    var strokeWidth: CGFloat = 5
+    var filled = false
+    var shadowed = false
+    var text = ""
+    var fontSize: CGFloat = 24
+    var fontName: String = "Helvetica-Bold"
+    var outlined: Bool = true
+    var pathCommands: [SVGPathCommand] = []
+    var imagePNG: Data?
+    var transform = SketchTransform.identity
+    var groupID: UUID?
+
+    var localBounds: CGRect {
+        switch kind {
+        case .path: return (try? SVGPathParser.makeCGPath(pathCommands).boundingBoxOfPath) ?? .zero
+        case .arrow, .line, .brush:
+            guard let first = points.first else { return .zero }
+            return points.dropFirst().reduce(CGRect(origin: first, size: .zero)) { result, point in
+                CGRect(x: min(result.minX, point.x), y: min(result.minY, point.y),
+                       width: max(result.maxX, point.x) - min(result.minX, point.x),
+                       height: max(result.maxY, point.y) - min(result.minY, point.y))
+            }
+        default: return rect.standardized
+        }
+    }
+    var bounds: CGRect { localBounds.applying(transform.cg).standardized }
+    var paintBounds: CGRect {
+        let scale = max(hypot(transform.a, transform.b), hypot(transform.c, transform.d))
+        let padding = (kind == .arrow ? max(14, strokeWidth * 4) : max(2, strokeWidth)) * scale
+        return bounds.insetBy(dx: -padding - (shadowed ? 10 : 0), dy: -padding - (shadowed ? 10 : 0))
+    }
+    mutating func translate(x: CGFloat, y: CGFloat) {
+        transform = transform.followed(by: .translation(x: x, y: y))
+    }
+}
+
+extension SketchElement {
+    private enum CodingKeys: String, CodingKey {
+        case id, kind, points, rect, color, strokeWidth, filled, shadowed, text, fontSize
+        case fontName, outlined, pathCommands, imagePNG, transform, groupID
+    }
+    /// New version-1 fields have defaults so files saved before legacy path support remain readable.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        kind = try c.decode(Kind.self, forKey: .kind)
+        points = try c.decodeIfPresent([CGPoint].self, forKey: .points) ?? []
+        rect = try c.decodeIfPresent(CGRect.self, forKey: .rect) ?? .zero
+        color = try c.decodeIfPresent(SketchColor.self, forKey: .color) ?? SketchColor(.systemRed)
+        strokeWidth = try c.decodeIfPresent(CGFloat.self, forKey: .strokeWidth) ?? 5
+        filled = try c.decodeIfPresent(Bool.self, forKey: .filled) ?? false
+        shadowed = try c.decodeIfPresent(Bool.self, forKey: .shadowed) ?? false
+        text = try c.decodeIfPresent(String.self, forKey: .text) ?? ""
+        fontSize = try c.decodeIfPresent(CGFloat.self, forKey: .fontSize) ?? 24
+        fontName = try c.decodeIfPresent(String.self, forKey: .fontName) ?? "Helvetica-Bold"
+        outlined = try c.decodeIfPresent(Bool.self, forKey: .outlined) ?? true
+        pathCommands = try c.decodeIfPresent([SVGPathCommand].self, forKey: .pathCommands) ?? []
+        imagePNG = try c.decodeIfPresent(Data.self, forKey: .imagePNG)
+        transform = try c.decodeIfPresent(SketchTransform.self, forKey: .transform) ?? .identity
+        groupID = try c.decodeIfPresent(UUID.self, forKey: .groupID)
+    }
+}
+
+enum SketchDocumentError: LocalizedError {
+    case unsupportedFormat, unsupportedVersion, invalidDocument, invalidImage
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedFormat: return "This is not a Skitch Redux document. Original .skitch files are not supported yet."
+        case .unsupportedVersion: return "This Skitch Redux document uses an unsupported format version."
+        case .invalidDocument: return "The document contains invalid dimensions, colors, or drawing data."
+        case .invalidImage: return "The image could not be decoded."
+        }
+    }
+}
+
+/// Versioned JSON + embedded PNGs. This is explicitly distinct from the original .skitch format.
+struct SketchDocument: Codable, Equatable {
+    static let formatIdentifier = "com.skitch-redux.editable-document"
+    static let fileExtension = "skitchredux"
+    static let maximumDimension: CGFloat = 16384
+    static let maximumPixelCount: CGFloat = 32_000_000
+    var format = Self.formatIdentifier
+    var version = 1
+    var size: CGSize = CGSize(width: 800, height: 600)
+    var backgroundColor = SketchColor.white
+    var backgroundPNG: Data?
+    var elements: [SketchElement] = []
+
+    init(size: CGSize = CGSize(width: 800, height: 600)) { self.size = size }
+    var canvasRect: CGRect { CGRect(origin: .zero, size: size) }
+    var backgroundImage: NSImage? {
+        get { backgroundPNG.flatMap(NSImage.init(data:)) }
+        set { backgroundPNG = newValue.flatMap { SketchRenderer.png(image: $0) } }
+    }
+    static func validSize(_ size: CGSize) -> Bool {
+        size.width.isFinite && size.height.isFinite && size.width >= 1 && size.height >= 1 &&
+        size.width <= maximumDimension && size.height <= maximumDimension &&
+        size.width.rounded(.up) * size.height.rounded(.up) <= maximumPixelCount
+    }
+    func validated() throws -> SketchDocument {
+        guard format == Self.formatIdentifier else { throw SketchDocumentError.unsupportedFormat }
+        guard version == 1 else { throw SketchDocumentError.unsupportedVersion }
+        func validPoint(_ point: CGPoint) -> Bool {
+            point.x.isFinite && point.y.isFinite && abs(point.x) <= 1_000_000 && abs(point.y) <= 1_000_000
+        }
+        func validColor(_ color: SketchColor) -> Bool {
+            [color.red, color.green, color.blue, color.alpha].allSatisfy { $0.isFinite && (0...1).contains($0) }
+        }
+        guard Self.validSize(size), validColor(backgroundColor), elements.count <= 100_000,
+              Set(elements.map(\.id)).count == elements.count else { throw SketchDocumentError.invalidDocument }
+        if let data = backgroundPNG, NSImage(data: data) == nil { throw SketchDocumentError.invalidImage }
+        for element in elements {
+            let t = element.transform
+            guard element.points.count <= 1_000_000, element.points.allSatisfy(validPoint),
+                  validPoint(element.rect.origin), element.rect.width.isFinite, element.rect.height.isFinite,
+                  abs(element.rect.width) <= 1_000_000, abs(element.rect.height) <= 1_000_000,
+                  element.strokeWidth.isFinite, (0...4096).contains(element.strokeWidth),
+                  element.strokeWidth > 0 || (element.kind == .path && element.filled),
+                  // Imported historical typography keeps its original size. New
+                  // tool text and the editor enforce the 18-point minimum.
+                  element.fontSize.isFinite, element.fontSize > 0, element.fontSize <= 4096, validColor(element.color),
+                  [t.a, t.b, t.c, t.d, t.tx, t.ty].allSatisfy({ $0.isFinite && abs($0) <= 1_000_000 }),
+                  abs(t.a * t.d - t.b * t.c) > 0.000000001 else { throw SketchDocumentError.invalidDocument }
+            if [.arrow, .line, .brush].contains(element.kind), element.points.isEmpty {
+                throw SketchDocumentError.invalidDocument
+            }
+            if element.kind == .raster {
+                guard let data = element.imagePNG, NSImage(data: data) != nil,
+                      element.rect.width > 0, element.rect.height > 0 else { throw SketchDocumentError.invalidImage }
+            }
+            if element.kind == .path {
+                guard !element.pathCommands.isEmpty, element.pathCommands.count <= 1_000_000 else {
+                    throw SketchDocumentError.invalidDocument
+                }
+                for command in element.pathCommands {
+                    let points: [CGPoint]
+                    switch command {
+                    case .move(let p), .line(let p): points = [p]
+                    case .cubic(let a, let b, let p): points = [a, b, p]
+                    case .quadratic(let a, let p): points = [a, p]
+                    case .close: points = []
+                    case .arc: throw SketchDocumentError.invalidDocument // Parser retains arcs; renderer does not support them yet.
+                    }
+                    guard points.allSatisfy(validPoint) else { throw SketchDocumentError.invalidDocument }
+                }
+                _ = try SVGPathParser.makeCGPath(element.pathCommands)
+            }
+        }
+        return self
+    }
+    func encoded() throws -> Data {
+        _ = try validated()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(self)
+    }
+    static func decode(_ data: Data) throws -> SketchDocument {
+        try JSONDecoder().decode(Self.self, from: data).validated()
+    }
+}
+
+/// Shared by screen drawing and exports. Selection handles and editor chrome are never exported.
+enum SketchRenderer {
+    static func bitmap(size: CGSize, draw: () -> Void) -> NSBitmapImageRep? {
+        guard SketchDocument.validSize(size),
+              let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil,
+                pixelsWide: Int(ceil(size.width)), pixelsHigh: Int(ceil(size.height)),
+                bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+              let context = NSGraphicsContext(bitmapImageRep: bitmap) else { return nil }
+        bitmap.size = size
+        NSGraphicsContext.saveGraphicsState()
+        context.cgContext.clear(CGRect(x: 0, y: 0, width: bitmap.pixelsWide, height: bitmap.pixelsHigh))
+        context.cgContext.translateBy(x: 0, y: CGFloat(bitmap.pixelsHigh))
+        context.cgContext.scaleBy(x: 1, y: -1)
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: context.cgContext, flipped: true)
+        draw()
+        NSGraphicsContext.restoreGraphicsState()
+        return bitmap
+    }
+    static func bitmap(document: SketchDocument, includeBackground: Bool = true) -> NSBitmapImageRep? {
+        bitmap(size: document.size) { draw(document, includeBackground: includeBackground) }
+    }
+    static func png(image: NSImage) -> Data? {
+        guard SketchDocument.validSize(image.size) else { return nil }
+        return bitmap(size: image.size) { drawImage(image, in: CGRect(origin: .zero, size: image.size)) }?
+            .representation(using: .png, properties: [:])
+    }
+    static func drawImage(_ image: NSImage, in rect: CGRect) {
+        image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true,
+                   hints: [.interpolation: NSImageInterpolation.high])
+    }
+    static func draw(_ document: SketchDocument, includeBackground: Bool = true) {
+        NSGraphicsContext.saveGraphicsState()
+        NSBezierPath(rect: document.canvasRect).addClip()
+        if includeBackground {
+            document.backgroundColor.nsColor.setFill()
+            document.canvasRect.fill()
+            if let image = document.backgroundImage { drawImage(image, in: document.canvasRect) }
+        }
+        // Original Skitch text always floats above the drawing shapes.
+        for element in document.elements where element.kind != .text { draw(element) }
+        for element in document.elements where element.kind == .text { draw(element) }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+    static func path(for element: SketchElement) -> NSBezierPath {
+        let path = NSBezierPath()
+        path.lineWidth = element.strokeWidth
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        switch element.kind {
+        case .rectangle: path.appendRect(element.rect.standardized)
+        case .ellipse: path.appendOval(in: element.rect.standardized)
+        case .arrow, .line, .brush:
+            if let first = element.points.first {
+                path.move(to: first)
+                for point in element.points.dropFirst() { path.line(to: point) }
+            }
+        default: break
+        }
+        return path
+    }
+    static func draw(_ element: SketchElement) {
+        guard let cg = NSGraphicsContext.current?.cgContext else { return }
+        NSGraphicsContext.saveGraphicsState()
+        cg.concatenate(element.transform.cg)
+        if element.shadowed {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
+            shadow.shadowBlurRadius = 4
+            shadow.shadowOffset = NSSize(width: 2, height: -3)
+            shadow.set()
+        }
+        element.color.nsColor.set()
+        switch element.kind {
+        case .path:
+            if let path = try? SVGPathParser.makeCGPath(element.pathCommands) {
+                cg.setFillColor(element.color.nsColor.cgColor)
+                cg.setStrokeColor(element.color.nsColor.cgColor)
+                cg.setLineWidth(element.strokeWidth); cg.setLineCap(.round); cg.setLineJoin(.round)
+                cg.addPath(path); cg.drawPath(using: element.filled ? .fill : .stroke)
+            }
+        case .raster:
+            if let data = element.imagePNG, let image = NSImage(data: data) { drawImage(image, in: element.rect) }
+        case .text:
+            var attributes: [NSAttributedString.Key: Any] = [
+                .font: NSFont(name: element.fontName, size: element.fontSize) ?? NSFont.boldSystemFont(ofSize: element.fontSize),
+                .foregroundColor: element.color.nsColor,
+                .paragraphStyle: textParagraphStyle
+            ]
+            if element.outlined { attributes[.strokeColor] = NSColor.white; attributes[.strokeWidth] = -3 }
+            (element.text as NSString).draw(in: element.rect, withAttributes: attributes)
+        case .brush where element.points.count == 1:
+            if let point = element.points.first {
+                NSBezierPath(ovalIn: CGRect(x: point.x - element.strokeWidth / 2,
+                    y: point.y - element.strokeWidth / 2, width: element.strokeWidth, height: element.strokeWidth)).fill()
+            }
+        default:
+            let path = path(for: element)
+            if element.filled && [.rectangle, .ellipse].contains(element.kind) { path.fill() }
+            path.stroke()
+            if element.kind == .arrow, let end = element.points.last, element.points.count >= 2 {
+                let start = element.points[element.points.count - 2]
+                let angle = atan2(end.y - start.y, end.x - start.x)
+                let length = max(14, element.strokeWidth * 4)
+                let halfWidth = max(6, element.strokeWidth * 1.8)
+                let head = NSBezierPath()
+                head.move(to: end)
+                head.line(to: CGPoint(x: end.x - length * cos(angle) + halfWidth * sin(angle),
+                                     y: end.y - length * sin(angle) - halfWidth * cos(angle)))
+                head.line(to: CGPoint(x: end.x - length * cos(angle) - halfWidth * sin(angle),
+                                     y: end.y - length * sin(angle) + halfWidth * cos(angle)))
+                head.close(); head.fill()
+            }
+        }
+        NSGraphicsContext.restoreGraphicsState()
+    }
+    static var textParagraphStyle: NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byWordWrapping
+        return style
+    }
+}

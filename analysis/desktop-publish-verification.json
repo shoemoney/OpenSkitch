@@ -1,0 +1,8 @@
+{
+  "url": "https://shoemoney.com/imgs/skitch-redux-desktop-verified-20261007.png",
+  "httpStatus": 200,
+  "contentType": "image/png",
+  "bytes": 1234,
+  "sha256": "eb5e19f566952e84f0a0ab8d3e2753f7f7ef6112c8283d0e4146b46aff43416b",
+  "verification": "Corrected native app Publish workflow verifies SFTP roundtrip and unauthenticated HTTP exact bytes before returning success. Independent HTTPS fetch successful."
+}

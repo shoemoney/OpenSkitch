@@ -1,0 +1,7 @@
+original/
+analysis/*
+!analysis/reconstruction-progress.json
+!analysis/desktop-publish-verification.json
+!analysis/sftp-verification.json
+build/
+.DS_Store
