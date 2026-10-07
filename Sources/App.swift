@@ -141,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         buildMenus(); buildWindow()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
+        canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
         canvas.onViewportEditCancelled = { [weak self] in
             self?.endWindowGesture(cancelled: true)
             self?.activeResizeSession?.cancel()
@@ -318,7 +319,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
         let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
-        let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Toggle Text Outline", #selector(toggleOutline), "")])
+        let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Skitch Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
+        let spelling = NSMenu(title: "Spelling"); spelling.font = .systemFont(ofSize: 20)
+        for (title, action, key) in [("Spelling…", "showGuessPanel:", ":"), ("Check Spelling", "checkSpelling:", ";"), ("Check Spelling as You Type", "toggleContinuousSpellChecking:", "")] {
+            // Original MainMenu.nib connects these directly to the text responder.
+            // Keep the target nil so sheet fields and annotation editors both work.
+            spelling.addItem(NSMenuItem(title: title, action: Selector(action), keyEquivalent: key))
+        }
+        let spellingItem = NSMenuItem(title: "Spelling", action: nil, keyEquivalent: ""); spellingItem.submenu = spelling; text.addItem(spellingItem)
         let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
         let drawing = menu("Drawing", items: [])
         let smoothing = menu("Pencil Smoothing", items: [])
@@ -953,15 +961,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func prompt(_ title: String, text: String, value: String) -> String? { let a = NSAlert(); a.messageText = title; a.informativeText = text; let field = NSTextField(string: value); field.font = .systemFont(ofSize: 20); field.frame = NSRect(x: 0,y: 0,width: 340,height: 32); a.accessoryView = field; a.addButton(withTitle: "OK"); a.addButton(withTitle: "Cancel"); return a.runModal() == .alertFirstButtonReturn ? field.stringValue : nil }
     @objc func chooseFont() {
-        let alert = NSAlert(); alert.messageText = "Text Font"
-        let family = NSComboBox(); family.addItems(withObjectValues: NSFontManager.shared.availableFontFamilies.sorted()); family.stringValue = NSFont(name: canvas.fontName, size: canvas.fontSize)?.familyName ?? canvas.fontName; family.font = .systemFont(ofSize: 20)
-        let size = NSTextField(string: String(Int(canvas.fontSize))); size.font = .systemFont(ofSize: 20)
-        let form = stack([label("Font family"), family, label("Size in pixels"), size]); form.frame = NSRect(x: 0, y: 0, width: 380, height: 156); family.widthAnchor.constraint(equalToConstant: 370).isActive = true
-        alert.accessoryView = form; alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn, let pixels = Double(size.stringValue), pixels.isFinite, pixels >= 18, pixels <= 4096, let font = NSFontManager.shared.font(withFamily: family.stringValue, traits: [], weight: 5, size: pixels) else { return }
-        canvas.fontName = font.fontName; canvas.fontSize = pixels; canvas.applyTextStyleToSelection(); window.makeFirstResponder(canvas)
+        guard !terminationStarted else { return }
+        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
+        let font = NSFont(name: selected?.fontName ?? canvas.fontName, size: selected?.fontSize ?? canvas.fontSize) ?? .boldSystemFont(ofSize: 24)
+        let form = TextStyleForm(font: font, outlined: selected?.outlined ?? canvas.outlined, shadowed: selected?.shadowed ?? canvas.shadowed)
+        let alert = NSAlert(); alert.messageText = "Skitch Text Style"; alert.accessoryView = form
+        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn, let font = form.resolvedFont() else { return }
+        canvas.fontName = font.fontName; canvas.fontSize = font.pointSize
+        canvas.outlined = form.outline.state == .on; canvas.shadowed = form.shadowControl.state == .on
+        canvas.applyTextStyleToSelection(includingShadow: true); window.makeFirstResponder(canvas)
     }
-    @objc func toggleOutline() { canvas.outlined.toggle(); canvas.applyTextStyleToSelection() }
+    @objc func defaultTextStyle() { canvas.restoreDefaultTextStyle() }
+    @objc func toggleTextShadow() {
+        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
+        canvas.shadowed = !(selected?.shadowed ?? canvas.shadowed)
+        canvas.applyTextEffectsToSelection(shadow: canvas.shadowed)
+    }
+    @objc func toggleOutline() {
+        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
+        canvas.outlined = !(selected?.outlined ?? canvas.outlined)
+        canvas.applyTextEffectsToSelection(outline: canvas.outlined)
+    }
     @objc func resize() {
         guard let session = makeResizeSession() else { return }
         ResizePanel(session: session).show(attachedTo: window)

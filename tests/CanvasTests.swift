@@ -184,6 +184,9 @@ struct CanvasTests {
             ("document-drop callback preserves pending editor and history", pendingDocumentDrop),
             ("text-only font/outline changes preserve colors, shapes and wrap width", textStyleSelection),
             ("text-only style safely commits pending typing with separate undo", pendingTextStyle),
+            ("text style shadow changes preserve non-text artwork and separate typing Undo", textShadowStyle),
+            ("Default Skitch Style restores face and effects while preserving mixed sizes", defaultTextStyle),
+            ("text context routes Font without disrupting Control eraser", textContextStyle),
             ("Control eraser, secondary mouse and recovered modifier precedence", controlEraser),
             ("Space pans snap and drawing, preserves offscreen pixels and undo", spacePan),
             ("Tab Pencil toggle and Option eyedropper only notify UI", toolAndColorGestures),
@@ -1524,6 +1527,63 @@ struct CanvasTests {
         c.undo(); try expect(c.document == committedTyping, "Undo font action retains the committed pending text at its previous font")
         c.undo(); try expect(c.document == original, "Separate typing undo restores the pre-editor document")
         c.redo(); c.redo(); try expect(c.document == styled, "Redo typing then font preserves both edits")
+    }
+    static func textShadowStyle() throws {
+        let c = canvas(NSSize(width: 400, height: 200)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Blue annotation"; text.color = SketchColor(.blue)
+        text.rect = CGRect(x: 10, y: 10, width: 200, height: 70); text.shadowed = true
+        let shape = rectangle(CGRect(x: 270, y: 20, width: 80, height: 40))
+        c.document.elements = [text, shape]; c.tool = .select
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 20, y: 20), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        editor.insertText("Edited annotation", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let pending = try SketchDocument.decode(c.snapshotDocumentData())
+        c.selection.insert(shape.id); c.fontName = text.fontName; c.fontSize = text.fontSize
+        c.strokeColor = .red; c.strokeWidth = 40; c.filled = true; c.shadowed = false
+        c.applyTextStyleToSelection(includingShadow: true)
+        let styled = c.document
+        try expect(!styled.elements[0].shadowed && styled.elements[0].color == text.color && styled.elements[0].strokeWidth == text.strokeWidth, "Only requested text shadow changes")
+        try expect(styled.elements[1] == shape && styled.elements[0].text == "Edited annotation", "Protected shape and pending typing")
+        c.undo(); try expect(c.document == pending, "Text style Undo preserves committed typing")
+        c.undo(); try expect(c.document.elements == [text, shape], "Separate typing Undo")
+        c.redo(); c.redo(); try expect(c.document == styled, "Both Redo steps reproduce style")
+    }
+    static func defaultTextStyle() throws {
+        let c = canvas(NSSize(width: 500, height: 300))
+        var a = SketchElement(kind: .text); a.text = "First"; a.fontName = "Courier"; a.fontSize = 23
+        a.outlined = false; a.shadowed = false; a.rect = CGRect(x: 10, y: 10, width: 150, height: 50); a.color = SketchColor(.blue)
+        var b = a; b.id = UUID(); b.text = "Second"; b.fontSize = 48; b.rect.origin.y = 100
+        let shape = rectangle(CGRect(x: 300, y: 30, width: 100, height: 100))
+        c.document.elements = [a, b, shape]; c.selection = [a.id, b.id, shape.id]
+        c.fontSize = 31; c.fontName = "Courier"; c.outlined = false; c.shadowed = false
+        let before = c.document; c.restoreDefaultTextStyle(); let after = c.document
+        try expect(c.fontName == "Helvetica-Bold" && c.fontSize == 31 && c.outlined && c.shadowed, "Future text default restored without a size reset")
+        for (old, new) in zip([a,b], after.elements.prefix(2)) {
+            try expect(new.fontName == "Helvetica-Bold" && new.fontSize == old.fontSize && new.outlined && new.shadowed, "Mixed selected sizes preserved")
+            try expect(new.color == old.color && new.text == old.text && new.rect.width == old.rect.width && new.rect.origin == old.rect.origin && new.transform == old.transform, "Color geometry and text preserved")
+        }
+        try expect(after.elements[2] == shape, "Default text action does not restyle shape")
+        c.undo(); try expect(c.document == before, "Default style one Undo")
+        c.redo(); try expect(c.document == after, "Default style Redo")
+        c.undo(); c.fontName = "Helvetica"; c.fontSize = 80
+        c.applyTextEffectsToSelection(outline: true, shadow: true)
+        for (old, new) in zip([a,b], c.document.elements.prefix(2)) {
+            try expect(new.fontName == old.fontName && new.fontSize == old.fontSize && new.rect == old.rect, "Effect controls preserve every selected font and size")
+        }
+    }
+    static func textContextStyle() throws {
+        let c = canvas(NSSize(width: 300, height: 200)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Context"; text.rect = CGRect(x: 10, y: 10, width: 150, height: 70)
+        c.document.elements = [text]; c.tool = .brush
+        let before = c.document
+        let event = try mouse(c, .rightMouseDown, CGPoint(x: 20, y: 20))
+        guard let menu = c.menu(for: event) else { throw Failure(description: "Text context menu") }
+        try expect(menu.items.map(\.title) == ["Skitch Text Style…", "Default Skitch Style"], "Original reachable text font/default controls")
+        try expect(c.selection == [text.id] && c.tool == .brush && c.document == before && !c.editingUndoManager.canUndo, "Context selects text without document or tool mutation")
+        var requests = 0; c.onTextStyleRequested = { requests += 1 }
+        try expect(NSApp.sendAction(menu.items[0].action!, to: menu.items[0].target, from: menu.items[0]) && requests == 1, "Font context callback")
+        try expect(c.menu(for: try mouse(c, .rightMouseDown, CGPoint(x: 20, y: 20), flags: [.control])) == nil, "Control secondary gesture remains eraser")
+        try expect(c.menu(for: try mouse(c, .rightMouseDown, CGPoint(x: 220, y: 150))) == nil, "Blank canvas has no text context menu")
     }
     static func controlEraser() throws {
         let c = canvas(); let window = host(c); defer { window.close() }

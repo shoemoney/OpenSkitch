@@ -7,6 +7,16 @@ private final class SketchTextEditor: NSTextView {
     // an annotation registers one canvas undo step, regardless of keystroke count.
     private let typingHistory = UndoManager()
     override var undoManager: UndoManager? { typingHistory }
+    override func menu(for event: NSEvent) -> NSMenu? {
+        let menu = super.menu(for: event) ?? NSMenu()
+        menu.font = .systemFont(ofSize: 20)
+        guard delegate is CanvasView else { return menu }
+        menu.addItem(.separator())
+        let item = NSMenuItem(title: "Skitch Text Style…", action: #selector(showTextStyle), keyEquivalent: "")
+        item.target = self; menu.addItem(item)
+        return menu
+    }
+    @objc private func showTextStyle() { (delegate as? CanvasView)?.onTextStyleRequested?() }
     override func keyDown(with event: NSEvent) {
         // Original SkitchTextFieldEditor_keyDown: handles Escape before NSTextView
         // completion handling, then textDidEndEditing: saves the field contents.
@@ -62,6 +72,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
     }
     var onChange: (() -> Void)?
+    var onTextStyleRequested: (() -> Void)?
     /// Called after an in-flight viewport edit has been cancelled and cleared.
     var onViewportEditCancelled: (() -> Void)?
     var onHistoryRestored: ((CGSize) -> Void)?
@@ -524,7 +535,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     /// Font/outline controls must not apply the current pen color or shape style.
     /// Pending typing commits first through edit(), retaining its own undo step.
-    func applyTextStyleToSelection() {
+    func applyTextStyleToSelection(includingShadow: Bool = false) {
         edit("Change Text Style") {
             for index in document.elements.indices where selection.contains(document.elements[index].id) &&
                 document.elements[index].kind == .text {
@@ -534,10 +545,32 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 element.fontName = fontName
                 element.fontSize = size
                 element.outlined = outlined
+                if includingShadow { element.shadowed = shadowed }
                 // Keep the existing wrap width, anchor, and affine transform. Only
                 // reflow height when typography changes so larger text is not clipped.
                 if typographyChanged { element.rect.size.height = textHeight(for: element) }
                 document.elements[index] = element
+            }
+        }
+    }
+
+    func restoreDefaultTextStyle() {
+        fontName = "Helvetica-Bold"; outlined = true; shadowed = true
+        edit("Default Skitch Style") {
+            for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind == .text {
+                document.elements[index].fontName = fontName
+                document.elements[index].outlined = true; document.elements[index].shadowed = true
+                // The recovered original reset preserves each selected text size.
+                document.elements[index].rect.size.height = textHeight(for: document.elements[index])
+            }
+        }
+    }
+
+    func applyTextEffectsToSelection(outline: Bool? = nil, shadow: Bool? = nil) {
+        edit("Change Text Style") {
+            for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind == .text {
+                if let outline { document.elements[index].outlined = outline }
+                if let shadow { document.elements[index].shadowed = shadow }
             }
         }
     }
@@ -1355,6 +1388,18 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
 
     // AppKit may deliver Control-click as a secondary-button event; it is still a pen eraser gesture.
+    override func menu(for event: NSEvent) -> NSMenu? {
+        guard !event.modifierFlags.contains(.control), let element = hitElement(documentPoint(event)), element.kind == .text else { return nil }
+        finishTextEditing(); selection = [element.id]; needsDisplay = true
+        let menu = NSMenu(title: "Text"); menu.font = .systemFont(ofSize: 20)
+        let style = NSMenuItem(title: "Skitch Text Style…", action: #selector(requestTextStyle), keyEquivalent: "")
+        style.target = self; menu.addItem(style)
+        let defaults = NSMenuItem(title: "Default Skitch Style", action: #selector(defaultTextStyle), keyEquivalent: "")
+        defaults.target = self; menu.addItem(defaults)
+        return menu
+    }
+    @objc private func requestTextStyle() { onTextStyleRequested?() }
+    @objc private func defaultTextStyle() { restoreDefaultTextStyle() }
     override func rightMouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { mouseDown(with: event) } else { super.rightMouseDown(with: event) }
     }

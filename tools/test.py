@@ -35,6 +35,7 @@ def suite(name, sources, test, define=None, arguments=()):
     return name
 
 suites = [
+    ("text-style-form-tests", ["TextStyleForm.swift"], "TextStyleFormTests.swift", "TEXT_STYLE_FORM_TESTS", ()),
     ("resize-presets-tests", ["ResizePresets.swift"], "ResizePresetsTests.swift", "RESIZE_PRESETS_TESTS", ()),
     ("window-sizing-tests", ["WindowSizing.swift"], "WindowSizingTests.swift", "WINDOW_SIZING_TESTS", ()),
     ("canvas-navigator-tests", ["CanvasNavigator.swift"], "CanvasNavigatorTests.swift", "CANVAS_NAVIGATOR_TESTS", ()),

@@ -91,6 +91,7 @@ final class AppSafetyAlert: NSAlert {
         let title: String
         let response: NSApplication.ModalResponse
         var text: String? = nil
+        var configureTextStyle: ((TextStyleForm) -> Void)? = nil
     }
     static var answers: [Answer] = []
     static var seen: [String] = []
@@ -105,6 +106,7 @@ final class AppSafetyAlert: NSAlert {
         let answer = Self.answers.removeFirst()
         if answer.title != messageText { Self.unexpected.append(messageText) }
         if let text = answer.text, let field = accessoryView as? NSTextField { field.stringValue = text }
+        if let form = accessoryView as? TextStyleForm { answer.configureTextStyle?(form) }
         return answer.response
     }
 }
@@ -1766,6 +1768,37 @@ enum AppSafetyTests {
         app.redo()
         try expect(app.canvas.document == document && history.canRedo, "Roundtrip preserves the existing Redo chain")
     }
+    static func textStyleCommands() throws {
+        let fixture = try Fixture(), app = fixture.app
+        var text = SketchElement(kind: .text); text.text = "Blue text"; text.color = SketchColor(.blue)
+        text.fontName = "Courier-Bold"; text.fontSize = 37; text.outlined = false; text.shadowed = false
+        text.rect = CGRect(x: 20, y: 20, width: 250, height: 80)
+        var shape = SketchElement(kind: .rectangle); shape.rect = CGRect(x: 320, y: 20, width: 100, height: 80)
+        app.canvas.document.elements = [text, shape]; app.canvas.selection = [text.id, shape.id]
+        let before = try app.canvas.snapshotDocumentData()
+        AppSafetyAlert.answers = [.init(title: "Skitch Text Style", response: .alertSecondButtonReturn, configureTextStyle: { form in
+            form.restoreDefault(); form.size.stringValue = "48"
+        })]
+        app.chooseFont()
+        try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo, "Cancelled style form does not alter selected artwork")
+        AppSafetyAlert.answers = [.init(title: "Skitch Text Style", response: .alertFirstButtonReturn, configureTextStyle: { form in
+            precondition(form.resolvedFont()?.fontName == "Courier-Bold" && form.resolvedFont()?.pointSize == 37)
+            form.restoreDefault(); form.size.stringValue = "48"
+        })]
+        app.chooseFont(); let after = app.canvas.document
+        try expect(after.elements[0].fontName == "Helvetica-Bold" && after.elements[0].fontSize == 48 && after.elements[0].outlined && after.elements[0].shadowed, "Dialog restores original style with explicit size")
+        try expect(after.elements[0].color == text.color && after.elements[1] == shape, "Dialog leaves color and shape intact")
+        app.canvas.undo(); try expect(try app.canvas.snapshotDocumentData() == before, "App font action is one Undo")
+        app.toggleTextShadow(); app.toggleOutline()
+        try expect(app.canvas.document.elements[0].fontName == text.fontName && app.canvas.document.elements[0].fontSize == 37 && app.canvas.document.elements[0].outlined && app.canvas.document.elements[0].shadowed && app.canvas.document.elements[1] == shape, "Effect toggles invert selected text rather than stale defaults, preserving fonts and shapes")
+        app.canvas.undo(); app.canvas.undo()
+        app.defaultTextStyle()
+        try expect(app.canvas.document.elements[0].fontSize == 37 && app.canvas.document.elements[0].outlined && app.canvas.document.elements[0].shadowed, "Default menu action preserves selected size")
+        let textMenu = NSApp.mainMenu!.items.compactMap(\.submenu).first { $0.title == "Text" }!
+        let spelling = textMenu.items.compactMap(\.submenu).first { $0.title == "Spelling" }!
+        try expect(spelling.items.map { NSStringFromSelector($0.action!) } == ["showGuessPanel:", "checkSpelling:", "toggleContinuousSpellChecking:"] && spelling.items.allSatisfy { $0.target == nil }, "Original spelling selectors retain responder-chain routing")
+        try expect(spelling.items.map(\.keyEquivalent) == [":", ";", ""], "Original spelling keyboard equivalents")
+    }
     static func resizeSheetPreviewLifecycle() throws {
         let fixture = try Fixture(), app = fixture.app
         try viewportFixture(app)
@@ -2368,6 +2401,7 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
             ("Resize Apply previews from one baseline; Cancel restores all state; OK commits one crop Undo", resizeSheetPreviewLifecycle),
             ("Resize first-Apply baseline, native Save and independent edits prevent stale preview rollback", resizePreviewInterruptionAndSave),
             ("Resize previews cannot overwrite recovery/History or enter Open History Undo", resizePreviewRecoveryAndHistory),
