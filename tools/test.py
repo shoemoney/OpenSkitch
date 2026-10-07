@@ -37,6 +37,8 @@ def suite(name, sources, test, define=None, arguments=()):
 suites = [
     ("window-zoom-tests", ["WindowZoom.swift"], "WindowZoomTests.swift", "WINDOW_ZOOM_TESTS", ()),
     ("text-style-form-tests", ["TextStyleForm.swift"], "TextStyleFormTests.swift", "TEXT_STYLE_FORM_TESTS", ()),
+    ("general-preferences-form-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "GeneralPreferencesForm.swift"], "GeneralPreferencesFormTests.swift", "GENERAL_PREFERENCES_FORM_TESTS", ()),
+    ("original-general-preferences-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "DocumentModel.swift", "GeneralPreferencesForm.swift", "OriginalGeneralPreferences.swift"], "OriginalGeneralPreferencesTests.swift", "ORIGINAL_GENERAL_PREFERENCES_TESTS", ()),
     ("resize-presets-tests", ["ResizePresets.swift"], "ResizePresetsTests.swift", "RESIZE_PRESETS_TESTS", ()),
     ("window-sizing-tests", ["WindowSizing.swift"], "WindowSizingTests.swift", "WINDOW_SIZING_TESTS", ()),
     ("canvas-navigator-tests", ["CanvasNavigator.swift"], "CanvasNavigatorTests.swift", "CANVAS_NAVIGATOR_TESTS", ()),

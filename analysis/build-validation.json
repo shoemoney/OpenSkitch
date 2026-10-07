@@ -1,32 +1,34 @@
 {
-  "verified_at": "2026-10-07T22:15:25.854648+00:00",
-  "checkpoint_id": "arrow-fac1640392",
-  "checkpoint_state": "apple_silicon_arrow_build_suites_startup_and_listed_native_checks_verified",
+  "verified_at": "2026-10-07T22:49:36.711927+00:00",
+  "checkpoint_id": "preferences-2ce50637b2",
+  "checkpoint_state": "apple_silicon_preferences_build_suites_startup_and_listed_native_checks_verified",
   "build": {
     "architectures": [
       "arm64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.Rx1S3C",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.oVe3fw",
     "source_sha256": {
-      "App.swift": "86d30adebedc35d69047e3598eee51f72af03c001b53357f06c53136652124e9",
+      "App.swift": "5395404df2539697cd6b1960e813bfdb8dd1c20e961c503512eeb073106089ce",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
       "Canvas.swift": "922a8248ed35ec062c926f22c8318864de2e3a5a62a86a599c3bcea1c4f00693",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
-      "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
+      "Capture.swift": "5a4487eda829771196e8e0797ba31b00387c484d9724f4cb958ed974b15035ea",
       "DocumentModel.swift": "13e5bf7740940301596dbf63437df160f487bcc492b438ed904a27eb911aacd6",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
+      "GeneralPreferencesForm.swift": "724813bf0711936a75d0b9e5b2fbe476983eaf55462cc943646dbcdf6240d4ec",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
       "HistoryBrowser.swift": "ee3c9a2dc48982721403fbf9dfb0440651c09c4b6676c69dd78bf99d31a93b3c",
       "HistoryRemoteDeletion.swift": "de8a69153fd185d5026838ec878d2ccdee7e6d65ae9b4eff4b22fe018e6209e6",
       "HistoryStore.swift": "22b844f988db0232706a26680271ad8e9ecdfcda4ddbc8774b47fe38ec737ff6",
       "ImageExport.swift": "d54f00f33b1337f7d45870fa14230162957a609650791ff0867af5c1bc1cd0f0",
-      "Info.plist": "31d43e115e32aa398d9548af9da0d61cca70d35d0f6f26376108337e680dce24",
+      "Info.plist": "6665eba1ea4074aaf771a87804bd33f3b3772c797c3eaced35e71ff306224fa6",
       "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
       "LegacyHistoryImporter.swift": "2add6149931fa2c418b71604af6622b8006b561c52464d49732a6a502011b08d",
       "LegacySkitch.swift": "02b6a4b57151fde5fe7a981bf0866feb8fb0a5b8537d320d6f7e2d66252067be",
+      "OriginalGeneralPreferences.swift": "dddb8808df8e5a91b70b3c8334d60d9ee1c24d6ba872cc058587126a1d81534b",
       "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
       "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
@@ -41,6 +43,11 @@
     },
     "resource_sha256": {
       "CursorMove.png": "50ec303249a161e796b0e54977a5408b393d92a5252cb7891a6f68e46c593192",
+      "OpenSkitch.icns": "9c0026d606f93425e3c50cce72f62b7b8f1c85f9d5b70638a44425b1aef8471c",
+      "OpenSkitch.png": "4e048a4ceeac9555e7634e7956da9081b0c321229581c72ea0bdbe050272c35b",
+      "PTW_commence.m4a": "06dcd463590d8ff085e5a83c0f50da13a5e4bface6cc387708d322631cc549ad",
+      "PTW_complete.m4a": "2721eda8ce2034f435721575421242fc13b8c3b2a94077481e4069d32b2ebf4c",
+      "PTW_error.m4a": "97d68ec254fd1879f2f2d79488d8e53766debc2ed337518931bceee9f93af230",
       "SkitchMac.icns": "81a2b816d8f8aa05fe712147e7bad66626a4607049d02fef80fc7166dd2b7663",
       "SkitchTitle.png": "c783a487de04832489683d44aa248674db553a38792095b99824c8c07e1ebe8f",
       "Skitch_Cancel_DragMe.png": "feda111f7ea378d48239a0d52c38d39b4a2826ce258fa320e454e321a701cd62",
@@ -64,6 +71,7 @@
       "ToolOnLine.png": "00e4a35c63aff7abdbf4bd94c99887dd00a5fe6b89530e252d97c5afc2b23ca2",
       "ToolOnRect.png": "66e2a5074659bf0cccd9d899551f8f6e91dd59c1ba377b045abe6a6182debb81",
       "ToolOnText.png": "3f24e2c186acb004666476881e73a7980a19d4be43d342e065d314715182c499",
+      "archive_1st.m4a": "1d35495206ae87b6a97db752967c5b2c4046749d6f3547f1b197d01ba86c7549",
       "docWin_Bottom.png": "9dd3899a57eac2425e08f1bca80c8cf56fc10c02679576db59756792a27447df",
       "docWin_BottomLeft.png": "f2e493715044d0efd997de206ed03ad5077787be4430f16bac4a851d46d58a98",
       "docWin_BottomLeftBlank.png": "d0d104302948beec35759f3858a11c23fedf3df898f1a3a805d0ae26ced60eae",
@@ -79,110 +87,79 @@
       "docWin_TopRightBlank.png": "1387c18a861695a3706205fa4d7ad8d4ccee2117ad3cf005361728b976d1ca25",
       "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
       "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52",
+      "pre-snap-countdown.m4a": "0dbc5992d2da00168a3236e587a291d655783cf21ea677fcb7074c581d7c894f",
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
-      "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
+      "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5",
+      "snap.m4a": "8baa1381da1d7938da49ddf3ba0a7eb0f0291c52a16bbe45e34e427053044272",
+      "wipe_already_blank.m4a": "ba96879a658fcf4f5181a35b17db0077b0621a452dc49807a71338d9ad6e3be4",
+      "wipe_brushlayer.m4a": "337dccca75944897a7040d157acc7d80dd16ed33f9a9985fc8c43856451d8f73",
+      "wipe_snap.m4a": "2a2f06ee966b68a2daf3a1386770800a937466b2d50bb8d78c572be97ce408dc"
     },
-    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89"
+    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "0b1e34409a780631d6cc791caa3644e358b46364a99b88e841ff77502d8b9ccd",
+  "build_manifest_sha256": "2b6ce501a4f0b69db1800d382fef27103cb3ceec9bbfc0875356352770f064e1",
   "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/arrow-verification/build.log",
-  "build_log_sha256": "ede8a9ace723f86a9573c10a42647d3b0f415b2a81f1ae4acd7e77eab266701b",
+  "build_log_path": "build/preferences-verification/build.log",
+  "build_log_sha256": "60c51f3532b12cd732206e53c0e02374b99376f7fea484d008d0602ad47a12b9",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.9p0kokos",
-      "log_path": "build/arrow-verification/arm64.log",
-      "log_sha256": "deaea09785b49e6be374aadf614ec75882f5b8408b4f04e5570e0c9ce1aa0930",
-      "checks": 2548,
-      "suites": 24,
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.u5bbmdp8",
+      "log_path": "build/preferences-verification/arm64.log",
+      "log_sha256": "326bda89beddeabf87aa2c12083502b7f28c3e6a4b69baf54bb066750df65959",
+      "checks": 4057,
+      "suites": 26,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/arrow-verification/results.json",
-  "full_suite_results_sha256": "8fabfa9b8764102d0fd831737fb3094f6320023e9fdc04c692e64571190ac4b1",
+  "full_suite_results_path": "build/preferences-verification/results.json",
+  "full_suite_results_sha256": "cd0dc5b6e6be9465369cf5cd48b50d6b72f8f25f2e62b15c54f43bd6e5fbf469",
   "native_startup_smoke": {
-    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89",
-    "verified_at": "2026-10-07T22:11:03.813747+00:00",
+    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c",
+    "verified_at": "2026-10-07T22:48:19.332104+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 22421,
       "editable_bytes": 29793,
-      "editable_sha256": "d03bb5b02e4df460690bd9022dc31ef165ad230110e02d820274950e087c21c5"
+      "editable_sha256": "95e9c943b1ebea3bb5a2a7310ee02145bdae0640967a72005a070245186189a4"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-fac1640392/results.json",
-  "native_startup_smoke_results_sha256": "113a86248cb1bd0ac012ff5965c6fcb39a7a847177ca7629a1f39481e0fb6279",
+  "native_startup_smoke_results_path": "build/startup-smoke-2ce50637b2/results.json",
+  "native_startup_smoke_results_sha256": "ac633f06e231c7d3c980a028a9068429a148e4c4979bc012c416a5e8ddd07dc1",
   "validation_tools_sha256": {
-    "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
-    "tools/build.sh": "5674d47adcee941cd07546dacc8c9e66cd5d1c962283fec1417c00d19abd2488",
+    "tools/test.py": "9d8d9db3963d4174d3e67c66692c4371488fc37b29bbf8e4879e12041484b488",
+    "tools/build.sh": "0f0d14ac5e399a977c58322e97a42b2e7f48348cce9f37e0360df6e164ca3f5b",
     "tools/test-native-startup.py": "2e5f8497cf17de5a6f90bb5aa0d984ef56e9453dd78d6e240008be05c445663a",
-    "tools/test-app-safety.sh": "a33dea4e76093ca0a9bcde612d6e746128c612a93ea0c6c8f8ab2f0436ac7d04"
+    "tools/test-app-safety.sh": "2b92f9a3b327df5f313953a9f2c6eb0208f902e02779cba6f2688e5cc2f35b1c"
   },
   "current_full_suite_validation": {
     "status": "passed_arm64",
     "architectures": [
       "arm64"
     ],
-    "checks_per_architecture": 2548,
-    "suites": 24,
-    "results_path": "build/arrow-verification/results.json",
-    "results_sha256": "8fabfa9b8764102d0fd831737fb3094f6320023e9fdc04c692e64571190ac4b1"
+    "checks_per_architecture": 4057,
+    "suites": 26,
+    "results_path": "build/preferences-verification/results.json",
+    "results_sha256": "cd0dc5b6e6be9465369cf5cd48b50d6b72f8f25f2e62b15c54f43bd6e5fbf469"
   },
   "current_native_startup_validation": {
     "status": "passed_arm64",
-    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89",
-    "startup_log_path": "build/arrow-verification/startup.log",
-    "startup_log_sha256": "667deb4c4dc2988498b05935d3820f07e964b9a440bebe9dcc9958042d03731a"
+    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c",
+    "startup_log_path": "build/preferences-verification/startup.log",
+    "startup_log_sha256": "bbbf15d462cf9fd4715f09bc1bca253a76c2d1e0453808caf06ff24f6c9770c9"
   },
   "current_desktop_checks": [
-    {
-      "name": "Original words/fonts/effects/alpha open and the prior file is preserved",
-      "passed": true,
-      "evidence": "build/arrow-verification/opened.png"
-    },
-    {
-      "name": "Native Drawing > Arrow Head > At End draws a tapered arrow toward release",
-      "passed": true,
-      "evidence": "build/arrow-verification/end-arrow.png"
-    },
-    {
-      "name": "One Undo removes the first arrow; Redo restores it",
-      "passed": true,
-      "evidence": "build/arrow-verification/end-undo.png"
-    },
-    {
-      "name": "Native At Start draws the opposite direction while retaining the first arrow",
-      "passed": true,
-      "evidence": "build/arrow-verification/start-arrow.png"
-    },
-    {
-      "name": "One Undo removes the second arrow only; Redo restores it",
-      "passed": true,
-      "evidence": "build/arrow-verification/start-undo.png"
-    },
-    {
-      "name": "Separate native Save As and Open preserve both editable arrow paths and prior text",
-      "passed": true,
-      "evidence": "build/arrow-verification/reopened.png"
-    },
-    {
-      "name": "After actual Quit/relaunch the saved Start preference draws another start-headed arrow",
-      "passed": true,
-      "evidence": "build/arrow-verification/persisted-start.png"
-    },
-    {
-      "name": "Undo removes the temporary persistence arrow; final save retains the two-arrow proof and normal End preference",
-      "passed": true,
-      "evidence": "build/arrow-verification/final.png"
-    }
+    "Current native editor header displays ShoeMoney logo and sharp readable OpenSkitch text, replacing the original heart/Skitch mark.",
+    "Current native About window displays the same company logo as the application icon.",
+    "Command-comma opens native General/Drawing/Snapping tabs with restored enabled/Both, Medium/End and excluded-capture baseline choices.",
+    "Command-W closes Preferences and returns to the saved editor; no drawing edits were made during this final desktop check."
   ],
   "historical_validations": [
     {
@@ -1057,6 +1034,62 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "arrow-fac1640392",
+      "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89",
+      "full_suite_results_path": "build/arrow-verification/results.json",
+      "full_suite_results_sha256": "8fabfa9b8764102d0fd831737fb3094f6320023e9fdc04c692e64571190ac4b1",
+      "desktop_checks": [
+        {
+          "name": "Original words/fonts/effects/alpha open and the prior file is preserved",
+          "passed": true,
+          "evidence": "build/arrow-verification/opened.png"
+        },
+        {
+          "name": "Native Drawing > Arrow Head > At End draws a tapered arrow toward release",
+          "passed": true,
+          "evidence": "build/arrow-verification/end-arrow.png"
+        },
+        {
+          "name": "One Undo removes the first arrow; Redo restores it",
+          "passed": true,
+          "evidence": "build/arrow-verification/end-undo.png"
+        },
+        {
+          "name": "Native At Start draws the opposite direction while retaining the first arrow",
+          "passed": true,
+          "evidence": "build/arrow-verification/start-arrow.png"
+        },
+        {
+          "name": "One Undo removes the second arrow only; Redo restores it",
+          "passed": true,
+          "evidence": "build/arrow-verification/start-undo.png"
+        },
+        {
+          "name": "Separate native Save As and Open preserve both editable arrow paths and prior text",
+          "passed": true,
+          "evidence": "build/arrow-verification/reopened.png"
+        },
+        {
+          "name": "After actual Quit/relaunch the saved Start preference draws another start-headed arrow",
+          "passed": true,
+          "evidence": "build/arrow-verification/persisted-start.png"
+        },
+        {
+          "name": "Undo removes the temporary persistence arrow; final save retains the two-arrow proof and normal End preference",
+          "passed": true,
+          "evidence": "build/arrow-verification/final.png"
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "preferences-c7d6130601",
+      "binary_sha256": "c7d6130601183cc9729bf751622e2daa1dd0b4f76dfa88f834807e678e26b42e",
+      "desktop_proof_path": "build/preferences-verification/desktop-proof-before-wordmark.json",
+      "desktop_proof_sha256": "3b574d8b6010daee703472fa0f778c112233d8951e9647c2b6ef005627cebd34",
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -1110,10 +1143,11 @@
     "Original runtime text-effect equivalence and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native effects/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
     "Original runtime layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native natural sizing/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
     "Original runtime keyboard/layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts workflows remain unverified. Previous native text completion checks remain pinned to the earlier exact binary.",
-    "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified."
+    "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified.",
+    "Listed native header/company icon, three Preferences tab layouts and auxiliary Close only. Earlier preference changes, Shortcuts sheet, narrower-window layout and Quit/relaunch proof are pinned to the prior c7d6130601 binary. Pending text/history and capture routing are isolated AppKit checks; actual capture pixels, sound audibility, native exact minimum-width and complete original-runtime parity remain unverified."
   ],
-  "current_desktop_proof_path": "build/arrow-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "9f42aa706f458ad281ad068e2bf11b589608b1ea96de8a076e41ef8bf5be229f",
+  "current_desktop_proof_path": "build/preferences-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "fbc21129a12233a1681cd484f002ad7bd0528357f98ce45b3e5df9f29011d00d",
   "architecture_policy": "Apple Silicon arm64 only; prior Intel results remain historical, with no current Intel build/test requirement.",
   "recovered_text_effects": {
     "path": "build/text-effects-verification/original-recovery.json",
@@ -1130,11 +1164,24 @@
     "sha256": "8cdd1c6aa7a7bbf2099f5634c902f614297c441d85c08d6ed674534accc7b871",
     "original_runtime_verified": false
   },
-  "historical_text_verification_scope": "Exact Apple Silicon build: listed native Return/Command Return continuation, Option Return/keypad Enter completion, separate annotation drawing Undo/Redo, native Save As/reopen and preserved prior drawing. Full Fonts layout/direct choices, transformed live editor presentation and original i386 runtime comparison remain unverified.",
+  "historical_text_verification_scope": "",
   "arrow_verification_scope": "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified.",
   "recovered_arrow_rules": {
     "path": "build/arrow-verification/original-recovery.json",
     "sha256": "a1249cb9ec5d42076257a26d583fc77b7992a622e66d530b0a3fc436fdd8076b",
     "original_runtime_verified": false
+  },
+  "preferences_verification_scope": "Listed native header/company icon, three Preferences tab layouts and auxiliary Close only. Earlier preference changes, Shortcuts sheet, narrower-window layout and Quit/relaunch proof are pinned to the prior c7d6130601 binary. Pending text/history and capture routing are isolated AppKit checks; actual capture pixels, sound audibility, native exact minimum-width and complete original-runtime parity remain unverified.",
+  "recovered_preferences_rules": {
+    "path": "build/preferences-verification/original-recovery.json",
+    "sha256": "3cec2a000df406e29603720906bd86f39c0810f211d80a395afdb12f0842f2b9",
+    "original_runtime_verified": false
+  },
+  "company_branding": {
+    "source": "Resources/OpenSkitch.png",
+    "sha256": "4e048a4ceeac9555e7634e7956da9081b0c321229581c72ea0bdbe050272c35b",
+    "icon_package_path": "build/preferences-verification/icon-package.json",
+    "icon_package_sha256": "6e0276b54d91608856ebed04cf8331b067043236fa7d327b71c3f4fcb769896f",
+    "header": "Supplied ShoeMoney logo and native20-point OpenSkitch text; explicit user-requested branding override."
   }
 }

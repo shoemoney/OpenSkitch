@@ -29,6 +29,11 @@ final class AppSafetyWindow: NSWindow {
     override func orderBack(_ sender: Any?) {}
 }
 
+final class AppSafetyCloseProbe: NSWindow {
+    var closeRequests = 0
+    override func performClose(_ sender: Any?) { closeRequests += 1 }
+}
+
 final class AppSafetyPopover: NSObject {
     var behavior: NSPopover.Behavior = .transient
     var contentViewController: NSViewController?
@@ -67,6 +72,15 @@ enum AppSafetyActivation {
     static var isActive = true
     static func suppress() {}
 }
+@MainActor
+enum AppSafetyEvents { static var current: NSEvent? }
+@MainActor
+enum AppSafetyPresence {
+    static var policies: [NSApplication.ActivationPolicy] = []
+    static var installs = 0
+    @discardableResult
+    static func setPolicy(_ policy: NSApplication.ActivationPolicy) -> Bool { policies.append(policy); return true }
+}
 enum AppSafetyAnimations { static var reduceMotion = true }
 enum AppSafetyMenuDestination { static var rect: CGRect = .zero }
 
@@ -84,16 +98,20 @@ enum AppSafetyTermination {
 final class AppSafetyHotkeyManager {
     static var installations = 0
     static var unregistrations = 0
+    var screen: (@MainActor () -> Void)?
+    var fullscreen: (@MainActor () -> Void)?
+    var settingsParents: [NSWindow?] = []
     func install(globalScreen: @escaping @MainActor () -> Void,
                  globalWindow: @escaping @MainActor () -> Void,
                  globalFullscreen: @escaping @MainActor () -> Void,
                  globalFrame: @escaping @MainActor () -> Void,
                  globalCamera: @escaping @MainActor () -> Void) throws {
         Self.installations += 1
+        screen = globalScreen; fullscreen = globalFullscreen
     }
     func unregister() throws { Self.unregistrations += 1 }
     func showSettings(attachedTo parent: NSWindow? = nil) {
-        AppSafetyAlert.unexpected.append("Unexpected shortcut settings window")
+        settingsParents.append(parent)
     }
 }
 
@@ -154,6 +172,7 @@ final class AppSafetyAlert: NSAlert {
     static var answers: [Answer] = []
     static var seen: [String] = []
     static var unexpected: [String] = []
+    static var beforeReply: (() -> Void)?
     @discardableResult
     override func runModal() -> NSApplication.ModalResponse {
         Self.seen.append(messageText)
@@ -162,6 +181,7 @@ final class AppSafetyAlert: NSAlert {
             return .alertSecondButtonReturn
         }
         let answer = Self.answers.removeFirst()
+        Self.beforeReply?()
         if answer.title != messageText { Self.unexpected.append(messageText) }
         if let text = answer.text, let field = accessoryView as? NSTextField { field.stringValue = text }
         return answer.response
@@ -172,6 +192,8 @@ final class AppSafetyAlert: NSAlert {
 final class AppSafetyCaptureCoordinator {
     var frameRect: NSRect?
     static var requests: [String] = []
+    struct ScreenRequest { let mode: String; let delay: Double; let includeApp: Bool }
+    static var screenRequests: [ScreenRequest] = []
     static var cancellation: NSError { NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError) }
     static var holdShutdown = false
     static var shutdownRequests = 0
@@ -193,8 +215,8 @@ final class AppSafetyCaptureCoordinator {
         if Self.holdShutdown { Self.shutdownCallbacks.append(completion) }
         else { completion(Self.shutdownResult) }
     }
-    func capture(mode: String, delay: Double = 0, completion: @escaping (Result<NSImage, Error>) -> Void) {
-        Self.requests.append(mode); deliver(completion)
+    func capture(mode: String, delay: Double = 0, includeApp: Bool = false, completion: @escaping (Result<NSImage, Error>) -> Void) {
+        Self.requests.append(mode); Self.screenRequests.append(.init(mode: mode, delay: delay, includeApp: includeApp)); deliver(completion)
     }
     func captureCamera(completion: @escaping (Result<NSImage, Error>) -> Void) {
         Self.requests.append("camera"); deliver(completion)
@@ -301,6 +323,8 @@ enum AppSafetyTests {
                 app.dragPreviewTimer?.invalidate()
                 app.navigatorTimer?.invalidate()
                 app.closeFontPanel()
+                app.preferencesWindow?.delegate = nil
+                app.preferencesWindow?.close()
                 app.closeDrawingColors()
                 app.removeDragThumbnail()
                 app.navigatorWindow?.orderOut(nil)
@@ -1830,6 +1854,106 @@ enum AppSafetyTests {
         app.redo()
         try expect(app.canvas.document == document && history.canRedo, "Roundtrip preserves the existing Redo chain")
     }
+    static func generalPreferencesIntegration() throws {
+        let defaults = UserDefaults.standard
+        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "disableSounds", "statusMenu"]
+        let previous = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, previous) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        for key in keys { defaults.removeObject(forKey: key) }
+        let fixture = try Fixture(), app = fixture.app
+        let editor = try editor(app, text: "Keep pending typing")
+        let data = try app.canvas.snapshotDocumentData(), history = app.canvas.editingUndoManager
+        let undo = history.undoActionName, redo = history.redoActionName, dirty = app.dirty
+        let menu = NSApp.mainMenu!.items.compactMap(\.submenu).first { $0.title == "OpenSkitch" }!
+        let command = menu.items.first { $0.title == "Preferences…" }!
+        try expect(command.keyEquivalent == "," && command.action == #selector(AppDelegate.showPreferences), "Command-comma opens real Preferences")
+        app.showPreferences()
+        let panel = app.preferencesWindow!, form = app.preferencesForm!
+        try expect(panel.title == "Preferences" && panel.contentView === form && panel.contentMinSize.width >= 650, "Preferences owns a native readable window and form")
+        try expect(editor.superview != nil && editor.string == "Keep pending typing" && history.undoActionName == undo && history.redoActionName == redo,
+                   "Opening Preferences does not finish or lose pending text or its Undo branch")
+        var choices = app.generalPreferences.state
+        choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeSkitch = true; choices.playSounds = false; choices.statusMenu = 1
+        form.onChange?(choices)
+        try expect(app.generalPreferences.state == choices && app.canvas.strokeSmoothing == .loose && app.canvas.arrowHeadPreference == 1,
+                   "Form routes immediate original preference writes and future drawing defaults")
+        try expect(AppSafetyPresence.policies.last == .accessory && defaults.bool(forKey: "disableSounds"), "Menu-only policy and inverted sound flag apply without relaunch")
+        try expect(try app.canvas.snapshotDocumentData() == data && app.dirty == dirty && editor.string == "Keep pending typing" && history.undoActionName == undo && history.redoActionName == redo,
+                   "Preferences never mutates the pending drawing or its history")
+        let smoothing = NSMenuItem(); smoothing.representedObject = "precise"; app.changeSmoothing(smoothing)
+        let arrow = NSMenuItem(); arrow.tag = 2; app.changeArrowHead(arrow)
+        try expect(app.generalPreferences.state.drawingPrecision == .precise && defaults.integer(forKey: "fittingPrecision") == 0 && app.canvas.arrowHeadPreference == 2,
+                   "Existing Drawing menu choices keep the Preferences model and recovered precision key synchronized")
+        form.onShortcuts?()
+        try expect(app.hotkeys.settingsParents.last! === panel && form.onSharing != nil, "Shortcuts attaches to Preferences and Sharing has a live route")
+        let same = app.preferencesWindow; app.showPreferences()
+        try expect(app.preferencesWindow === same && app.preferencesForm === form, "Repeated open reuses and synchronizes one owned window")
+        form.onDone?()
+        try expect(editor.superview != nil && editor.string == "Keep pending typing", "Done retains the pending native editor")
+        let auxiliary = AppSafetyCloseProbe(contentRect: .zero, styleMask: [.titled, .closable], backing: .buffered, defer: true)
+        app.closeWindow(auxiliary)
+        try expect(auxiliary.closeRequests == 1 && editor.superview != nil, "Close routes utility windows to their own native close path without hiding the editor")
+        try expect(!app.windowShouldClose(panel), "Native Preferences close uses its owned hide path")
+        app.terminationStarted = true
+        choices.arrowHead = 1; form.onChange?(choices)
+        try expect(app.canvas.arrowHeadPreference == 2 && !app.validateMenuItem(command), "Termination blocks preference writes and reopening")
+    }
+    static func capturePreferenceRouting() throws {
+        let defaults = UserDefaults.standard, key = "skitchInSnap", previous = UserDefaults.standard.object(forKey: "skitchInSnap")
+        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }; AppSafetyEvents.current = nil; AppSafetyAlert.beforeReply = nil }
+        let fixture = try Fixture(), app = fixture.app
+        for include in [false, true] {
+            defaults.set(include, forKey: key)
+            for option in [false, true] {
+                AppSafetyEvents.current = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: option ? [.option] : [], timestamp: 0,
+                    windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 0)
+                app.screenSnap(); app.fullscreenSnap()
+                let direct = Array(AppSafetyCaptureCoordinator.screenRequests.suffix(2))
+                try expect(direct.map(\.mode) == ["crosshair", "fullscreen"] && direct.allSatisfy { $0.includeApp == (include != option) }, "Manual menu/button wrappers read Option and invert only the saved inclusion choice")
+                app.hotkeys.screen?(); app.hotkeys.fullscreen?()
+                try expect(AppSafetyCaptureCoordinator.screenRequests.suffix(2).allSatisfy { $0.includeApp == include }, "Global hotkey callbacks ignore an unrelated current Option event")
+                app.windowSnap()
+                try expect(AppSafetyCaptureCoordinator.screenRequests.last!.mode == "window" && !AppSafetyCaptureCoordinator.screenRequests.last!.includeApp,
+                           "Window capture retains its independent exclusion behavior")
+                try expect(defaults.bool(forKey: key) == include, "Every temporary capture leaves the saved preference intact")
+            }
+        }
+        defaults.set(false, forKey: key)
+        AppSafetyEvents.current = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.option], timestamp: 0,
+            windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 0)
+        AppSafetyAlert.answers = [.init(title: "Timed Snapshot", response: .alertFirstButtonReturn, text: "7")]
+        AppSafetyAlert.beforeReply = { AppSafetyEvents.current = nil }
+        app.timedSnap()
+        let timed = AppSafetyCaptureCoordinator.screenRequests.last!
+        try expect(timed.mode == "crosshair" && timed.delay == 7 && timed.includeApp, "Timed Snap samples Option before the modal prompt and carries it into the delayed request")
+        AppSafetyAlert.beforeReply = nil; app.frameSnap(); app.screenSnap()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.mode == "frame" && !AppSafetyCaptureCoordinator.screenRequests.last!.includeApp,
+                   "Snap in Frame mode keeps frame routing and exclusion instead of using the crosshair preference")
+    }
+    static func originalSoundRouting() throws {
+        let key = "disableSounds", defaults = UserDefaults.standard, previous = UserDefaults.standard.object(forKey: "disableSounds")
+        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
+        let fixture = try Fixture(), app = fixture.app
+        var played: [String] = []
+        app.soundEffects = OriginalSoundEffects(resource: { URL(fileURLWithPath: "/test-only/" + $0 + ".m4a") }, playback: { played.append($0.deletingPathExtension().lastPathComponent) })
+        defaults.set(false, forKey: key)
+        var drawing = SketchElement(kind: .rectangle); drawing.rect = CGRect(x: 10, y: 10, width: 30, height: 20)
+        app.canvas.document.elements = [drawing]
+        app.canvas.wipe(); try expect(played == ["wipe_brushlayer"], "Canvas Wipe routes the original brush sound through the live shell")
+        app.canvas.undo(); defaults.set(true, forKey: key); app.canvas.wipe()
+        try expect(played == ["wipe_brushlayer"], "The original inverse preference disables actual playback routing")
+        defaults.set(false, forKey: key); app.canvas.editingUndoManager.removeAllActions(); app.dirty = false; app.window.isDocumentEdited = false
+        app.showPreferences()
+        let preferences = app.preferencesWindow as! AppSafetyWindow
+        preferences.simulatesVisibility = true; preferences.shown = true
+        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
+        try expect(preferences.isVisible, "Cancelled capture retains Preferences")
+        app.receiveCapture(.success(try image()))
+        try expect(played == ["wipe_brushlayer", "snap"], "Accepted valid capture routes the original completion sound")
+        try expect(!preferences.isVisible, "Accepted Snap dismisses Preferences before showing the replacement drawing")
+        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
+        try expect(played == ["wipe_brushlayer", "snap"], "Cancelled capture does not play success feedback")
+    }
     static func arrowHeadDefaults() throws {
         let key = OriginalArrowGeometry.preferenceKey, defaults = UserDefaults.standard
         let previous = defaults.object(forKey: key)
@@ -2546,6 +2670,9 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("Native Preferences routes original defaults without disturbing pending text or history", generalPreferencesIntegration),
+            ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
+            ("Original sound toggle controls Wipe and accepted Snap feedback", originalSoundRouting),
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
             ("Modeless Fonts follows mixed selections scale pending editors and document replacement", fontPanelContextAndPending),
@@ -3137,8 +3264,11 @@ enum AppSafetyTests {
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []
+            AppSafetyAlert.beforeReply = nil; AppSafetyEvents.current = nil
+            AppSafetyPresence.policies = []; AppSafetyPresence.installs = 0
             AppSafetyFilePanel.answers = []
             AppSafetyCaptureCoordinator.requests = []
+            AppSafetyCaptureCoordinator.screenRequests = []
             AppSafetyCaptureCoordinator.holdShutdown = false
             AppSafetyCaptureCoordinator.shutdownRequests = 0
             AppSafetyCaptureCoordinator.shutdownResult = .success(())

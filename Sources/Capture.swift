@@ -149,12 +149,54 @@ extension CaptureSessionStopping {
     }
 }
 
+// Keep visibility ownership in the coordinator; tests replace only native UI.
+@MainActor
+protocol CaptureApplicationVisibility: Sendable {
+    var isHidden: Bool { get }
+    var isActive: Bool { get }
+    func hide()
+    func unhide()
+    func activate()
+    func keyWindowRestorer() -> (@MainActor () -> Void)?
+}
+
+@MainActor
+protocol CaptureKeyWindow: AnyObject {
+    var isVisible: Bool { get }
+    func makeKeyAndOrderFront(_ sender: Any?)
+}
+
+extension NSWindow: CaptureKeyWindow {}
+
+@MainActor
+func captureKeyWindowRestorer(_ window: (any CaptureKeyWindow)?) -> (@MainActor () -> Void)? {
+    guard let window else { return nil }
+    return { [weak window] in
+        // finish calls this after native unhide/activation. A normal hidden
+        // window is visible again then; an ordered-out/closed window stays out.
+        guard let window, window.isVisible else { return }
+        window.makeKeyAndOrderFront(nil)
+    }
+}
+
+@MainActor
+private final class NativeCaptureApplicationVisibility: CaptureApplicationVisibility {
+    nonisolated init() {}
+    var isHidden: Bool { NSApplication.shared.isHidden }
+    var isActive: Bool { NSApplication.shared.isActive }
+    func hide() { NSApplication.shared.hide(nil) }
+    func unhide() { NSApplication.shared.unhide(nil) }
+    func activate() { NSApplication.shared.activate(ignoringOtherApps: true) }
+    func keyWindowRestorer() -> (@MainActor () -> Void)? {
+        captureKeyWindowRestorer(NSApplication.shared.keyWindow)
+    }
+}
+
 private struct CaptureEnvironment: Sendable {
     var executable = URL(fileURLWithPath: "/usr/sbin/screencapture")
     var arguments: [String] = []
     var temporaryRoot = FileManager.default.temporaryDirectory
     var testDisplays: [NSRect]? = nil
-    var managesApplication = true
     var settleDelay = 0.3
     var screenTimeout = 120.0
     var killDelay = 2.0
@@ -304,10 +346,6 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     /// The parent supplies its canvas rectangle; a missing frame is an error.
     var frameRect: NSRect? = nil
 
-    /// False hides the app before screen capture. True deliberately includes it
-    /// if it lies inside the captured area. Camera preview remains visible.
-    var showAppDuringCapture: Bool = false
-
     /// Updated before a successful capture callback, and cleared when the next
     /// operation begins. Frame NSImage.size equals the actual -R region in points;
     /// Retina pixel dimensions remain available separately here.
@@ -318,6 +356,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
 
     private let ingress = CaptureIngress()
     private let environment: CaptureEnvironment
+    private let applicationVisibility: (any CaptureApplicationVisibility)?
     private var cleaningUp = false
     private var finishingResult: Result<NSImage, Error>?
     private var stopWaiters: [CaptureStopCompletion] = []
@@ -335,7 +374,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     private var screenshot: ScreenshotProcess?
     private var hidApplication = false
     private var wasActive = false
-    private weak var previousKeyWindow: NSWindow?
+    private var previousKeyWindowRestorer: (@MainActor () -> Void)?
 
     // A real, ordered off-screen window keeps WebKit attached and rendering.
     private var webView: WKWebView?
@@ -353,6 +392,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
 
     nonisolated override init() {
         environment = CaptureEnvironment()
+        applicationVisibility = NativeCaptureApplicationVisibility()
         super.init()
     }
 
@@ -361,11 +401,13 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     // Production always uses the system helper and native permission preflight.
     nonisolated init(testHelper: URL, arguments: [String], temporaryRoot: URL,
                      displays: [NSRect] = [NSRect(x: -1000, y: -1000, width: 3000, height: 3000)],
-                     settleDelay: Double = 0, timeout: Double = 2, killDelay: Double = 0.1) {
+                     settleDelay: Double = 0, timeout: Double = 2, killDelay: Double = 0.1,
+                     applicationVisibility: (any CaptureApplicationVisibility)? = nil) {
         environment = CaptureEnvironment(executable: testHelper, arguments: arguments,
                                          temporaryRoot: temporaryRoot, testDisplays: displays,
-                                         managesApplication: false, settleDelay: settleDelay,
+                                         settleDelay: settleDelay,
                                          screenTimeout: timeout, killDelay: killDelay)
+        self.applicationVisibility = applicationVisibility
         super.init()
     }
     #endif
@@ -448,10 +490,12 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         }
     }
 
-    nonisolated func capture(mode: String, delay: Double = 0,
+    /// Inclusion is fixed at submission, including while queued or delayed.
+    /// False hides a visible app; true leaves its existing visibility unchanged.
+    nonisolated func capture(mode: String, delay: Double = 0, includeApp: Bool = false,
                              completion: @escaping (Result<NSImage, Error>) -> Void) {
         submit(completion) { callback in
-            self.startScreenCapture(mode: mode, delay: delay, callback: callback)
+            self.startScreenCapture(mode: mode, delay: delay, includeApp: includeApp, callback: callback)
         }
     }
 
@@ -504,14 +548,14 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         let request = screenshot
         screenshot = nil
         if hidApplication {
-            NSApplication.shared.unhide(nil)
+            applicationVisibility?.unhide()
             if wasActive {
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                previousKeyWindow?.makeKeyAndOrderFront(nil)
+                applicationVisibility?.activate()
+                previousKeyWindowRestorer?()
             }
         }
         hidApplication = false
-        previousKeyWindow = nil
+        previousKeyWindowRestorer = nil
         wasActive = false
 
         webView?.navigationDelegate = nil
@@ -613,7 +657,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         }
     }
 
-    private func startScreenCapture(mode: String, delay: Double, callback: CaptureCompletion) {
+    private func startScreenCapture(mode: String, delay: Double, includeApp: Bool,
+                                    callback: CaptureCompletion) {
         guard let id = begin(callback) else { return }
         let mode = mode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         source = mode
@@ -665,12 +710,11 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
             // A file, rather than an undrained pipe, cannot deadlock on stderr.
             process.standardError = request.diagnosticHandle
             let interactive = mode == "crosshair" || mode == "window"
-            if environment.managesApplication {
-                let app = NSApplication.shared
-                hidApplication = !showAppDuringCapture && !app.isHidden
+            if let app = applicationVisibility, !includeApp, !app.isHidden {
+                hidApplication = true
                 wasActive = app.isActive
-                previousKeyWindow = app.keyWindow
-                if hidApplication { app.hide(nil) }
+                previousKeyWindowRestorer = app.keyWindowRestorer()
+                app.hide()
             }
             armTimeout(delay + environment.screenTimeout, id: id, message: "Screen capture timed out.")
             let launchDelay = delay + environment.settleDelay

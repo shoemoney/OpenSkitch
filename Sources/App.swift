@@ -190,6 +190,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let publishing = PublishingCoordinator()
     let historyRemoteDeletion = HistoryRemoteDeletionCoordinator()
     let hotkeys = GlobalHotkeyManager()
+    var generalPreferences: OriginalGeneralPreferences { OriginalGeneralPreferences(defaults: .standard) }
+    var preferencesWindow: NSWindow?
+    var preferencesForm: GeneralPreferencesForm?
+    var soundEffects = OriginalSoundEffects()
     let photoBrowser = PhotoBrowserCoordinator()
     let nameField = NSTextField(string: "Untitled")
     let status = NSTextField(labelWithString: "")
@@ -289,8 +293,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenus(); buildWindow()
         installMenuPresence()
+        applyPresencePolicy()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
+        canvas.onSound = { [weak self] name in self?.playOriginalSound(name) }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
         canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection() }
         canvas.onViewportEditCancelled = { [weak self] in
@@ -318,7 +324,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
-            try hotkeys.install(globalScreen: { [weak self] in self?.screenSnap() }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.fullscreenSnap() }, globalFrame: { [weak self] in self?.frameSnap() }, globalCamera: { [weak self] in self?.cameraSnap() })
+            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.frameSnap() }, globalCamera: { [weak self] in self?.cameraSnap() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
         writeLayoutEvidence()
         if CommandLine.arguments.contains("--smoke-test") {
@@ -360,11 +366,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return false
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === preferencesWindow { closePreferences(); return false }
         guard sender === window else { return true }
         vanish()
         return false
     }
     func installMenuPresence() {
+        guard statusItem == nil else { return }
         guard UserDefaults.standard.integer(forKey: "statusMenu") != 2 else { return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
@@ -376,6 +384,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             button.target = self; button.action = #selector(showHide)
         }
     }
+    func applyPresencePolicy() {
+        let presence = generalPreferences.state.statusMenu
+        // Modern AppKit changes Dock presence without rewriting the signed app
+        // bundle or restarting with pending drawings, unlike original Skitch.
+        NSApp.setActivationPolicy(presence == 1 ? .accessory : .regular)
+        if presence == 2, let item = statusItem {
+            NSStatusBar.system.removeStatusItem(item); statusItem = nil
+        } else if presence != 2 { installMenuPresence() }
+    }
+    func playOriginalSound(_ name: String) { soundEffects.play(name, enabled: generalPreferences.state.playSounds) }
     @objc func showHide() {
         if NSApp.currentEvent?.modifierFlags.contains(.option) == true { quit(); return }
         guard UserDefaults.standard.integer(forKey: "statusMenu") != 2 else { return }
@@ -451,6 +469,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
         timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
+        preferencesWindow?.orderOut(nil); soundEffects.stop()
         removeDragThumbnail(); activeDragID = nil; visibilityZoomOrigin = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
     }
@@ -559,6 +578,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         choices.addItem(.separator())
         for (title, action) in [("Filled Shapes", #selector(toggleBezelFill(_:))), ("Shadow", #selector(toggleBezelShadow(_:))),
+                                ("Preferences…", #selector(showPreferences)),
                                 ("Sharing Settings…", #selector(sharingSettings)), ("Capture Shortcuts…", #selector(shortcutSettings))] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; choices.addItem(item)
         }
@@ -574,8 +594,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         (content as? FrameChromeView)?.usesRecoveredBezel = true
         let toolbox = bezelToolbox()
         let photos = button("Photos", #selector(showPhotos))
-        let title = NSImageView(); title.image = recoveredImage("SkitchTitle"); title.imageScaling = .scaleNone
-        title.setAccessibilityLabel("Skitch"); title.widthAnchor.constraint(equalToConstant: 97).isActive = true
+        let companyLogo = NSImageView(); companyLogo.image = recoveredImage("OpenSkitch")
+        companyLogo.imageScaling = .scaleProportionallyUpOrDown
+        companyLogo.setAccessibilityLabel("ShoeMoney logo")
+        companyLogo.widthAnchor.constraint(equalToConstant: 32).isActive = true
+        companyLogo.heightAnchor.constraint(equalToConstant: 32).isActive = true
+        let companyName = label("OpenSkitch"); companyName.font = .systemFont(ofSize: 20, weight: .semibold)
+        companyName.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let title = stack([companyLogo, companyName], horizontal: true); title.spacing = 8
+        title.identifier = NSUserInterfaceItemIdentifier("OpenSkitchBrand")
         let beforeTitle = NSView(), afterTitle = NSView()
         let top = stack([toolbox, photos, beforeTitle, title, afterTitle, button("Save", #selector(saveHistory)), button("History", #selector(showHistory))], horizontal: true)
         beforeTitle.widthAnchor.constraint(equalTo: afterTitle.widthAnchor).isActive = true
@@ -690,7 +717,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.strokeColor = colorWell.color; canvas.strokeWidth = CGFloat(OriginalDrawingControls.initialSize)
         canvas.fontSize = OriginalDrawingControls.readableFontSize(OriginalDrawingControls.initialSize)
         syncDrawingControls()
-        canvas.strokeSmoothing = StrokeSmoothing(rawValue: UserDefaults.standard.string(forKey: "PencilSmoothing") ?? "medium") ?? .medium
+        canvas.strokeSmoothing = generalPreferences.state.drawingPrecision
         canvas.arrowHeadPreference = UserDefaults.standard.integer(forKey: OriginalArrowGeometry.preferenceKey)
         setTool(.arrow)
     }
@@ -700,7 +727,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func buildMenus() {
         let bar = NSMenu()
-        let appMenu = menu("OpenSkitch", items: [("About OpenSkitch", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit OpenSkitch", #selector(quit), "q")])
+        let appMenu = menu("OpenSkitch", items: [("About OpenSkitch", #selector(about), ""), ("Preferences…", #selector(showPreferences), ","), ("Sharing Settings…", #selector(sharingSettings), ""), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit OpenSkitch", #selector(quit), "q")])
         appMenu.insertItem(NSMenuItem(title: "Hide OpenSkitch", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
         appMenu.item(at: appMenu.numberOfItems - 2)?.target = self
         let quitIndex = appMenu.numberOfItems - 1
@@ -711,7 +738,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.target = nil; appMenu.insertItem(item, at: quitIndex + offset)
         }
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
-        let close = NSMenuItem(title: "Close", action: #selector(toggleVisible), keyEquivalent: "w")
+        let close = NSMenuItem(title: "Close", action: #selector(closeCurrentWindow), keyEquivalent: "w")
         close.target = self; file.insertItem(close, at: 3)
         let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
         setup.target = self; file.insertItem(setup, at: file.numberOfItems - 1)
@@ -750,14 +777,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func changeSmoothing(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let mode = StrokeSmoothing(rawValue: raw) else { return }
-        canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
+        canvas.strokeSmoothing = mode; generalPreferences.setPrecision(mode)
+        preferencesForm?.synchronize(generalPreferences.state)
     }
     @objc func changeArrowHead(_ sender: NSMenuItem) {
         guard sender.tag == 1 || sender.tag == 2 else { return }
         canvas.arrowHeadPreference = sender.tag
         UserDefaults.standard.set(sender.tag, forKey: OriginalArrowGeometry.preferenceKey)
+        preferencesForm?.synchronize(generalPreferences.state)
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(showPreferences) { return !terminationStarted && !frameCaptureInProgress && window?.attachedSheet == nil }
         if menuItem.action == #selector(changeArrowHead(_:)) {
             menuItem.state = ((canvas.arrowHeadPreference == 1) == (menuItem.tag == 1)) ? .on : .off
             return !terminationStarted && !frameCaptureInProgress
@@ -1348,6 +1378,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         sharingSnapshots.removeValue(forKey: ObjectIdentifier(service)); pickerSnapshot = nil
         if !terminationStarted { self.error(error) }
     }
+    @objc func showPreferences() {
+        guard !terminationStarted, !frameCaptureInProgress, window?.attachedSheet == nil,
+              preferencesWindow?.attachedSheet == nil, NSApp.modalWindow == nil else { return }
+        if preferencesWindow == nil {
+            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 570),
+                styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+            panel.title = "Preferences"; panel.isReleasedWhenClosed = false
+            panel.contentMinSize = NSSize(width: 650, height: 500); panel.delegate = self
+            let form = GeneralPreferencesForm(state: generalPreferences.state)
+            form.onChange = { [weak self] in self?.applyGeneralPreferences($0) }
+            form.onDone = { [weak self] in self?.closePreferences() }
+            form.onShortcuts = { [weak self] in
+                guard let self, !self.terminationStarted else { return }
+                self.hotkeys.showSettings(attachedTo: self.preferencesWindow)
+            }
+            form.onSharing = { [weak self] in
+                guard let self, !self.terminationStarted, let panel = self.preferencesWindow else { return }
+                self.publishing.showSettings(relativeTo: panel)
+            }
+            panel.contentView = form
+            preferencesForm = form; preferencesWindow = panel; panel.center()
+        }
+        preferencesForm?.synchronize(generalPreferences.state)
+        preferencesWindow?.makeKeyAndOrderFront(nil)
+    }
+    func applyGeneralPreferences(_ state: GeneralPreferencesState) {
+        guard !terminationStarted else { return }
+        let previous = generalPreferences.state
+        generalPreferences.apply(state)
+        let saved = generalPreferences.state
+        canvas.strokeSmoothing = saved.drawingPrecision
+        canvas.arrowHeadPreference = UserDefaults.standard.integer(forKey: OriginalArrowGeometry.preferenceKey)
+        preferencesForm?.synchronize(saved)
+        if saved.statusMenu != previous.statusMenu { applyPresencePolicy() }
+        if !saved.playSounds { soundEffects.stop() }
+    }
+    func closePreferences() {
+        guard let panel = preferencesWindow, panel.attachedSheet == nil else { return }
+        panel.orderOut(nil)
+        if !terminationStarted, window.isVisible { window.makeKeyAndOrderFront(nil) }
+    }
+    @objc func closeCurrentWindow() {
+        closeWindow(NSApp.keyWindow)
+    }
+    func closeWindow(_ keyWindow: NSWindow?) {
+        if let keyWindow, keyWindow === preferencesWindow { closePreferences() }
+        else if let keyWindow, keyWindow !== window { keyWindow.performClose(nil) }
+        else { toggleVisible() }
+    }
     @objc func shortcutSettings() { hotkeys.showSettings(attachedTo: window) }
     @objc func sharingSettings() { publishing.showSettings(relativeTo: window) }
     @objc func publishImage() {
@@ -1381,11 +1460,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSUserCancelledError { self.error(error) }
         }
     }
-    func startCapture(_ mode: String, delay: Double = 0) {
+    func startCapture(_ mode: String, delay: Double = 0, manualOption: Bool = false) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
         leaveFrame()
         let generation = documentGeneration
-        capture.capture(mode: mode, delay: delay) { [weak self] result in
+        let includeApp = generalPreferences.includeApp(mode: mode, manualOption: manualOption)
+        capture.capture(mode: mode, delay: delay, includeApp: includeApp) { [weak self] result in
             guard let self, self.documentGeneration == generation else { return }
             self.receiveCapture(result, expectedGeneration: generation)
         }
@@ -1402,14 +1482,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // here so timed, camera and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
+            preferencesWindow?.orderOut(nil)
             followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
+            playOriginalSound("snap")
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {
-        if frameMode { performFrameSnap(); return }
-        startCapture("crosshair")
+        captureCrosshair(manualOption: NSApp.currentEvent?.modifierFlags.contains(.option) == true)
     }
-    @objc func fullscreenSnap() { startCapture("fullscreen") }
+    func captureCrosshair(manualOption: Bool) {
+        if frameMode { performFrameSnap(); return }
+        startCapture("crosshair", manualOption: manualOption)
+    }
+    @objc func fullscreenSnap() { captureFullscreen(manualOption: NSApp.currentEvent?.modifierFlags.contains(.option) == true) }
+    func captureFullscreen(manualOption: Bool) { startCapture("fullscreen", manualOption: manualOption) }
     @objc func windowSnap() { startCapture("window") }
     @objc func frameSnap() {
         enterFrame(keepingAnnotations: false)
@@ -1523,7 +1609,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // A cancelled picker keeps the frame ready for another attempt.
         }
     }
-    @objc func timedSnap() { if let s = prompt("Timed Snapshot", text: "Delay in seconds", value: "5"), let d = Double(s), d >= 0, d <= 120 { startCapture("crosshair", delay: d) } }
+    @objc func timedSnap() {
+        let option = NSApp.currentEvent?.modifierFlags.contains(.option) == true
+        if let s = prompt("Timed Snapshot", text: "Delay in seconds", value: "5"), let d = Double(s), d >= 0, d <= 120 {
+            startCapture("crosshair", delay: d, manualOption: option)
+        }
+    }
     @objc func cameraSnap() {
         guard !terminationStarted, !frameCaptureInProgress else { return }
         let generation = documentGeneration

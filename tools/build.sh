@@ -13,14 +13,25 @@ done
 cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
+ICONSET="$ROOT/build/OpenSkitch.iconset"
+mkdir -p "$ICONSET"
+for SIZE in 16 32 128 256 512; do
+  sips -z "$SIZE" "$SIZE" "$ROOT/Resources/OpenSkitch.png" --out "$ICONSET/icon_${SIZE}x${SIZE}.png" >/dev/null
+  DOUBLE=$((SIZE * 2))
+  sips -z "$DOUBLE" "$DOUBLE" "$ROOT/Resources/OpenSkitch.png" --out "$ICONSET/icon_${SIZE}x${SIZE}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/OpenSkitch.icns"
+cp "$ROOT/Resources/OpenSkitch.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/menu.png" "$ROOT/original/Skitch.app/Contents/Resources/menu-sel.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch_mouseover.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_Cancel_DragMe.png" "$APP/Contents/Resources/"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/docWin_*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchTitle.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider.png" "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider-indicator.png" "$APP/Contents/Resources/"
+cp "$ROOT"/original/Skitch.app/Contents/Resources/*.m4a "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
+# Let Launch Services notice changed bundle resources on the next launch.
+touch "$APP"
 file "$APP/Contents/MacOS/OpenSkitch"
 
 python3 - "$ROOT" "$SNAPSHOT" "$APP" <<'PYBUILD'

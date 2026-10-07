@@ -1,0 +1,82 @@
+#if ORIGINAL_GENERAL_PREFERENCES_TESTS
+import AppKit
+
+@main
+@MainActor
+enum OriginalGeneralPreferencesTests {
+    static var checks = 0
+    struct Failure: Error { let message: String }
+    static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
+        checks += 1
+        if !condition() { throw Failure(message: message) }
+    }
+    static func main() throws {
+        _ = NSApplication.shared
+        let domain = "OpenSkitch.preferences.tests." + UUID().uuidString
+        let defaults = UserDefaults(suiteName: domain)!
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let store = OriginalGeneralPreferences(defaults: defaults)
+        let fresh = store.state
+        try expect(fresh.drawingPrecision == .medium && fresh.arrowHead == 2 && !fresh.includeSkitch && fresh.playSounds && fresh.statusMenu == 0,
+                   "Fresh behavior follows original engine fallback, End/Both defaults, excluded app and enabled sounds")
+        store.apply(fresh)
+        try expect(defaults.persistentDomain(forName: domain)?.isEmpty != false, "Reading/opening unchanged preferences writes no defaults")
+        defaults.set("loose", forKey: "PencilSmoothing")
+        try expect(store.state.drawingPrecision == .loose, "Existing reconstruction precision survives until explicit choice")
+        for (tag, mode) in [(0, StrokeSmoothing.precise), (1, .medium), (2, .loose)] {
+            defaults.set(tag, forKey: "fittingPrecision")
+            try expect(store.state.drawingPrecision == mode, "Recovered fittingPrecision tag \(tag) takes precedence")
+            store.setPrecision(mode)
+            try expect(defaults.integer(forKey: "fittingPrecision") == tag && defaults.string(forKey: "PencilSmoothing") == mode.rawValue,
+                       "Explicit precision keeps original key and reconstruction compatibility key synchronized")
+        }
+        defaults.set(99, forKey: "fittingPrecision")
+        try expect(store.state.drawingPrecision == .loose, "Malformed original precision preserves valid existing choice")
+        defaults.set("invalid", forKey: "PencilSmoothing")
+        try expect(store.state.drawingPrecision == .medium, "Invalid precision falls back to original engine Medium")
+        defaults.removeObject(forKey: "fittingPrecision"); defaults.removeObject(forKey: "PencilSmoothing")
+        for include in [false, true] {
+            defaults.set(include, forKey: "skitchInSnap")
+            for option in [false, true] {
+                for mode in ["crosshair", "fullscreen", "window", "frame", "camera", "web"] {
+                    let before = defaults.persistentDomain(forName: domain)!
+                    try expect(store.includeApp(mode: mode, manualOption: option) == ((mode == "crosshair" || mode == "fullscreen") && (include != option)),
+                               "Manual Option policy \(mode)/\(include)/\(option)")
+                    try expect(NSDictionary(dictionary: defaults.persistentDomain(forName: domain)!).isEqual(to: before), "Temporary capture reversal never mutates saved settings")
+                }
+            }
+            try expect(OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state.includeSkitch == include, "Saved inclusion reloads through another store")
+        }
+        for presence in [0, 1, 2] {
+            var state = store.state; state.statusMenu = presence; state.arrowHead = presence == 1 ? 1 : 2
+            state.playSounds = presence == 1; state.drawingPrecision = .precise
+            store.apply(state)
+            let reopened = OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state
+            try expect(reopened == state, "Native states persist together and reload exactly")
+            try expect(defaults.bool(forKey: "disableSounds") == !state.playSounds, "Original sound binding stores inverse checkbox value")
+        }
+        let before = store.state
+        var invalid = before; invalid.statusMenu = 9; invalid.arrowHead = 9; store.apply(invalid)
+        try expect(store.state == before, "Invalid radio tags cannot overwrite valid saved choices")
+        defaults.set(17, forKey: "statusMenu"); defaults.set(17, forKey: "arrowHead")
+        try expect(store.state.statusMenu == 0 && store.state.arrowHead == 2, "Unknown tags display semantic defaults without destructive rewrites")
+        try expect(defaults.integer(forKey: "statusMenu") == 17 && defaults.integer(forKey: "arrowHead") == 17, "Reading invalid tags leaves external preference data intact")
+        var resolutions: [String] = [], playback: [URL] = []
+        let audio = OriginalSoundEffects(resource: { name in
+            resolutions.append(name)
+            return name == "snap" ? nil : URL(fileURLWithPath: "/test-only/" + name + ".m4a")
+        }, playback: { playback.append($0) })
+        audio.play("wipe_snap", enabled: false); audio.play("unknown", enabled: true)
+        try expect(resolutions.isEmpty && playback.isEmpty, "Disabled sounds and unknown names never resolve or play a resource")
+        audio.play("wipe_brushlayer", enabled: true); audio.play("snap", enabled: true)
+        try expect(resolutions == ["wipe_brushlayer", "snap"] && playback.map(\.lastPathComponent) == ["wipe_brushlayer.m4a"], "Allowed original assets route playback; a missing resource is harmless")
+        audio.stop()
+        let resources = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("original/Skitch.app/Contents/Resources")
+        for name in OriginalSoundEffects.names.sorted() {
+            let sound = NSSound(contentsOf: resources.appendingPathComponent(name + ".m4a"), byReference: false)
+            try expect(sound != nil && sound!.duration > 0, "Original \(name) audio decodes with positive duration without playing it")
+        }
+        print("OriginalGeneralPreferencesTests: \(checks) checks passed")
+    }
+}
+#endif

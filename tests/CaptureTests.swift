@@ -36,6 +36,45 @@ private actor FakeCameraSession: CaptureSessionStopping {
     func state() -> (Bool, Bool, Int) { (stopping, stopped, calls) }
 }
 
+@MainActor
+private final class CaptureFocusWindowStub: CaptureKeyWindow {
+    var isVisible = true
+    var orderedOut = false
+    var fronts = 0
+    func dismiss() { orderedOut = true; isVisible = false }
+    func makeKeyAndOrderFront(_ sender: Any?) { fronts += 1; orderedOut = false; isVisible = true }
+}
+
+@MainActor
+private final class FakeApplicationVisibility: CaptureApplicationVisibility {
+    var isHidden: Bool
+    var isActive: Bool
+    var keyWindow = "original"
+    var focusWindow: CaptureFocusWindowStub?
+    var events: [String] = []
+    var allMain = true
+
+    init(hidden: Bool, active: Bool) { isHidden = hidden; isActive = active }
+    private func record(_ event: String) {
+        allMain = allMain && Thread.isMainThread
+        events.append(event)
+    }
+    func hide() {
+        record("hide"); isHidden = true; isActive = false
+        focusWindow?.isVisible = false
+    }
+    func unhide() {
+        record("unhide"); isHidden = false
+        if let focusWindow, !focusWindow.orderedOut { focusWindow.isVisible = true }
+    }
+    func activate() { record("activate"); isActive = true }
+    func keyWindowRestorer() -> (@MainActor () -> Void)? {
+        if let focusWindow { return captureKeyWindowRestorer(focusWindow) }
+        let saved = keyWindow
+        return { [weak self] in self?.record("key:\(saved)") }
+    }
+}
+
 private final class CaptureTerminationJournal: @unchecked Sendable {
     private let lock = NSLock()
     private let url: URL
@@ -226,6 +265,9 @@ private enum CaptureTests {
             try await repeatedFrame()
             try await frameSnapshotAndValidation()
             try await failuresAndTimeout()
+            try await immutableInclusion()
+            try await visibilityLifecycle()
+            try await dismissedKeyWindowRestoration()
             try await cleanupFailure()
             try await shutdownAdmission()
             try await shutdownVoidAPI()
@@ -282,7 +324,8 @@ private enum CaptureTests {
     }
 
     static func make(_ behavior: String = "instant", timeout: Double = 10,
-                     killDelay: Double = 0.15, missingExecutable: Bool = false) throws -> Rig {
+                     killDelay: Double = 0.15, missingExecutable: Bool = false,
+                     visibility: FakeApplicationVisibility? = nil) throws -> Rig {
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let temporary = directory.appendingPathComponent("captures", isDirectory: true)
         let marker = directory.appendingPathComponent("helper.json")
@@ -291,7 +334,8 @@ private enum CaptureTests {
             : URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let coordinator = CaptureCoordinator(testHelper: helper,
             arguments: ["--capture-test-helper", behavior, marker.path, fixture.path],
-            temporaryRoot: temporary, timeout: timeout, killDelay: killDelay)
+            temporaryRoot: temporary, timeout: timeout, killDelay: killDelay,
+            applicationVisibility: visibility)
         coordinators.append(coordinator)
         return Rig(coordinator: coordinator, directory: directory, temporary: temporary, marker: marker)
     }
@@ -325,9 +369,14 @@ private enum CaptureTests {
         return false
     }
 
-    static func start(_ rig: Rig, mode: String = "fullscreen", delay: Double = 0) -> CaptureRecord {
+    static func start(_ rig: Rig, mode: String = "fullscreen", delay: Double = 0,
+                      includeApp: Bool? = nil) -> CaptureRecord {
         let record = CaptureRecord()
-        rig.coordinator.capture(mode: mode, delay: delay, completion: record.received)
+        if let includeApp {
+            rig.coordinator.capture(mode: mode, delay: delay, includeApp: includeApp, completion: record.received)
+        } else {
+            rig.coordinator.capture(mode: mode, delay: delay, completion: record.received)
+        }
         return record
     }
 
@@ -504,6 +553,165 @@ private enum CaptureTests {
         invalid.coordinator.captureURL(URL(string: "file:///tmp/not-a-webpage")!, completion: urlRecord.received)
         try await wait { urlRecord.results.count == 1 }
         try expect(errorCode(urlRecord.results.first) == 11, "invalid webpage must fail before constructing WebKit")
+    }
+
+    static func immutableInclusion() async throws {
+        for includeApp in [false, true] {
+            let visibility = FakeApplicationVisibility(hidden: false, active: true)
+            let rig = try make("hold", visibility: visibility)
+            let record = CaptureRecord()
+            // Both values cross submit before its main-actor jobs can run. The
+            // second call must not reconfigure the first request's delayed shot.
+            rig.coordinator.capture(mode: "fullscreen", delay: 0.25, includeApp: includeApp,
+                                    completion: record.received)
+            let queuedBusy = start(rig, includeApp: !includeApp)
+            try await wait { directories(rig).count == 1 && queuedBusy.results.count == 1 }
+            try expect(record.results.isEmpty && errorCode(queuedBusy.results.first) == 1,
+                       "accepted delayed request must survive a differently configured queued busy call")
+            let expectedStart = includeApp ? [] : ["hide"]
+            try expect(visibility.events == expectedStart && visibility.isHidden == !includeApp,
+                       "submission must transport its immutable inclusion value through the main-actor hop")
+            let delayedBusy = start(rig, includeApp: !includeApp)
+            try await wait { delayedBusy.results.count == 1 }
+            try expect(errorCode(delayedBusy.results.first) == 1 && visibility.events == expectedStart,
+                       "busy request during delay cannot acquire or change visibility ownership")
+            try await wait { FileManager.default.fileExists(atPath: rig.marker.path) }
+            try expect(visibility.isHidden == !includeApp && visibility.events == expectedStart,
+                       "helper launch must retain the accepted request's inclusion after opposing requests")
+            try Data().write(to: rig.release)
+            try await wait { record.results.count == 1 }
+            try expect(errorCode(record.results.first) == nil && directories(rig).isEmpty,
+                       "delayed capture must succeed after its helper and files are cleaned")
+            try expect(visibility.events == (includeApp ? [] : ["hide", "unhide", "activate", "key:original"]),
+                       "only the accepted exclusion may restore an owned hide")
+            try await pause(0.05)
+            try expect([record, queuedBusy, delayedBusy].allSatisfy { $0.results.count == 1 && $0.allMain },
+                       "accepted and busy callbacks must each run exactly once on main")
+        }
+    }
+
+    static func visibilityLifecycle() async throws {
+        let endings = ["success", "failure", "launch", "escape", "cancel-delay", "cancel-running",
+                       "shutdown-delay", "shutdown-running", "timeout"]
+        for includeApp in [false, true] {
+            for hidden in [false, true] {
+                for active in [false, true] {
+                    for ending in endings {
+                        let visibility = FakeApplicationVisibility(hidden: hidden, active: active)
+                        let delayed = ending.hasSuffix("-delay")
+                        let stopping = ending.hasPrefix("cancel-") || ending.hasPrefix("shutdown-")
+                        let behavior = ending == "timeout" || (stopping && !delayed) ? "stubborn"
+                            : ending == "failure" ? "failure" : ending == "escape" ? "escape" : "instant"
+                        let rig = try make(behavior, timeout: ending == "timeout" ? 0.6 : 10,
+                                           missingExecutable: ending == "launch", visibility: visibility)
+                        let ownsHide = !includeApp && !hidden
+                        let expected = ownsHide
+                            ? ["hide", "unhide"] + (active ? ["activate", "key:original"] : []) : []
+                        let record = CaptureRecord()
+                        var restoredBeforeCallback = false
+                        let received: (Result<NSImage, Error>) -> Void = { result in
+                            restoredBeforeCallback = visibility.events == expected && visibility.isHidden == hidden
+                            record.received(result)
+                        }
+                        if includeApp {
+                            rig.coordinator.capture(mode: "crosshair", delay: delayed ? 30 : 0,
+                                                    includeApp: true, completion: received)
+                        } else {
+                            // Exercise the production API's exclusion default.
+                            rig.coordinator.capture(mode: "crosshair", delay: delayed ? 30 : 0, completion: received)
+                        }
+                        if stopping {
+                            if delayed { try await wait { directories(rig).count == 1 } }
+                            else { try await wait { FileManager.default.fileExists(atPath: rig.marker.path) } }
+                            try expect(visibility.isHidden == (hidden || ownsHide) &&
+                                       visibility.events == (ownsHide ? ["hide"] : []),
+                                       "\(ending): capture must hide only an initially visible excluded app")
+                            // Restoration must use the original active/key snapshot.
+                            visibility.isActive = !active
+                            visibility.keyWindow = "replacement"
+                            try await stopped(rig, record, shutdown: ending.hasPrefix("shutdown-"))
+                            try expect(delayed ? !FileManager.default.fileExists(atPath: rig.marker.path)
+                                               : try processExited(rig),
+                                       "\(ending): acknowledgement must cancel delay or reap the launched helper")
+                        } else {
+                            try await wait { record.results.count == 1 }
+                            if ending == "success" {
+                                try expect(errorCode(record.results.first) == nil, "visibility success must return an image")
+                            } else if ending == "launch" {
+                                if case .failure(let error) = record.results[0] {
+                                    try expect((error as NSError).domain != "SkitchRedux.Capture",
+                                               "visibility launch failure must preserve Foundation's actual error")
+                                } else { try expect(false, "missing helper must fail after hiding") }
+                            } else {
+                                let code = ending == "failure" ? 7 : ending == "escape" ? NSUserCancelledError : 2
+                                try expect(errorCode(record.results.first) == code,
+                                           "\(ending): visibility cleanup must preserve the capture outcome")
+                            }
+                            if ending == "timeout" { try expect(try processExited(rig), "timeout must reap its helper") }
+                        }
+                        try expect(visibility.events == expected && visibility.isHidden == hidden,
+                                   "\(ending): restore only our hide, activate/key only if originally active")
+                        let expectedActive = ownsHide && active ? true : stopping ? !active : active
+                        try expect(visibility.isActive == expectedActive,
+                                   "restore may activate only for an owned hide of an originally active app")
+                        try expect(restoredBeforeCallback && directories(rig).isEmpty && record.allMain && visibility.allMain,
+                                   "\(ending): main callbacks must follow visibility restoration and owned file cleanup")
+                        let events = visibility.events
+                        let ack = CaptureRecord()
+                        rig.coordinator.shutdown(completion: ack.acknowledged)
+                        try await wait { ack.acknowledgements.count == 1 }
+                        try await pause(0.01)
+                        try expect(visibility.events == events && record.results.count == 1 &&
+                                   succeeded(ack.acknowledgements.first),
+                                   "\(ending): repeated shutdown and late exit cannot restore or complete twice")
+                    }
+                }
+            }
+        }
+    }
+
+    static func dismissedKeyWindowRestoration() async throws {
+        for dismissed in [false, true] {
+            for ending in ["success", "cancel", "shutdown"] {
+                let visibility = FakeApplicationVisibility(hidden: false, active: true)
+                let window = CaptureFocusWindowStub()
+                visibility.focusWindow = window
+                let rig = try make("hold", visibility: visibility)
+                let record = start(rig, delay: 0.15)
+                try await wait { directories(rig).count == 1 }
+                try expect(visibility.events == ["hide"] && !window.isVisible,
+                           "window visibility during app hide cannot decide eventual focus restoration")
+                if dismissed { window.dismiss() }
+                if ending == "success" {
+                    try await wait { FileManager.default.fileExists(atPath: rig.marker.path) }
+                    try Data().write(to: rig.release)
+                    try await wait { record.results.count == 1 }
+                    try expect(errorCode(record.results.first) == nil, "focus regression capture must return an image")
+                } else {
+                    // Cancellation/shutdown during the delay exercise restoration
+                    // before a helper launches, with the same production closure.
+                    try await stopped(rig, record, shutdown: ending == "shutdown")
+                }
+                try expect(visibility.events == ["hide", "unhide", "activate"] && visibility.isActive,
+                           "native ordering must unhide and activate before testing current window visibility")
+                try expect(window.fronts == (dismissed ? 0 : 1) && window.isVisible == !dismissed,
+                           "\(ending): restore normal hide/unhide focus without resurrecting dismissed Preferences")
+                try expect(directories(rig).isEmpty && record.results.count == 1 && record.allMain,
+                           "focus restoration must preserve owned cleanup and exactly-once main delivery")
+                let ack = CaptureRecord()
+                rig.coordinator.shutdown(completion: ack.acknowledged)
+                try await wait { ack.acknowledgements.count == 1 }
+                try expect(window.fronts == (dismissed ? 0 : 1), "later shutdown cannot refocus the saved window again")
+            }
+        }
+        try expect(captureKeyWindowRestorer(nil) == nil, "no original key window needs no restorer")
+        var window: CaptureFocusWindowStub? = CaptureFocusWindowStub()
+        weak let observed = window
+        let restore = captureKeyWindowRestorer(window)
+        window = nil
+        try expect(observed == nil, "focus restorer must not retain a released window")
+        restore?()
+        try expect(NSApp == nil, "production focus policy tests must not construct native application UI")
     }
 
     static func cleanupFailure() async throws {
