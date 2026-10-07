@@ -108,6 +108,16 @@ enum WindowZoomTests {
         cancelled.start(); cancelled.advance(); cancelled.cancel(); cancelled.advance()
         try expect(cancelled.state == .cancelled && cancelled.timer == nil && cancelled.panel == nil && finishes == 2 && cancelledPanel.closes == 1, "Cancelled animation discards its completion and overlay")
         try expect(WindowZoomAnimation(image: input, source: .zero, destination: small, direction: .shrink, completion: {}) == nil, "Zero-sized geometry cannot create an overlay")
+        let menuHide = WindowZoomAnimation(image: input, source: full, destination: small, direction: .shrink, frames: 15,
+            panelFactory: { ZoomTestPanel(contentRect: $0, styleMask: [], backing: .buffered, defer: false) }, completion: { finishes += 1 })!
+        menuHide.start()
+        for _ in 0..<15 { menuHide.advance() }
+        try expect(menuHide.lastRenderedFrame == 14 && menuHide.state == .running && finishes == 2, "Menu hide uses its recovered15-frame count instead of the drag25 count")
+        menuHide.advance()
+        try expect(menuHide.lastRenderedFrame == 15 && menuHide.state == .completed && finishes == 3, "Menu hide completes exactly on its own last frame")
+        try expect(WindowZoomAnimation(image: input, source: full, destination: small, direction: .shrink, frames: 0, completion: {}) == nil &&
+                   WindowZoomAnimation(image: input, source: full, destination: small, direction: .restore, frames: -1, completion: {}) == nil,
+                   "Invalid frame counts cannot allocate a live transition")
         for mode in [RunLoop.Mode.eventTracking, .modalPanel] {
             let tracking = WindowZoomAnimation(image: input, source: small, destination: full, direction: .restore,
                 panelFactory: { ZoomTestPanel(contentRect: $0, styleMask: [], backing: .buffered, defer: false) }, completion: {})!

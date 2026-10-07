@@ -1,16 +1,16 @@
 {
-  "verified_at": "2026-10-07T17:56:20.710721+00:00",
-  "checkpoint_id": "window-zoom-28c563ecca",
-  "checkpoint_state": "current_build_suites_and_startup_verified_desktop_pending",
+  "verified_at": "2026-10-07T18:17:27.037461+00:00",
+  "checkpoint_id": "close-hide-82d9394aeb",
+  "checkpoint_state": "current_build_suites_startup_and_listed_desktop_checks_verified",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.T3IoiY",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.CXpRT5",
     "source_sha256": {
-      "App.swift": "3c102c3faaf253226f235a041089ce40a09690007695a1579df129f7c49016fa",
+      "App.swift": "73b1cfbf76df2062b004236e5d44b101eee1e3612d033315e4ac4f8a8f806c59",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
@@ -37,7 +37,7 @@
       "TextStyleForm.swift": "ee864cfc831d34e8e22f21b04d6e2c71b34b4ffbcc891cee4f4d5ed369f22322",
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
       "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
-      "WindowZoom.swift": "bae36c1520ee121820bca3dde49e2aab3834178916bba24bae2baad8113bfb2f"
+      "WindowZoom.swift": "564d364871e7655e8094705d7d5ba042530ade98459f1993ea2c612445828ada"
     },
     "resource_sha256": {
       "CursorMove.png": "50ec303249a161e796b0e54977a5408b393d92a5252cb7891a6f68e46c593192",
@@ -66,23 +66,23 @@
       "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
       "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52"
     },
-    "binary_sha256": "28c563ecca47c14415e1f236af01d73215f8d5b7cbf25afa5058bd11c3f47942"
+    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "4bc81d082653376a300b43de4d41a7ca87e8591506099978e0c2c1dccb55e819",
+  "build_manifest_sha256": "ec26e7ce9a6c8099ab83f0365e30e718e93cc0bcbf9c12338d43d4d65b87c254",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/window-zoom-verification/build.log",
-  "build_log_sha256": "109b52f136c07e1696ac5e0150f8271c45e59c004f0ea3c9506deb7cc590a48c",
+  "build_log_path": "build/close-hide-verification/build.log",
+  "build_log_sha256": "69f704cfcf4cce7ca45761a808d4e075e6f66d4fcc2f4acf57575d6adb3617cf",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.0hp2jrfs",
-      "log_path": "build/window-zoom-verification/arm64.log",
-      "log_sha256": "d395e1734313f208be1711c03a2e1d7e09431670d8cf87115e019f107614f5d3",
-      "checks": 2528,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.wq08arkj",
+      "log_path": "build/close-hide-verification/arm64.log",
+      "log_sha256": "85cde2a971beb4b11f66939906eb1c0f8aa8a1f7c4d57589b07e75a8183fcaa1",
+      "checks": 2532,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -90,27 +90,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.0qfa7mfh",
-      "log_path": "build/window-zoom-verification/x86_64.log",
-      "log_sha256": "cf8a476f4f379a2f73599553c34227a83d5f0f002774ed126446a65d09a362a9",
-      "checks": 2528,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.3dw9nmfh",
+      "log_path": "build/close-hide-verification/x86_64.log",
+      "log_sha256": "892fc0d84027cb7dfbf1b002f13b04b65d8335305e2971170103a93d67e82bec",
+      "checks": 2532,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/window-zoom-verification/results.json",
-  "full_suite_results_sha256": "ec13e769becbfa91a8a59b76645c8552cd3079df62866c7e3523df636afe84ca",
+  "full_suite_results_path": "build/close-hide-verification/results.json",
+  "full_suite_results_sha256": "679bc5cc96b78346cc805c89eb78503b0854a50b8bfd72025cb00849908a72fe",
   "native_startup_smoke": {
-    "binary_sha256": "28c563ecca47c14415e1f236af01d73215f8d5b7cbf25afa5058bd11c3f47942",
-    "verified_at": "2026-10-07T17:54:38.039998+00:00",
+    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d",
+    "verified_at": "2026-10-07T18:11:43.890182+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "fdcfcb8fb624f9a44516fe8a534694ae42562fb3420aa4957e1b25e7bfc7d23c"
+      "editable_sha256": "f963187e6810a622af6e7d8a8b5a59344090af3d9c9beb988bc807effb49079a"
     },
     "x86_64": {
       "passed": true,
@@ -118,31 +118,39 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "1fbae0fbdd29248c75a532ba5d5f47c12f1d8a33c001b0db557783af455c26c2"
+      "editable_sha256": "48f02e6b76f4d4231ad3cce3f3acefece859b6aef7c5314d6a93756eb444911a"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-28c563ecca/results.json",
-  "native_startup_smoke_results_sha256": "cce76620be3517404320c011e138f2ed4cdb33c058a1960a481be603e6cd7b9b",
+  "native_startup_smoke_results_path": "build/startup-smoke-82d9394aeb/results.json",
+  "native_startup_smoke_results_sha256": "4a4dc6a72dd45830a03b4bad89e4aeb945f546c90427b2198bc27fa0fc8cdff0",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
     "tools/build.sh": "8aae27f758367cbf7338672878b9dd5d3b0dc73365aec0b28deadb7724678d81",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "c86f28a2fe3a9a49709aa9269a791aedf611d912517c9ee22c2d68405326c847"
+    "tools/test-app-safety.sh": "cc42833b8183e663ebcbeb970874ea70482a4e46538efefd5bc7703885ca2b17"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2528,
+    "checks_per_architecture": 2532,
     "suites": 24,
-    "results_path": "build/window-zoom-verification/results.json",
-    "results_sha256": "ec13e769becbfa91a8a59b76645c8552cd3079df62866c7e3523df636afe84ca"
+    "results_path": "build/close-hide-verification/results.json",
+    "results_sha256": "679bc5cc96b78346cc805c89eb78503b0854a50b8bfd72025cb00849908a72fe"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "28c563ecca47c14415e1f236af01d73215f8d5b7cbf25afa5058bd11c3f47942",
-    "startup_log_path": "build/window-zoom-verification/startup.log",
-    "startup_log_sha256": "52ab798f416b93d8250b666465f284ffe97e45f453863d64e99260ce78442a7c"
+    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d",
+    "startup_log_path": "build/close-hide-verification/startup.log",
+    "startup_log_sha256": "a63105c2641a438dcd1609fa285583bfc5dd68926908daa580854e591f214791"
   },
-  "current_desktop_checks": [],
+  "current_desktop_checks": [
+    "Native Open dialog loads the saved editable drawing.",
+    "Cmd-W hides the editor without miniaturizing or creating a thumbnail; Finder reopen retains the document and frame.",
+    "Red Close starts a 15-frame menu-target shrink, finishes hidden and restores the same saved drawing and frame through Finder reopen.",
+    "Cmd-H hides the active annotation editor; Finder reopen retains its draft and focused text editor.",
+    "Native typing Undo and Redo operate after restoration; AppKit coalesces the pre-hide and post-hide typing into one group.",
+    "Save As writes a separate native SVG Skitch document containing the restored text.",
+    "Cmd-M menu route hides the editor; Finder reopen retains the saved drawing and frame."
+  ],
   "historical_validations": [
     {
       "id": "current-source-scan",
@@ -672,6 +680,14 @@
       "full_suite_results_sha256": "b455615e4a09b59c73f3b4e116ea0643ca942e087b298edf087e53e44a4a57dd",
       "desktop_checks": [],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "window-zoom-28c563ecca",
+      "binary_sha256": "28c563ecca47c14415e1f236af01d73215f8d5b7cbf25afa5058bd11c3f47942",
+      "full_suite_results_path": "build/window-zoom-verification/results.json",
+      "full_suite_results_sha256": "ec13e769becbfa91a8a59b76645c8552cd3079df62866c7e3523df636afe84ca",
+      "desktop_checks": [],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -722,12 +738,13 @@
     "Native Minimize behavior, menu-icon click, auxiliary-window visibility details and native pending-text editor continuity remain unverified.",
     "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
     "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta.",
-    "Current drag-thumbnail desktop interaction remains unverified. Cua app selection and screenshot observation of the previously running editor timed out; no current-build native drag/drop/hover/restore proof was obtained.",
-    "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
     "Original floating snapshot includes native/window effects that are not established by cached owned-view rendering.",
-    "Complete Fonts native workflow and full original runtime parity remain unverified.",
-    "Current drag-thumbnail desktop interaction remains unverified. Cua selection of the existing Skitch process timed out while Finder remained accessible; reopening from Finder kept the same process and did not resolve the timeout. No current-build native drag/drop/hover/animated-restore proof was obtained.",
-    "Recovered corner curves,25/15-frame sequences and20ms timers are implemented, including tracking/modal modes. Original CGS2x2 mesh pixel interpolation, shadow/titlebar texture, restoration origin and compositor/runtime equivalence remain unverified; current drawing uses a native CoreImage snapshot projection.",
-    "Close/Hide zoom toward the menu icon remains unfinished; the current animation applies to drag iconify/restore only."
-  ]
+    "Current drag-thumbnail desktop interaction remains unverified: no actual Finder/application delivery, hover/cancel/animated-restore proof was obtained.",
+    "Recovered corner curves, editor15/15 and drag25/15-frame sequences and20ms timers are implemented in default/tracking/modal modes. Listed native Close/Hide/menu-Minimize endpoints and pending-editor continuity are checked; intermediate animation pixels, original CGS2x2 mesh interpolation, shadow/titlebar texture, restoration origin and original runtime equivalence remain unverified.",
+    "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
+    "Previous-app focus, menu-icon click, physical yellow Minimize button, Dock-only/menu-only desktop presence, status-only Dock suppression and preference UI remain unverified or incomplete.",
+    "Complete Fonts native workflow, original compact bezel/layout and full original runtime parity remain unverified."
+  ],
+  "current_desktop_proof_path": "build/close-hide-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "38019d4d457e754228cdaf3b3d0f87633a34e80d3fb89227e9ac4ffaa3f43130"
 }

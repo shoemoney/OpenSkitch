@@ -51,6 +51,7 @@ enum AppSafetyActivation {
     static func suppress() {}
 }
 enum AppSafetyAnimations { static var reduceMotion = true }
+enum AppSafetyMenuDestination { static var rect: CGRect = .zero }
 
 @MainActor
 enum AppSafetyTermination {
@@ -2576,6 +2577,76 @@ enum AppSafetyTests {
                 app.terminationStarted = false
             }),
             ("Quit Save persists pending text and clears recovery", quitSave),
+            ("Close Hide and menu restore use original counts and live icon geometry without changing the editor", {
+                let fixture = try Fixture(), app = fixture.app, window = app.window as! AppSafetyWindow
+                window.simulatesVisibility = true; window.shown = true
+                let previous = UserDefaults.standard.object(forKey: "statusMenu")
+                defer {
+                    if let previous { UserDefaults.standard.set(previous, forKey: "statusMenu") } else { UserDefaults.standard.removeObject(forKey: "statusMenu") }
+                    AppSafetyAnimations.reduceMotion = true; AppSafetyActivation.isActive = true; AppSafetyMenuDestination.rect = .zero
+                }
+                UserDefaults.standard.set(0, forKey: "statusMenu")
+                AppSafetyAnimations.reduceMotion = false
+                AppSafetyMenuDestination.rect = CGRect(x: 860, y: 920, width: 22, height: 22)
+                app.timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in }
+                let destination = try fixture.saveA(), saved = try Data(contentsOf: destination)
+                let editor = try editor(app, text: "Keep this draft through the menu zoom")
+                let state = try app.canvas.snapshotDocumentData(), generation = app.documentGeneration, frame = window.frame
+                let caret = editor.selectedRange(), undo = editor.undoManager
+                @MainActor func finish(_ animation: WindowZoomAnimation) {
+                    for _ in 0...animation.frameCount { animation.advance() }
+                }
+                app.toggleVisible()
+                let hide = app.windowZoom!
+                try expect(hide.frameCount == 15 && hide.direction == .shrink && hide.destination == AppSafetyMenuDestination.rect && app.dragThumbnailWindow == nil && !window.isVisible,
+                           "Close/Hide shrinks the editor to the actual menu-icon frame without making a drag thumbnail")
+                try expect(app.timer!.fireDate.timeIntervalSinceNow > 1_000 && app.currentURL == destination && !app.terminationStarted, "Menu hide pauses recovery without Quit or destination changes")
+                finish(hide)
+                try expect(app.windowZoom == nil && !window.isVisible && app.visibilityZoomOrigin == AppSafetyMenuDestination.rect, "Hide completion keeps the icon destination for reopen")
+                AppSafetyMenuDestination.rect = CGRect(x: 1100, y: 1000, width: 24, height: 24)
+                _ = app.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
+                let restore = app.windowZoom!
+                try expect(restore.frameCount == 15 && restore.direction == .restore && restore.source == AppSafetyMenuDestination.rect && restore.destination == frame && app.timer!.fireDate.timeIntervalSinceNow <= 15,
+                           "Reopen uses the current icon position and resumes the document timer before zoom-in")
+                finish(restore)
+                try expect(window.isVisible && window.frame == frame && app.windowZoom == nil && app.visibilityZoomOrigin == nil,
+                           "Restore ends at the existing editor frame and clears transient state")
+                try expect(try app.canvas.snapshotDocumentData() == state && editor.superview === app.canvas && editor.selectedRange() == caret && editor.undoManager === undo && app.documentGeneration == generation && Data(contentsOf: destination) == saved,
+                           "Menu zoom retains pending text, caret, Undo, identity and saved bytes")
+                app.toggleVisible(); let interrupted = app.windowZoom!
+                app.toggleVisible(); interrupted.advance()
+                try expect(window.isVisible && interrupted.state == .cancelled && app.windowZoom == nil && app.visibilityZoomOrigin == nil,
+                           "An interrupted toggle restores immediately and cannot later hide the editor")
+                AppSafetyActivation.isActive = false; app.toggleVisible()
+                try expect(window.isVisible && app.windowZoom == nil, "Inactive toggle activates an existing editor without animating hide")
+                AppSafetyActivation.isActive = true
+                UserDefaults.standard.set(2, forKey: "statusMenu"); app.toggleVisible()
+                try expect(window.isMiniaturized && app.windowZoom == nil && app.visibilityZoomOrigin == nil, "Dock-only presence keeps native miniaturization")
+                app.makeVisible(); try expect(window.isVisible && !window.isMiniaturized && app.windowZoom == nil, "Dock-only restore keeps native deminiaturization")
+                UserDefaults.standard.set(0, forKey: "statusMenu"); AppSafetyAnimations.reduceMotion = true
+                app.toggleVisible(); app.makeVisible()
+                try expect(window.isVisible && app.windowZoom == nil && app.visibilityZoomOrigin == nil, "Reduce Motion preserves immediate show/hide")
+                AppSafetyAnimations.reduceMotion = false; AppSafetyMenuDestination.rect = .zero
+                app.toggleVisible(); try expect(!window.isVisible && app.windowZoom == nil, "An absent status-item window cannot create an invented animation target")
+                app.makeVisible()
+                AppSafetyMenuDestination.rect = CGRect(x: 860, y: 920, width: 22, height: 22)
+                let drag = app.dragExportView!, provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: drag)
+                try expect(drag.beginExport(provider: provider, payload: drag.prepare!()!, controlRect: CGRect(x: 0, y: 0, width: 115, height: 50)), "Thumbnail-to-menu fixture begins")
+                drag.moveExport(to: CGPoint(x: 400, y: 400)); finish(app.windowZoom!)
+                drag.endExport(provider: ObjectIdentifier(provider), succeeded: true)
+                let thumbnailFrame = app.dragThumbnailWindow!.frame
+                app.toggleVisible()
+                let thumbnailHide = app.windowZoom!
+                try expect(thumbnailHide.frameCount == 25 && thumbnailHide.source == thumbnailFrame && thumbnailHide.destination == AppSafetyMenuDestination.rect && app.dragThumbnailWindow == nil && !window.isVisible,
+                           "An existing drag thumbnail follows its separate25-frame hide-to-menu branch")
+                finish(thumbnailHide); app.makeVisible(); finish(app.windowZoom!)
+                try expect(window.isVisible && app.canvas.document.elements.contains { $0.text == "Keep this draft through the menu zoom" }, "Reopening after thumbnail hide restores the underlying edited document")
+                app.toggleVisible(); finish(app.windowZoom!)
+                AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertThirdButtonReturn))
+                app.newFile()
+                try expect(window.isVisible && app.visibilityZoomOrigin == nil && app.windowZoom == nil && app.currentURL == nil,
+                           "Replacing a completed hidden editor retires its old menu-origin state")
+            }),
             ("Drag export snapshots remain immutable across successful, cancelled and failed promises", {
                 let view = DragExportView(frame: NSRect(x: 0, y: 0, width: 115, height: 50))
                 var begun: [UUID] = [], left: [UUID] = [], ended: [(UUID, Bool)] = [], failed: [UUID] = [], deliveries: [URL] = []

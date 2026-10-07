@@ -58,6 +58,7 @@ for name, (path, data) in snapshot.items():
         text = text.replace('        installMenuPresence()\n', '')
         text = text.replace('NSApp.isActive', 'AppSafetyActivation.isActive')
         text = text.replace('NSWorkspace.shared.accessibilityDisplayShouldReduceMotion', 'AppSafetyAnimations.reduceMotion')
+        text = text.replace('statusItem?.button?.window?.frame ?? .zero', 'AppSafetyMenuDestination.rect')
         replacements = {
             'NSAlert(': 'AppSafetyAlert(',
             'NSWindow(': 'AppSafetyWindow(',

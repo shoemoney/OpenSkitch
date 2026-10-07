@@ -87,13 +87,14 @@ final class WindowZoomAnimation {
     private var nextFrame: Int
     private var completion: (() -> Void)?
 
-    init?(image: NSImage, source: CGRect, destination: CGRect, direction: WindowZoomDirection,
+    init?(image: NSImage, source: CGRect, destination: CGRect, direction: WindowZoomDirection, frames: Int? = nil,
           panelFactory: @MainActor (CGRect) -> NSPanel = { rect in NSPanel(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: false) },
           completion: @escaping () -> Void) {
-        guard source.width > 0, source.height > 0, destination.width > 0, destination.height > 0,
+        let count = frames ?? (direction == .shrink ? Self.shrinkFrames : Self.restoreFrames)
+        guard count > 0, source.width > 0, source.height > 0, destination.width > 0, destination.height > 0,
               let pixels = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
         self.source = source; self.destination = destination; self.direction = direction
-        frameCount = direction == .shrink ? Self.shrinkFrames : Self.restoreFrames
+        frameCount = count
         nextFrame = direction == .shrink ? 0 : 1
         self.completion = completion
         let rect = source.union(destination).integral
