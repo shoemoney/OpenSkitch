@@ -239,6 +239,33 @@ enum OriginalTextEffects {
     }
 }
 
+/// SkitchTextFieldEditor updateFrameSize (0x1c1e6): natural string width
+/// plus four points and two outline margins; glyph height plus eight points.
+/// Explicit line breaks determine rows, independently of a historical box width.
+enum OriginalTextGeometry {
+    static func size(text: String, font: NSFont) -> CGSize {
+        let storage = NSTextStorage(string: text, attributes: [.font: font,
+            .paragraphStyle: SketchRenderer.textParagraphStyle])
+        let manager = NSLayoutManager()
+        let container = NSTextContainer(containerSize: CGSize(width: CGFloat(Float.greatestFiniteMagnitude),
+                                                              height: CGFloat(Float.greatestFiniteMagnitude)))
+        container.lineFragmentPadding = 2
+        container.widthTracksTextView = false; container.heightTracksTextView = false
+        storage.addLayoutManager(manager); manager.addTextContainer(container)
+        let range = manager.glyphRange(for: container)
+        let glyphs = manager.boundingRect(forGlyphRange: range, in: container)
+        // TextKit exposes the trailing empty row separately from the glyph range.
+        let height = max(glyphs.maxY, manager.extraLineFragmentUsedRect.maxY)
+        let margin = CGFloat(Float(font.pointSize) * Float(OriginalTextEffects.outlinePercentage(fontSize: font.pointSize)) / 100)
+        let width = (text as NSString).size(withAttributes: [.font: font]).width + 4 + 2 * margin
+        return CGSize(width: max(1, width), height: max(1, height + 8))
+    }
+    static func size(for element: SketchElement) -> CGSize {
+        size(text: element.text, font: NSFont(name: element.fontName, size: element.fontSize)
+             ?? .boldSystemFont(ofSize: element.fontSize))
+    }
+}
+
 /// Shared by screen drawing and exports. Selection handles and editor chrome are never exported.
 enum SketchRenderer {
     static func bitmap(size: CGSize, draw: () -> Void) -> NSBitmapImageRep? {

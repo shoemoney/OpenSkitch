@@ -191,12 +191,13 @@ struct CanvasTests {
             ("pending text deletion/cancel recovery", pendingTextDeletion),
             ("canvas shortcuts respect annotation and name-field focus", shortcutFocus),
             ("document-drop callback preserves pending editor and history", pendingDocumentDrop),
-            ("text-only font/outline changes preserve colors, shapes and wrap width", textStyleSelection),
+            ("text-only font changes fit natural width while preserving colors and shapes", textStyleSelection),
             ("text-only style safely commits pending typing with separate undo", pendingTextStyle),
             ("text style shadow changes preserve non-text artwork and separate typing Undo", textShadowStyle),
             ("Default Skitch Style restores face and effects while preserving mixed sizes", defaultTextStyle),
             ("text context routes Font without disrupting Control eraser", textContextStyle),
             ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
+            ("natural text layout grows shrinks and preserves source geometry through Undo", naturalTextLayout),
             ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
             ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
             ("active text grip replaces stale selection chrome through move zoom commit and cancel", textGripSelectionChrome),
@@ -1496,19 +1497,16 @@ struct CanvasTests {
         let updated = c.document.elements[0], styled = c.document
         var expected = text
         expected.fontName = "Courier-Bold"; expected.fontSize = 48; expected.outlined = false
-        expected.rect.size.height = updated.rect.height
+        expected.rect.size = updated.rect.size
         try expect(updated == expected && updated.color == SketchColor(.blue),
                    "Font action changes only selected text typography/outline/reflow height; red pen does not recolor blue text")
         try expect(c.document.elements[1] == shape && c.document.elements[2] == unselected,
                    "Selected shapes and unselected text remain completely unchanged")
-        let measured = (updated.text as NSString).boundingRect(
-            with: NSSize(width: text.rect.width, height: 100_000), options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: NSFont(name: updated.fontName, size: updated.fontSize)!,
-                         .paragraphStyle: SketchRenderer.textParagraphStyle])
-        try expect(updated.rect.height > text.rect.height && updated.rect.height >= ceil(measured.height),
-                   "Larger font expands text height enough for wrapped drawing")
-        try expect(updated.rect.width == text.rect.width && updated.rect.origin == text.rect.origin && updated.transform == text.transform,
-                   "Font reflow preserves wrap width, anchor and transform")
+        let naturalWidth = (updated.text as NSString).size(withAttributes: [.font: NSFont(name: updated.fontName, size: updated.fontSize)!]).width
+        try expect(abs(updated.rect.width - naturalWidth - 20) < 0.001 && updated.rect.height > text.rect.height,
+                   "Recovered natural width includes four points and two capped eight-point margins")
+        try expect(updated.rect.width > text.rect.width && updated.rect.origin == text.rect.origin && updated.transform == text.transform,
+                   "Font changes grow natural width and retain the anchor and transform")
         try expect(c.imageData(format: "png") != originalImage && changes == 1, "Font/outline change redraws and notifies once")
         c.applyTextStyleToSelection()
         try expect(c.document == styled && changes == 1, "Repeated identical text style is not a new edit")
@@ -1542,8 +1540,8 @@ struct CanvasTests {
                    styled.elements[0].fontName == "Courier-Bold" && styled.elements[0].fontSize == 40 && !styled.elements[0].outlined,
                    "Pending multiline text survives the new typography")
         try expect(styled.elements[0].color == text.color && styled.elements[0].shadowed == text.shadowed &&
-                   styled.elements[0].strokeWidth == text.strokeWidth && styled.elements[0].rect.width == text.rect.width,
-                   "Pending font action leaves blue color, shadow, pen width and wrap width intact")
+                   styled.elements[0].strokeWidth == text.strokeWidth && styled.elements[0].rect.origin == text.rect.origin,
+                   "Pending font action preserves blue color, shadow, pen width and anchor")
         c.undo(); try expect(c.document == committedTyping, "Undo font action retains the committed pending text at its previous font")
         c.undo(); try expect(c.document == original, "Separate typing undo restores the pre-editor document")
         c.redo(); c.redo(); try expect(c.document == styled, "Redo typing then font preserves both edits")
@@ -1580,7 +1578,7 @@ struct CanvasTests {
         try expect(c.fontName == "Helvetica-Bold" && c.fontSize == 31 && c.outlined && c.shadowed, "Future text default restored without a size reset")
         for (old, new) in zip([a,b], after.elements.prefix(2)) {
             try expect(new.fontName == "Helvetica-Bold" && new.fontSize == old.fontSize && new.outlined && new.shadowed, "Mixed selected sizes preserved")
-            try expect(new.color == old.color && new.text == old.text && new.rect.width == old.rect.width && new.rect.origin == old.rect.origin && new.transform == old.transform, "Color geometry and text preserved")
+            try expect(new.color == old.color && new.text == old.text && new.rect.origin == old.rect.origin && new.transform == old.transform, "Color anchor transform and text preserved")
         }
         try expect(after.elements[2] == shape, "Default text action does not restyle shape")
         c.undo(); try expect(c.document == before, "Default style one Undo")
@@ -1618,7 +1616,7 @@ struct CanvasTests {
         try expect(!grip.acceptsFirstResponder && !grip.canBecomeKeyView && grip.isFlipped,
                    "Grip cannot replace native typing focus")
         let editorIndex = c.subviews.firstIndex(of: editor)!, gripIndex = c.subviews.firstIndex(of: grip)!
-        try expect(gripIndex < editorIndex && grip.frame == CGRect(x: 64, y: 52, width: 275, height: 86),
+        try expect(gripIndex < editorIndex && grip.frame == CGRect(x: editor.frame.minX - 11, y: editor.frame.minY - 3, width: editor.frame.width + 15, height: editor.frame.height + 6).integral.insetBy(dx: -5, dy: -5),
                    "Original integral frame and exposed left pill are below the editor")
         try expect(c.hitTest(CGPoint(x: 71, y: 80)) === grip && c.hitTest(CGPoint(x: 100, y: 80)) === editor,
                    "Exposed pill receives mouse input while text retains interior selection")
@@ -1642,6 +1640,65 @@ struct CanvasTests {
         c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One Undo restores text and placement together")
         c.redo(); try expect(c.document == snapshot, "Redo restores text and placement")
     }
+    static func naturalTextLayout() throws {
+        let c = canvas(NSSize(width: 1400, height: 600)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text)
+        text.text = "Old text"; text.fontName = "Courier-Bold"; text.fontSize = 30
+        text.rect = CGRect(x: 40, y: 50, width: 90, height: 90)
+        c.document.elements = [text]; c.tool = .select
+        let before = c.document
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 50, y: 60), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        editor.undoManager!.groupsByEvent = false
+        try expect(editor.isHorizontallyResizable && editor.isVerticallyResizable && editor.textContainer?.widthTracksTextView == false && editor.textContainer?.heightTracksTextView == false,
+                   "Recovered unbounded container resizes in both dimensions")
+        try expect(editor.textContainerInset == NSSize(width: 4, height: 2) && editor.textContainer?.lineFragmentPadding == 2,
+                   "Recovered inset and line padding")
+        try expect((try SketchDocument.decode(c.snapshotDocumentData())) == before, "Opening an imported fixed box never rewrites its stored model")
+        let long = "A long annotation grows without automatic word wrapping"
+        editor.breakUndoCoalescing()
+        editor.undoManager!.beginUndoGrouping()
+        editor.insertText(long, replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        editor.undoManager!.endUndoGrouping()
+        let longFrame = editor.frame
+        let snapshot = try SketchDocument.decode(c.snapshotDocumentData())
+        let font = NSFont(name: text.fontName, size: 30)!
+        let width = (long as NSString).size(withAttributes: [.font: font]).width
+        try expect(abs(snapshot.elements[0].rect.width - width - 16) < 0.001 && longFrame.width > text.rect.width * 5,
+                   "Thirty-point natural width includes two six-point margins, without wrapping")
+        var lineCount = 0
+        editor.layoutManager!.enumerateLineFragments(forGlyphRange: NSRange(location: 0, length: editor.layoutManager!.numberOfGlyphs)) { _, _, _, _, _ in lineCount += 1 }
+        try expect(lineCount == 1, "Long text stays on one native line")
+        editor.breakUndoCoalescing()
+        editor.undoManager!.beginUndoGrouping()
+        editor.insertText("First\nSecond\n", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        editor.undoManager!.endUndoGrouping()
+        try expect(editor.frame.height > longFrame.height * 2 && editor.frame.width < longFrame.width,
+                   "Explicit rows, including trailing newline, grow height and shrink width")
+        let multiline = try SketchDocument.decode(c.snapshotDocumentData())
+        c.zoom = 0.5
+        try expect((try SketchDocument.decode(c.snapshotDocumentData())) == multiline && editor.font!.pointSize == 18,
+                   "Readable display font at small zoom does not change source text size")
+        editor.breakUndoCoalescing()
+        editor.undoManager!.beginUndoGrouping()
+        editor.insertText("Hi", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        editor.undoManager!.endUndoGrouping()
+        let shortFrame = editor.frame
+        try expect(shortFrame.height < longFrame.height && shortFrame.width < longFrame.width, "Shorter words shrink both dimensions after zoom")
+        editor.breakUndoCoalescing()
+        c.activeEditorUndoManager?.undo()
+        try expect(editor.string == "First\nSecond\n" && editor.frame.height > shortFrame.height * 2,
+                   "Native typing Undo restores words and grows their live box: \(editor.string), \(editor.frame), short \(shortFrame)")
+        c.activeEditorUndoManager?.redo()
+        try expect(editor.string == "Hi" && editor.frame == shortFrame, "Typing Redo restores short fitted box")
+        let pending = try SketchDocument.decode(c.snapshotDocumentData())
+        c.commitPendingTextEditing()
+        try expect(c.document == pending, "Commit uses source font dimensions independently of display zoom")
+        let data = try c.documentData(); let reopened = canvas(); try reopened.loadDocument(data: data)
+        try expect(reopened.document == pending, "Natural text box saves and reopens exactly")
+        c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One canvas Undo restores original imported bounds and words")
+        c.redo(); try expect(c.document == pending, "Canvas Redo restores the fitted edit")
+    }
     static func textGripGeometry() throws {
         let c = canvas(NSSize(width: 600, height: 400)); let window = host(c); defer { window.close() }
         var text = SketchElement(kind: .text); text.text = "Transformed annotation"
@@ -1655,6 +1712,7 @@ struct CanvasTests {
         let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
         let expandedFrame = editor.frame
         editor.frame = CGRect(origin: expandedFrame.origin, size: CGSize(width: expandedFrame.width, height: expandedFrame.height + 40))
+        try expect(editor.frame == expandedFrame, "Recovered frame setter retains natural sizing instead of an arbitrary requested height")
         let observedFrame = CGRect(x: editor.frame.minX - 11, y: editor.frame.minY - 3,
                                    width: editor.frame.width + 15, height: editor.frame.height + 6).integral.insetBy(dx: -5, dy: -5)
         try expect(grip.frame == observedFrame, "Native text-container frame changes immediately resize the attached grip")
@@ -1670,7 +1728,10 @@ struct CanvasTests {
                            width: expected.bounds.width * c.displayScale.width, height: expected.bounds.height * c.displayScale.height)
         try expect(abs(editor.frame.minX - frame.minX) < 0.00001 && abs(editor.frame.minY - frame.minY) < 0.00001,
                    "Zoom retains source-space pending placement rather than jumping back")
-        let expectedGrip = CGRect(x: frame.minX - 11, y: frame.minY - 3, width: frame.width + 15, height: frame.height + 6)
+        let fit = OriginalTextGeometry.size(text: editor.string, font: editor.font!)
+        try expect(abs(editor.frame.width - fit.width) < 0.001 && abs(editor.frame.height - fit.height) < 0.001 && editor.frame.height < baseFrame.height,
+                   "Zoom recomputes the fitted editor using its readable displayed font, allowing shrinkage")
+        let expectedGrip = CGRect(x: frame.minX - 11, y: frame.minY - 3, width: fit.width + 15, height: fit.height + 6)
             .integral.insetBy(dx: -5, dy: -5)
         try expect(grip.frame == expectedGrip, "Fractional editor frames round grip outwards after zoom; editor \(editor.frame), expected editor \(frame), grip \(grip.frame), expected grip \(expectedGrip)")
         let start = CGPoint(x: expected.bounds.minX - 5, y: expected.bounds.midY)
@@ -1782,7 +1843,7 @@ struct CanvasTests {
             let font = NSFont(name: new.fontName, size: new.fontSize)!
             let original = NSFont(name: old.fontName, size: old.fontSize)!
             try expect(font.familyName == "Courier" && new.fontSize == old.fontSize && manager.traits(of: font).intersection([.boldFontMask, .italicFontMask]) == manager.traits(of: original).intersection([.boldFontMask, .italicFontMask]), "Family conversion keeps each distinct size and face traits")
-            try expect(new.outlined == old.outlined && new.shadowed == old.shadowed && new.color == old.color && new.rect.origin == old.rect.origin && new.rect.width == old.rect.width && new.transform == old.transform, "Mixed flags color wrap anchor and transform are retained")
+            try expect(new.outlined == old.outlined && new.shadowed == old.shadowed && new.color == old.color && new.rect.origin == old.rect.origin && new.transform == old.transform, "Mixed flags color anchor and transform are retained")
         }
         try expect(changed.elements[2] == shape, "Font panel never restyles a selected shape")
         c.undo(); try expect(c.document == before, "Mixed family change is one Undo"); c.redo(); try expect(c.document == changed, "Mixed conversion Redo")

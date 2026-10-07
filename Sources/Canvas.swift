@@ -40,6 +40,26 @@ private final class SketchTextEditor: NSTextView {
     // an annotation registers one canvas undo step, regardless of keystroke count.
     private let typingHistory = UndoManager()
     private var refreshingStyle = false
+    private var fittingFrame = false
+    private func naturalFrameSize(_ requested: NSSize) -> NSSize {
+        guard let font, !string.isEmpty else { return requested }
+        return OriginalTextGeometry.size(text: string, font: font)
+    }
+    override func setFrameSize(_ newSize: NSSize) {
+        guard !fittingFrame else { super.setFrameSize(newSize); return }
+        fittingFrame = true
+        defer { fittingFrame = false }
+        super.setFrameSize(naturalFrameSize(newSize))
+    }
+    override var frame: NSRect {
+        get { super.frame }
+        set {
+            guard !fittingFrame else { super.frame = newValue; return }
+            fittingFrame = true
+            defer { fittingFrame = false }
+            super.frame = NSRect(origin: newValue.origin, size: naturalFrameSize(newValue.size))
+        }
+    }
     private var annotationStyle: (SketchElement, CGFloat)?
     private var styleObservers: [NSObjectProtocol] = []
     deinit { for observer in styleObservers { NotificationCenter.default.removeObserver(observer) } }
@@ -92,7 +112,19 @@ private final class SketchTextEditor: NSTextView {
         textStorage?.endEditing()
         typingAttributes = attributes
         setSelectedRange(caret)
+        fitContents()
         needsDisplay = true
+    }
+    func fitContents() {
+        guard let font, !string.isEmpty else { return }
+        let fitted = OriginalTextGeometry.size(text: string, font: font)
+        // Set both dimensions explicitly so a previous larger frame cannot act
+        // as a minimum after typing Undo, a font change, or zooming out.
+        let horizontal = isHorizontallyResizable, vertical = isVerticallyResizable
+        isHorizontallyResizable = false; isVerticallyResizable = false
+        minSize = .zero
+        setFrameSize(fitted)
+        isHorizontallyResizable = horizontal; isVerticallyResizable = vertical
     }
     override var undoManager: UndoManager? { typingHistory }
     override func menu(for event: NSEvent) -> NSMenu? {
@@ -439,15 +471,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
            let source = document.elements.first(where: { $0.id == id }) {
             let element = elementIncludingPendingText(source)
             editor.applyAnnotationStyle(element, scale: displayScale.height)
-            // Font/layout changes can grow NSTextView immediately. Zoom owns
-            // the transformed field geometry; its previous minimum height must
-            // not keep the grip at the larger zoom. Ordinary typing can grow it.
-            let geometry = viewRect(element.bounds)
-            let canGrow = editor.isVerticallyResizable
-            editor.isVerticallyResizable = false
-            editor.minSize = NSSize(width: 0, height: min(editor.minSize.height, geometry.height))
-            editor.frame = geometry
-            editor.isVerticallyResizable = canGrow
+            editor.setFrameOrigin(viewRect(element.bounds).origin)
+            editor.fitContents()
             textEditorGrip?.frame = SketchTextGrip.attachedFrame(editor.frame)
         }
         needsDisplay = true
@@ -783,9 +808,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 element.fontSize = size
                 element.outlined = outlined
                 if includingShadow { element.shadowed = shadowed }
-                // Keep the existing wrap width, anchor, and affine transform. Only
-                // reflow height when typography changes so larger text is not clipped.
-                if typographyChanged { element.rect.size.height = textHeight(for: element) }
+                // Recover natural text sizing while keeping its anchor/transform.
+                if typographyChanged { element.rect.size = OriginalTextGeometry.size(for: element) }
                 document.elements[index] = element
             }
         }
@@ -836,7 +860,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                     let old = document.elements[index]
                     style.apply(to: &document.elements[index])
                     if old.fontName != style.fontName || old.fontSize != style.fontSize {
-                        document.elements[index].rect.size.height = textHeight(for: document.elements[index])
+                        document.elements[index].rect.size = OriginalTextGeometry.size(for: document.elements[index])
                     }
                 }
             }
@@ -1712,14 +1736,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     // MARK: Text editor and responder commands
 
-    private func textHeight(for element: SketchElement) -> CGFloat {
-        let measured = (element.text as NSString).boundingRect(
-            with: NSSize(width: max(1, element.rect.width), height: 100_000),
-            options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: [.font: NSFont(name: element.fontName, size: element.fontSize) ?? NSFont.boldSystemFont(ofSize: element.fontSize),
-                         .paragraphStyle: SketchRenderer.textParagraphStyle])
-        return max(element.fontSize * 1.5, ceil(measured.height) + 8)
-    }
     private func documentIncludingPendingText() -> SketchDocument {
         var snapshot = document
         snapshot.elements = document.elements.map(elementIncludingPendingText).filter {
@@ -1735,7 +1751,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             element.translate(x: textEditorOffset.x, y: textEditorOffset.y)
         }
         if element.kind == .text, element.text != source.text || element.fontName != source.fontName || element.fontSize != source.fontSize {
-            element.rect.size.height = textHeight(for: element)
+            element.rect.size = OriginalTextGeometry.size(for: element)
         }
         return element
     }
@@ -1753,7 +1769,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
         editor.font = NSFont(name: element.fontName, size: max(18, element.fontSize * displayScale.height)) ??
             NSFont.boldSystemFont(ofSize: max(18, element.fontSize * displayScale.height))
         editor.textColor = element.color.nsColor
-        editor.textContainerInset = NSSize(width: 4, height: 4)
+        editor.textContainerInset = NSSize(width: 4, height: 2)
+        editor.textContainer?.lineFragmentPadding = 2
+        editor.textContainer?.containerSize = NSSize(width: CGFloat(Float.greatestFiniteMagnitude), height: CGFloat(Float.greatestFiniteMagnitude))
+        editor.textContainer?.widthTracksTextView = false
+        editor.textContainer?.heightTracksTextView = false
+        editor.isHorizontallyResizable = true; editor.isVerticallyResizable = true
+        editor.maxSize = NSSize(width: CGFloat(Float.greatestFiniteMagnitude), height: CGFloat(Float.greatestFiniteMagnitude))
         editor.string = element.text
         editor.applyAnnotationStyle(element, scale: displayScale.height)
         editor.delegate = self
