@@ -218,6 +218,31 @@ enum SkitchFileTests {
                 try expect(changed != String(decoding: bytes, as: UTF8.self), "Mutation did not alter SVG")
                 try rejects(Data(changed.utf8), "conflicting visible SVG")
             }),
+            ("Early Redux implicit defaults migrate without weakening SVG consistency", {
+                let defaults = ["skitchCustomColor": "rgb(0,0,0)", "skitchCustomColorAlpha": "1",
+                                "skitchBrushColor": "rgb(252,12,89)", "skitchBrushColorAlpha": "1", "skitchBrushSize": "5"]
+                var metadata = LegacyBridge.Metadata(); metadata.root = defaults
+                let document = try complex()
+                let explicit = try SkitchFile(document: document, metadata: metadata).encoded()
+                let early = try mutatedState(explicit) { envelope in
+                    var metadata = envelope["metadata"] as! [String: Any]
+                    metadata["root"] = [String: String](); envelope["metadata"] = metadata
+                }
+                let reopened = try SkitchFile.decode(early)
+                try expect(reopened.document == document && reopened.metadata.root == defaults,
+                           "Known early defaults must restore explicitly with exact editable artwork")
+                let saved = try reopened.encoded(), again = try SkitchFile.decode(saved)
+                try expect(again.document == document && again.metadata == reopened.metadata,
+                           "Migrated defaults survive save/reopen instead of adopting changed export constants")
+                try rejects(mutatedState(early) { envelope in
+                    var document = envelope["document"] as! [String: Any]
+                    var elements = document["elements"] as! [[String: Any]]
+                    elements[0]["strokeWidth"] = 19
+                    document["elements"] = elements; envelope["document"] = document
+                }, "conflicting hidden artwork in an early file")
+                let visibleEdit = String(decoding: early, as: UTF8.self).replacingOccurrences(of: "skitchBrushSize=\"5\"", with: "skitchBrushSize=\"6\"")
+                try rejects(Data(visibleEdit.utf8), "conflicting early visible defaults")
+            }),
             ("Hidden model edits cannot bypass visible SVG consistency", {
                 let bytes = try SkitchFile(document: try complex()).encoded()
                 let changed = try mutatedState(bytes) { envelope in

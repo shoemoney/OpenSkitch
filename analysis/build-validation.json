@@ -1,16 +1,16 @@
 {
-  "verified_at": "2026-10-07T20:36:40.758509+00:00",
-  "checkpoint_id": "hover-defaults-c783e0f6a2",
-  "checkpoint_state": "current_build_suites_startup_and_listed_desktop_checks_verified",
+  "verified_at": "2026-10-07T20:54:31.673286+00:00",
+  "checkpoint_id": "font-scale-4210d583e5",
+  "checkpoint_state": "current_build_suites_startup_and_listed_native_metrics_verified",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.4OOAxe",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.wbV21C",
     "source_sha256": {
-      "App.swift": "6cb538d539fd753c2fd5fe0b2fd99a1df64a93a20864c52a96fac739dcfd03d5",
+      "App.swift": "1208cf3540440630b48571b23daba168366782e231a6d9f955d19369fa897892",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
       "Canvas.swift": "135e1d62588b43f47531f06dd8a180493c26010a07aa9938dcc4a69890813420",
@@ -33,7 +33,7 @@
       "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
       "ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
       "SVGExport.swift": "901a037ef806c6dab6479ee701dc08b6b7b4b73c69b1fd84e0237c1bd02f11ac",
-      "SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
+      "SkitchFile.swift": "9d59f9c1e890536249990f7cd41f90f81083789478aed0ca434e6001802506e7",
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
       "TextStyleForm.swift": "ee864cfc831d34e8e22f21b04d6e2c71b34b4ffbcc891cee4f4d5ed369f22322",
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
@@ -83,23 +83,23 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363"
+    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "63252e3b7a293b84d4ce21df2bdc4f48b6cc65fd1bc84a80d64303222096918f",
+  "build_manifest_sha256": "1a662d0ff2ac0080acf1656ae6999c23e9dad3aa0814f735ede6bec88121849d",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/hover-defaults-verification/build.log",
-  "build_log_sha256": "df3e05cf4be3d0e562c7e86a57c15933dd078f7970a4863342d0a40c4de14804",
+  "build_log_path": "build/font-scale-verification/build.log",
+  "build_log_sha256": "414450549ea70d1eb877b5a10d6517b2a1af58d4d9337114a3b2cff64d3ed687",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.v6qdaffp",
-      "log_path": "build/hover-defaults-verification/arm64.log",
-      "log_sha256": "069a8c8e07ad60eeaf7b340ab3d2b4e48f2f4fd5b2166385924921ff40042010",
-      "checks": 2539,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.f8toyrgg",
+      "log_path": "build/font-scale-verification/arm64.log",
+      "log_sha256": "27b020f5eead396c4ccdf64ee55a7f15883c7eb3de7ba2cecfaf97ff0471228f",
+      "checks": 2540,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -107,27 +107,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.hb6v16kl",
-      "log_path": "build/hover-defaults-verification/x86_64.log",
-      "log_sha256": "c317dd7c34029d8f59da2d55ccf01d7c38ef3f5d27dea3270b974341b0f7113d",
-      "checks": 2539,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.2ytqrgq5",
+      "log_path": "build/font-scale-verification/x86_64.log",
+      "log_sha256": "a4458255409e60bb710340c20660390e200f61996b35f652cd8536f73783fa65",
+      "checks": 2540,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/hover-defaults-verification/results.json",
-  "full_suite_results_sha256": "903539af0b30ce32cd8f0c1da5031cd6067966b653556cf0fcb66f1af8d90702",
+  "full_suite_results_path": "build/font-scale-verification/results.json",
+  "full_suite_results_sha256": "11199f2964b800f6598a846bbad85d3962be1a452350638961d3c183c833eb78",
   "native_startup_smoke": {
-    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363",
-    "verified_at": "2026-10-07T20:33:08.002344+00:00",
+    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd",
+    "verified_at": "2026-10-07T20:49:31.515599+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "b1f82416bd1a605c180103f1f4168bc7347d71003fefb2791b98f3f92e8497e0"
+      "editable_sha256": "c0af34b8e55f2c58c2ff2405b8974c8ae9da80e0fa46f703c04565446caa4d0f"
     },
     "x86_64": {
       "passed": true,
@@ -135,11 +135,11 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "7674d4653a873f285af799a13afaf4110047a1fbf2a966ed8df3d335b3365248"
+      "editable_sha256": "474afe68b5c1942c396a7277d5d292e056ed5aae5e0fe45224ee2fc0e70dac11"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-c783e0f6a2/results.json",
-  "native_startup_smoke_results_sha256": "559e8ea27ab02fc10719af3bc420753a4bfae7aa3d158995977d887f9b29419b",
+  "native_startup_smoke_results_path": "build/startup-smoke-4210d583e5/results.json",
+  "native_startup_smoke_results_sha256": "e24786a613eec0f8c6b5301361bb0412edcd6356ee50e3284cd3cef31c9bab6b",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
     "tools/build.sh": "6d0136cd6131d3fe0c742b44abcb1e1a4a483a8efec98aafd290ba7fabfff7ae",
@@ -148,47 +148,45 @@
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2539,
+    "checks_per_architecture": 2540,
     "suites": 24,
-    "results_path": "build/hover-defaults-verification/results.json",
-    "results_sha256": "903539af0b30ce32cd8f0c1da5031cd6067966b653556cf0fcb66f1af8d90702"
+    "results_path": "build/font-scale-verification/results.json",
+    "results_sha256": "11199f2964b800f6598a846bbad85d3962be1a452350638961d3c183c833eb78"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363",
-    "startup_log_path": "build/hover-defaults-verification/startup.log",
-    "startup_log_sha256": "7e7c829a5d76702df6ac4354b92fd569cb262a6191fbbbdd2180e7905503a37b"
+    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd",
+    "startup_log_path": "build/font-scale-verification/startup.log",
+    "startup_log_sha256": "ec1635903db28ba3879fb6aa0bdf3c496c225231a3d94176e8f53dc2a25045fc"
   },
   "current_desktop_checks": [
     {
-      "name": "Original color palette opens through native Color button",
+      "name": "Preserved early Redux drawing opens without consistency error",
       "result": "passed",
-      "evidence": "palette-current.png",
-      "scope": "Ten preset swatches and Custom color; readable desktop layout; canvas remained first responder. Idle pointer hover not verified."
+      "scope": "Native Open and reviewed editor screenshot show both original text annotations, with differing font/effect styles.",
+      "evidence": "opened.png"
     },
     {
-      "name": "Native Open restores legacy SVG brush defaults",
+      "name": "Native Fonts mixed selection and opening metrics",
       "result": "passed",
-      "evidence": "restored-current-ax.txt",
-      "scope": "Synthetic legacy SVG fixture: size9.375, raw Blue RGB and alpha0.35; no original runtime claim."
+      "scope": "Native Select All then Font yields visible shared panel with blank mixed-size field. Auxiliary Fonts pixels and direct font choices were not exposed by the desktop tool.",
+      "evidence": "selected-fit-layout.json"
     },
     {
-      "name": "Retained custom choice preserves exact calibrated raw RGBA",
+      "name": "Native single-selection font size excludes editor zoom",
       "result": "passed",
-      "evidence": "custom-current-ax.txt",
-      "scope": "Native Custom choice restored RGBA0.17/0.43/0.91/0.23; fresh model evidence matches retained custom color. No native panel alpha-entry claim."
+      "scope": "Single text annotation visually selected; Font shows24 in live metrics at Fit and25% zoom. Panel close/open generated each fresh snapshot; no Fonts visual-layout claim.",
+      "evidence": [
+        "single-fit-layout.json",
+        "single-quarter-layout.json",
+        "quarter-ax.txt"
+      ]
     },
     {
-      "name": "Separate Save As and native Open retain brush size and custom RGBA",
+      "name": "Migrated independent Save As reopens without artwork changes",
       "result": "passed",
-      "evidence": "reopened-current-ax.txt",
-      "scope": "Saved independent proof reopens with size9.375 and RGBA0.17/0.43/0.91/0.23; saved SVG root attributes also checked."
-    },
-    {
-      "name": "Current owned bezel readability",
-      "result": "passed",
-      "evidence": "reopened-palette-current-layout.json",
-      "scope": "Current default1024x772 window and palette reviewed; all measured owned readable control fonts >=18. Minimum geometry has controlled tests and earlier exact-binary native proof, not repeated this checkpoint."
+      "scope": "Native Save As/reopen and reviewed editor screenshot; exact original document model preserved, five known early implicit defaults made explicit. Original fixture unchanged.",
+      "evidence": "reopened.png"
     }
   ],
   "historical_validations": [
@@ -812,6 +810,45 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "hover-defaults-c783e0f6a2",
+      "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363",
+      "full_suite_results_path": "build/hover-defaults-verification/results.json",
+      "full_suite_results_sha256": "903539af0b30ce32cd8f0c1da5031cd6067966b653556cf0fcb66f1af8d90702",
+      "desktop_checks": [
+        {
+          "name": "Original color palette opens through native Color button",
+          "result": "passed",
+          "evidence": "palette-current.png",
+          "scope": "Ten preset swatches and Custom color; readable desktop layout; canvas remained first responder. Idle pointer hover not verified."
+        },
+        {
+          "name": "Native Open restores legacy SVG brush defaults",
+          "result": "passed",
+          "evidence": "restored-current-ax.txt",
+          "scope": "Synthetic legacy SVG fixture: size9.375, raw Blue RGB and alpha0.35; no original runtime claim."
+        },
+        {
+          "name": "Retained custom choice preserves exact calibrated raw RGBA",
+          "result": "passed",
+          "evidence": "custom-current-ax.txt",
+          "scope": "Native Custom choice restored RGBA0.17/0.43/0.91/0.23; fresh model evidence matches retained custom color. No native panel alpha-entry claim."
+        },
+        {
+          "name": "Separate Save As and native Open retain brush size and custom RGBA",
+          "result": "passed",
+          "evidence": "reopened-current-ax.txt",
+          "scope": "Saved independent proof reopens with size9.375 and RGBA0.17/0.43/0.91/0.23; saved SVG root attributes also checked."
+        },
+        {
+          "name": "Current owned bezel readability",
+          "result": "passed",
+          "evidence": "reopened-palette-current-layout.json",
+          "scope": "Current default1024x772 window and palette reviewed; all measured owned readable control fonts >=18. Minimum geometry has controlled tests and earlier exact-binary native proof, not repeated this checkpoint."
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -866,8 +903,10 @@
     "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
     "Previous-app focus, menu-icon click, physical yellow Minimize button, Dock-only/menu-only desktop presence, status-only Dock suppression and preference UI remain unverified or incomplete.",
     "Complete Fonts native workflow, remaining original tool-specific clusters, real idle-pointer hover and preference tabs and full original runtime parity remain unverified.",
-    "Native minimum900x640 window layout was reached through the Resize workflow on the prior palette/Size binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified."
+    "Native minimum900x640 window layout was reached through the Resize workflow on the prior palette/Size binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified.",
+    "Current Fonts opening and zoom independence are native interaction plus live metrics only; the desktop tool did not expose the auxiliary Fonts window for visual or direct font-choice verification.",
+    "Current minimum-window, color/pending-text and Close/Hide proof remains pinned to earlier exact binaries; no original-runtime equivalence claim."
   ],
-  "current_desktop_proof_path": "build/hover-defaults-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "6ec500059d1b8a5a3eba1e16d7d2058facaaed1d443f41087886ad19cf69de1b"
+  "current_desktop_proof_path": "build/font-scale-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "5a5ca68751f8381ae3902b07d160e6c78c6a5dbdafaee3f74e22f6411b700118"
 }

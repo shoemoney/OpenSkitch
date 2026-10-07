@@ -60,10 +60,19 @@ struct SkitchFile {
         guard actual == envelope.svgFingerprint else {
             throw LegacySkitchError.invalidDocument("Visible SVG changed independently of Redux state; remove both Redux attributes to import the SVG edits")
         }
-        let file = Self(document: document, metadata: envelope.metadata, canvasData: envelope.rawCanvasData)
+        var file = Self(document: document, metadata: envelope.metadata, canvasData: envelope.rawCanvasData)
         let regenerated = try SVGExport.encode(document, preserving: envelope.metadata, backdrop: file.validatedBackdrop())
-        guard try fingerprint(regenerated) == actual else {
-            throw LegacySkitchError.invalidDocument("Redux state disagrees with the visible SVG")
+        if try fingerprint(regenerated) != actual {
+            // Early Redux version1 writers emitted these fixed defaults without
+            // storing them in envelope.metadata. Recover only that known profile,
+            // then require the entire regenerated SVG to agree as before.
+            let earlyDefaults = ["skitchCustomColor": "rgb(0,0,0)", "skitchCustomColorAlpha": "1",
+                                 "skitchBrushColor": "rgb(252,12,89)", "skitchBrushColorAlpha": "1", "skitchBrushSize": "5"]
+            for (key, value) in earlyDefaults where file.metadata.root[key] == nil { file.metadata.root[key] = value }
+            let compatible = try SVGExport.encode(document, preserving: file.metadata, backdrop: file.validatedBackdrop())
+            guard try fingerprint(compatible) == actual else {
+                throw LegacySkitchError.invalidDocument("Redux state disagrees with the visible SVG")
+            }
         }
         return file
     }

@@ -1878,9 +1878,16 @@ enum AppSafetyTests {
             try expect(NSFont(name: new.fontName, size: new.fontSize)?.familyName == "Courier" && new.fontSize == old.fontSize && new.outlined == old.outlined && new.shadowed == old.shadowed, "Panel converts each selected font without flattening mixed sizes or effects")
         }
         app.canvas.zoom = 0.5
-        try expect(NSFontManager.shared.selectedFont?.pointSize == 11.5, "Panel follows displayed font scale without modifying source size")
+        try expect(NSFontManager.shared.selectedFont?.pointSize == 23, "Editor zoom must not alter original output-sized font panel values")
         app.canvas.selection = [b.id]
-        try expect(!NSFontManager.shared.isMultiple && NSFontManager.shared.selectedFont?.pointSize == 18.5 && form.outlineChoice == true && form.shadowChoice == false, "Changing selection refreshes the same modeless panel")
+        try expect(!NSFontManager.shared.isMultiple && NSFontManager.shared.selectedFont?.pointSize == 37 && form.outlineChoice == true && form.shadowChoice == false, "Changing selection refreshes the same modeless panel without editor zoom")
+        app.canvas.document.renderSize = NSSize(width: app.canvas.canvasSize.width * 0.5, height: app.canvas.canvasSize.height * 0.5)
+        for zoom: CGFloat in [0.25, 1, 2] {
+            app.canvas.zoom = zoom
+            try expect(NSFontManager.shared.selectedFont?.pointSize == 18.5,
+                       "Original output/logical font scale stays fixed while editor zoom changes")
+        }
+        app.canvas.zoom = 0.5
         let beforeReplacement = app.canvas.document
         let field = try editor(app, text: "Live field")
         let typing = field.undoManager, caret = field.selectedRange()
@@ -1888,7 +1895,7 @@ enum AppSafetyTests {
         app.changeFont(NSFontManager.shared)
         try expect(field.superview === app.canvas && app.window.firstResponder === field && field.undoManager === typing && field.selectedRange() == caret && panel.isVisible, "Modeless font action retains native typing focus and history")
         let pending = try SketchDocument.decode(app.canvas.snapshotDocumentData())
-        try expect(pending.elements.last?.fontSize == 40 && field.font?.pointSize == 20 && app.dirty, "Displayed panel size converts back to source pixels and dirties recovery")
+        try expect(pending.elements.last?.fontSize == 40 && field.font?.pointSize == 18 && app.dirty, "Panel output size converts back to source pixels; editor zoom and readability floor affect only presentation")
         app.defaultTextStyle()
         let defaults = try SketchDocument.decode(app.canvas.snapshotDocumentData()).elements.last!
         try expect(defaults.fontSize == 40 && defaults.fontName == "Helvetica-Bold" && defaults.outlined && defaults.shadowed && field.superview === app.canvas, "Default Style preserves pending size and native editor")

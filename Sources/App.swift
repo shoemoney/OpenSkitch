@@ -1577,7 +1577,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let selected = canvas.selectedTextElements
         let first = selected.first
         let source = NSFont(name: first?.fontName ?? canvas.fontName, size: first?.fontSize ?? canvas.fontSize) ?? .boldSystemFont(ofSize: 24)
-        let displayed = NSFontManager.shared.convert(source, toSize: source.pointSize * canvas.displayScale.height)
+        // Original displayFontScale is output/logical height; editor zoom is a
+        // view transform and must not change the point size in the Fonts panel.
+        let scale = canvas.outputSize.height / canvas.canvasSize.height
+        let displayed = NSFontManager.shared.convert(source, toSize: source.pointSize * scale)
         NSFontManager.shared.setSelectedFont(displayed, isMultiple: selected.count > 1)
         func uniform(_ values: [Bool], fallback: Bool) -> Bool? {
             guard let value = values.first else { return fallback }
@@ -1588,7 +1591,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func changeFont(_ sender: NSFontManager?) {
         guard !terminationStarted, let panel = fontPanel, let form = textStyleForm else { return }
-        let scale = canvas.displayScale.height
+        let scale = canvas.outputSize.height / canvas.canvasSize.height
         let manager = NSFontManager.shared
         let convert: (NSFont) -> NSFont? = { source in
             let displayed = manager.convert(source, toSize: source.pointSize * scale)
