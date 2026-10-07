@@ -1,6 +1,27 @@
 import AppKit
 import UniformTypeIdentifiers
 
+final class ToolButton: NSButton {
+    static func textColor(on background: NSColor) -> NSColor {
+        guard let rgb = background.usingColorSpace(.deviceRGB) else { return .labelColor }
+        func linear(_ value: CGFloat) -> Double {
+            let channel = Double(value)
+            return channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+        return luminance > 0.179 ? .black : .white
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
+        let background = state == .on ? NSColor.controlAccentColor : NSColor.controlColor
+        let foreground = state == .on ? Self.textColor(on: background) : NSColor.labelColor
+        if contentTintColor != foreground { contentTintColor = foreground }
+        background.setFill()
+        shape.fill()
+        super.draw(dirtyRect)
+    }
+}
+
 /// Frame preview clears only the canvas hole; application controls keep an
 /// opaque backdrop so their adaptive label colors remain readable.
 final class FrameChromeView: NSView {
@@ -156,7 +177,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.onOpenDocument = { [weak self] url in self?.openURL(url) }
         canvas.onToolChange = { [weak self] tool in
             guard let self else { return }
-            for (choice, button) in self.toolButtons { button.state = choice == tool ? .on : .off }
+            self.updateToolButtons(tool)
             self.updateStatus()
         }
         canvas.onColorChange = { [weak self] color in self?.colorWell.color = color }
@@ -246,13 +267,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         top.distribution = .fillProportionally
         var sidebarViews: [NSView] = [label("Tools")]
         for tool in SketchTool.allCases {
-            let b = button(tool.rawValue.capitalized, #selector(chooseTool(_:)))
+            let b = ToolButton(title: tool.rawValue.capitalized, target: self, action: #selector(chooseTool(_:)))
+            b.isBordered = false
             b.identifier = NSUserInterfaceItemIdentifier(tool.rawValue); b.setButtonType(.toggle)
             let assets: [String: String] = ["select":"Cursor", "arrow":"Arrow", "line":"Line", "rectangle":"Rect", "ellipse":"Circle", "brush":"Brush", "text":"Text", "fill":"Fill", "eraser":"Eraser"]
             if let asset = assets[tool.rawValue], let url = Bundle.main.url(forResource: "ToolOff"+asset, withExtension: "png"), let image = NSImage(contentsOf: url) {
                 image.size = NSSize(width: 30, height: 30); b.image = image; b.imagePosition = .imageLeading
+                if let activeURL = Bundle.main.url(forResource: "ToolOn"+asset, withExtension: "png"), let activeImage = NSImage(contentsOf: activeURL) {
+                    activeImage.size = image.size; b.alternateImage = activeImage
+                }
             }
-            b.alignment = .left; b.widthAnchor.constraint(equalToConstant: 172).isActive = true; b.heightAnchor.constraint(equalToConstant: 38).isActive = true
+            b.font = .systemFont(ofSize: 20); b.alignment = .left; b.widthAnchor.constraint(equalToConstant: 172).isActive = true; b.heightAnchor.constraint(equalToConstant: 38).isActive = true
             sidebarViews.append(b); toolButtons[tool] = b
         }
         colorWell.color = .systemRed; colorWell.target = self; colorWell.action = #selector(changeColor(_:)); colorWell.heightAnchor.constraint(equalToConstant: 38).isActive = true; colorWell.widthAnchor.constraint(equalToConstant: 172).isActive = true
@@ -362,7 +387,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if menuItem.action == #selector(redo) { return activeUndoManager.canRedo }
         return true
     }
-    func setTool(_ tool: SketchTool) { canvas.tool = tool; for (t,b) in toolButtons { b.state = t == tool ? .on : .off }; window?.makeFirstResponder(canvas); updateStatus() }
+    func updateToolButtons(_ tool: SketchTool) {
+        for (choice, button) in toolButtons {
+            let selected = choice == tool
+            button.state = selected ? .on : .off
+            button.bezelColor = selected ? .controlAccentColor : nil
+            button.toolTip = choice.rawValue.capitalized + (selected ? " tool (selected)" : " tool")
+            button.needsDisplay = true
+        }
+    }
+    func setTool(_ tool: SketchTool) { canvas.tool = tool; updateToolButtons(tool); window?.makeFirstResponder(canvas); updateStatus() }
     @objc func chooseTool(_ sender: NSButton) { if let s = sender.identifier?.rawValue, let t = SketchTool(rawValue: s) { setTool(t) } }
     @objc func changeColor(_ sender: NSColorWell) { applyChosenColor(sender.color, modifiers: NSApp.currentEvent?.modifierFlags ?? []) }
     func applyChosenColor(_ color: NSColor, modifiers: NSEvent.ModifierFlags) {

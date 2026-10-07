@@ -1,16 +1,16 @@
 {
-  "verified_at": "2026-10-07T16:08:06.081430+00:00",
-  "checkpoint_id": "fontpanel-layout-1d02b93220",
-  "checkpoint_state": "current_build_full_suites_startup_layout_metrics_verified_font_workflow_pending",
+  "verified_at": "2026-10-07T16:33:51.176043+00:00",
+  "checkpoint_id": "tool-feedback-c4c52be333",
+  "checkpoint_state": "current_build_suites_startup_and_listed_native_tool_feedback_verified",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.VaR9pJ",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.Uww19t",
     "source_sha256": {
-      "App.swift": "07e8c99fbbd100f3f0ca9df93fd3884cbb793842f7b57d5d3165ff39092bb894",
+      "App.swift": "bc1afbd045072c7efb29bbe63dd3abd6f36feab445cbe26e0c5a407150c902b4",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
@@ -38,23 +38,45 @@
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
       "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7"
     },
-    "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00"
+    "resource_sha256": {
+      "CursorMove.png": "50ec303249a161e796b0e54977a5408b393d92a5252cb7891a6f68e46c593192",
+      "SkitchMac.icns": "81a2b816d8f8aa05fe712147e7bad66626a4607049d02fef80fc7166dd2b7663",
+      "ToolOffArrow.png": "e08d62527c75b6f4de394715835e1eb6fc892c3d3698a1855c377a91508422ff",
+      "ToolOffBrush.png": "143708ff84330ef53879f3e79d816fdf568fec2ff5b7371b9107996f7ea31487",
+      "ToolOffCircle.png": "034ff76a6566858b0d321fd20b7320f964e27b97f2efdf4d34b1116d561c72f2",
+      "ToolOffCursor.png": "1ebebd4f995d40c59470236e61c609e68236d706675096c179aae2aa4336535f",
+      "ToolOffEraser.png": "b555db05c940d216455cc16827af2da3f49bb694443ff5479c0d8ce35cfc9cf0",
+      "ToolOffFill.png": "b0cf5dcf31b5d54af94f647cdcf31a6eb99baa48196135b0848bafd9508bce7a",
+      "ToolOffLine.png": "f1ae21de61f68ceb08ff02647ff4f8b86eca7b03bdff376e7d967cf67cec5ad1",
+      "ToolOffRect.png": "c96f4f8392d0e73dca716064f3ebdfe4e187ba07bf457febef9fcf75879f5f25",
+      "ToolOffText.png": "854351300320a7e8bf8c6cc14112f52f3b08d964335236b4f167f195ac1f54b5",
+      "ToolOnArrow.png": "0928bc3d8154a36ae7872ac1ab55da03668ac1ff8adf68ffa658a1bd14930a7e",
+      "ToolOnBrush.png": "4b0981b7e065d8ca7c059104adc1f3e1510de53898274e7a36ade5676c7dcf55",
+      "ToolOnCircle.png": "4f57d952f9f59e4643805914cda13265d9dc91582fac0a71dbfb50efb64e2dce",
+      "ToolOnCursor.png": "9f23a996190e1244db70eccd2f6e6793c79f4443a607e8087bb257e83460b874",
+      "ToolOnEraser.png": "b39017f91185cc293376814f904496f2d41d301bcc54a5840712c55e78ec6dda",
+      "ToolOnFill.png": "4e92b684fd4b167d7399731dc7944be268ab766c7f169d403d9e8d73359bb4e2",
+      "ToolOnLine.png": "00e4a35c63aff7abdbf4bd94c99887dd00a5fe6b89530e252d97c5afc2b23ca2",
+      "ToolOnRect.png": "66e2a5074659bf0cccd9d899551f8f6e91dd59c1ba377b045abe6a6182debb81",
+      "ToolOnText.png": "3f24e2c186acb004666476881e73a7980a19d4be43d342e065d314715182c499"
+    },
+    "binary_sha256": "c4c52be3333afd8d221224598c4dda91383ec7b201d9e9d1294e3ac7114351bf"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "bec10a917fa7da597a1287e20e635bfb6c58594d127221dc8f66f78ae427f98d",
+  "build_manifest_sha256": "e517871d6e4597cce296c51fb54ee483bf66099cf909f6e6bdd34e5de52d2200",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/fontpanel-verification/build.log",
-  "build_log_sha256": "c6642a5eae5356694d472804f2f529d848f87f2ed6a3ad2f24e94008d8dd35ec",
+  "build_log_path": "build/tool-feedback-verification/build.log",
+  "build_log_sha256": "f413ead9e57d50f4eef2c07fe08ec189c1bb3b0f67afc0013cd4e3ecee161d3a",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot._jbhobaf",
-      "log_path": "build/fontpanel-verification/arm64.log",
-      "log_sha256": "f3624cfd834b6565c56602c4098ef8b25405b757510850c17a0590a36a188cc6",
-      "checks": 2484,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot._47wn81y",
+      "log_path": "build/tool-feedback-verification/arm64.log",
+      "log_sha256": "b5398468579dec46137c70de6c020cb1006e2a30e76a9bb51f5ef5e19a821f53",
+      "checks": 2485,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -62,27 +84,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.4bm4gq25",
-      "log_path": "build/fontpanel-verification/x86_64.log",
-      "log_sha256": "04c157417c00ce009e4110cec16adfee59a6697153c5d606fe9d2fbda46bed01",
-      "checks": 2484,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.b53g6_l0",
+      "log_path": "build/tool-feedback-verification/x86_64.log",
+      "log_sha256": "87cbe2faf905acd01d36cb14949d59c4f709123923622e7db53d0489f28b89e4",
+      "checks": 2485,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/fontpanel-verification/results.json",
-  "full_suite_results_sha256": "5e534173c170da85e18ad0afbf6267e035b36550ce294e6d428cd4a35f51d2dc",
+  "full_suite_results_path": "build/tool-feedback-verification/results.json",
+  "full_suite_results_sha256": "38f4a35930f3bd0ad7066c04470118d66df28eb1d840df40a214c9b6f2675231",
   "native_startup_smoke": {
-    "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00",
-    "verified_at": "2026-10-07T16:04:25.888857+00:00",
+    "binary_sha256": "c4c52be3333afd8d221224598c4dda91383ec7b201d9e9d1294e3ac7114351bf",
+    "verified_at": "2026-10-07T16:26:46.688630+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "d67f34893d6122d3a71724d75862cd07cea39d4b6e11d7ad1ea5e6f32f79eee2"
+      "editable_sha256": "42bd1f8c4d26ee063bc346ff79eea25d32686a1d3e57b3889ba32754f87e5577"
     },
     "x86_64": {
       "passed": true,
@@ -90,44 +112,46 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "dcb09c0e3b5e8ce8750bc1fad392379f4eefcffb26fce90412d59db456c59e24"
+      "editable_sha256": "c07cdb0c653289cd7c6f19121d82931eae524cf865420d7813d58a5218d9e5d9"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-1d02b93220/results.json",
-  "native_startup_smoke_results_sha256": "57808e8a400a5f3d61382323f1a803896f9f03f787d970fb3abbdc018619ba7e",
+  "native_startup_smoke_results_path": "build/startup-smoke-c4c52be333/results.json",
+  "native_startup_smoke_results_sha256": "e99fb8dc29bc2e32ac46a9da616a443b7491568baa86b2622fa29b3a2f191a85",
   "validation_tools_sha256": {
     "tools/test.py": "6af94957d08019ddcb30ed63bd5ce09f93f5efd9133c8052b093f2b9acedfe39",
-    "tools/build.sh": "fb2bed4e7f646a086ffada50f262dbdfe79001b1924019768293fb18b412daf2",
+    "tools/build.sh": "ab5152b1fac37017e35b48d2aad7546a660ee1e5ffeed0ef41b04429111ba61e",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2484,
+    "checks_per_architecture": 2485,
     "suites": 23,
-    "results_path": "build/fontpanel-verification/results.json",
-    "results_sha256": "5e534173c170da85e18ad0afbf6267e035b36550ce294e6d428cd4a35f51d2dc"
+    "results_path": "build/tool-feedback-verification/results.json",
+    "results_sha256": "38f4a35930f3bd0ad7066c04470118d66df28eb1d840df40a214c9b6f2675231"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00",
-    "startup_log_path": "build/fontpanel-verification/startup.log",
-    "startup_log_sha256": "4c1c6c18300cd5f81ee5542f77b83a4417bd2d5ff113e80e49cdc7068e4d49af"
+    "binary_sha256": "c4c52be3333afd8d221224598c4dda91383ec7b201d9e9d1294e3ac7114351bf",
+    "startup_log_path": "build/tool-feedback-verification/startup.log",
+    "startup_log_sha256": "5dd6bb563dd722114a1febf36befb2bd8ae6f2594e35b66b06e5dbb3153042a9"
   },
   "current_desktop_checks": [
     {
-      "id": "native-fontpanel-owned-layout-metrics",
-      "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00",
+      "id": "native-selected-tool-feedback",
+      "binary_sha256": "c4c52be3333afd8d221224598c4dda91383ec7b201d9e9d1294e3ac7114351bf",
       "architecture": "arm64",
       "passed": true,
-      "verification_kind": "owned_native_public_control_layout_metrics_only",
-      "evidence_path": "build/fontpanel-desktop-proof.json",
-      "evidence_sha256": "7c5b6bc50c4d514cc1dee88b148a993f63c489e315dd839827cc390db5101121",
-      "checkpoint_scope": "current_exact1d02b93220_owned_layout_metrics_only",
+      "verification_kind": "native_input_accessibility_and_visual_review",
+      "evidence_path": "build/tool-feedback-verification/desktop-proof.json",
+      "evidence_sha256": "349d101f2eb19e8915fe3b4fb793cd519f78aaef287fee78489856e0072d9f3b",
+      "checkpoint_scope": "current_exactc4c52be333_listed_tool_feedback_only",
       "checks": [
-        "Current installed universal app launches and exits on both architectures in startup smoke tests.",
-        "Loaded native Fonts panel uses mode mask 7 and arranged pane widths 360/580 in its 940-point window.",
-        "Recorded native control fonts and attributed text use at least 20 points.",
-        "Current screenshot tool exposes the canvas while the floating panel remains nonkey; current-build Fonts visual and editing proof is pending."
+        "All10 native sidebar buttons selected exactly one corresponding tool without changing the saved document. Clicking the already-selected Arrow kept one selection.",
+        "Native Tab changed Rectangle to Brush/Pencil, and the next Tab restored Rectangle and the selected feedback.",
+        "Arrow, Rectangle, Text, Brush and Crop selected states were visually reviewed at 1280x932 native points with 2x backing scale.",
+        "Original active icon artwork appears for the reviewed icon-bearing tools; Crop has a persistent highlight without invented artwork.",
+        "Yellow selected backgrounds now show contrasting black labels; the initially inactive app window retained its selected highlight.",
+        "Fonts Show/Hide menu toggled; the desktop adapter still exposed only the canvas. Owned metrics show family/face pane widths360/580, mode7 and all recorded control fonts20."
       ]
     }
   ],
@@ -547,6 +571,31 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "fontpanel-layout-1d02b93220",
+      "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00",
+      "full_suite_results_path": "build/fontpanel-verification/results.json",
+      "full_suite_results_sha256": "5e534173c170da85e18ad0afbf6267e035b36550ce294e6d428cd4a35f51d2dc",
+      "desktop_checks": [
+        {
+          "id": "native-fontpanel-owned-layout-metrics",
+          "binary_sha256": "1d02b9322026259f78dd9969a82de4c1522b892daeab12712cad036e55ab6e00",
+          "architecture": "arm64",
+          "passed": true,
+          "verification_kind": "owned_native_public_control_layout_metrics_only",
+          "evidence_path": "build/fontpanel-desktop-proof.json",
+          "evidence_sha256": "7c5b6bc50c4d514cc1dee88b148a993f63c489e315dd839827cc390db5101121",
+          "checkpoint_scope": "current_exact1d02b93220_owned_layout_metrics_only",
+          "checks": [
+            "Current installed universal app launches and exits on both architectures in startup smoke tests.",
+            "Loaded native Fonts panel uses mode mask 7 and arranged pane widths 360/580 in its 940-point window.",
+            "Recorded native control fonts and attributed text use at least 20 points.",
+            "Current screenshot tool exposes the canvas while the floating panel remains nonkey; current-build Fonts visual and editing proof is pending."
+          ]
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -581,6 +630,12 @@
     "Fonts toolbar screenshot/readability and foreground-focus verification remain pending on the current binary; public control metrics are not complete visual proof.",
     "Native desktop observations are arm64 only; x86_64 startup and regression tests run through Rosetta.",
     "Original runtime equivalence, adaptive effects, original font mapping, transformed text editor geometry and close widget remain unresolved.",
-    "All 340 original feature parity flags remain unverified."
+    "All 340 original feature parity flags remain unverified.",
+    "Full current-build floating Fonts visual/edit/save/Undo workflow remains pending; owned layout metrics do not prove the interactive workflow.",
+    "Desktop visual/input proof is arm64; Intel suites and startup run under Rosetta rather than real Intel hardware.",
+    "Other accent-label contrast is checked with controlled fixtures, not a desktop appearance/theme change.",
+    "Minimum-window desktop resize was attempted but did not change geometry; compact-window layout remains unverified.",
+    "Iconless Crop label padding, other panel spacing, save/export feedback and full original runtime visual equivalence remain unfinished.",
+    "All340 original parity flags remain unverified; this proof covers only the listed reconstructed behavior."
   ]
 }

@@ -2523,7 +2523,24 @@ enum AppSafetyTests {
             ("History index failure preserves prior readable revision and live editor", historyFailedIndexWrite),
             ("successful Save archives exported native state; failed Save archives nothing", historySaveOutcomes),
             ("asynchronous old-generation archive preserves immutable output and current document identity", historyStaleArchiveCompletion),
-            ("blank Save, cancelled Save As and cancelled capture cannot archive empty/cancelled outputs", historyEmptyAndCancelledOutputs)
+            ("blank Save, cancelled Save As and cancelled capture cannot archive empty/cancelled outputs", historyEmptyAndCancelledOutputs),
+            ("selected tool labels remain readable on bright and dark accent colors", {
+                let colors: [NSColor] = [.yellow, .white, .black, .blue, .red, .green,
+                    NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1),
+                    NSColor(srgbRed: 0.25, green: 0.45, blue: 0.9, alpha: 1)]
+                for background in colors {
+                    let foreground = ToolButton.textColor(on: background)
+                    let rgb = background.usingColorSpace(.deviceRGB)!
+                    let channels = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent].map { c in
+                        c <= 0.04045 ? Double(c) / 12.92 : pow((Double(c) + 0.055) / 1.055, 2.4)
+                    }
+                    let brightness = zip(channels, [0.2126, 0.7152, 0.0722]).reduce(0.0) { $0 + $1.0 * $1.1 }
+                    let contrast = foreground == .black ? (brightness + 0.05) / 0.05 : 1.05 / (brightness + 0.05)
+                    try expect(contrast >= 4.5, "Selected tool label contrast is too low: \(contrast)")
+                }
+                try expect(ToolButton.textColor(on: .yellow) == .black, "Yellow needs a dark selected label")
+                try expect(ToolButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
+            })
         ]
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {

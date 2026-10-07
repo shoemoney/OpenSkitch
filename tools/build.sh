@@ -11,7 +11,7 @@ for ARCH in arm64 x86_64; do
   xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit -framework AVFoundation -framework CoreMedia -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/SkitchRedux-$ARCH"
 done
 xcrun lipo -create "$ROOT/build/objects/SkitchRedux-arm64" "$ROOT/build/objects/SkitchRedux-x86_64" -output "$APP/Contents/MacOS/SkitchRedux"
-cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$APP/Contents/Resources/"
+cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
@@ -27,6 +27,7 @@ manifest = {
     "minimum_macos": "13.0",
     "source_snapshot": str(snapshot),
     "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(snapshot.iterdir()) if p.is_file()},
+    "resource_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((app / "Contents/Resources").iterdir()) if p.is_file()},
     "binary_sha256": hashlib.sha256((app / "Contents/MacOS/SkitchRedux").read_bytes()).hexdigest(),
 }
 (root / "build/build-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
