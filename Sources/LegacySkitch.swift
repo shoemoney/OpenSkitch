@@ -216,10 +216,12 @@ struct LegacySkitchPath: Codable, Equatable {
     var group: Int
     var hasShadow: Bool
     var attributes: [String: String]
+    var transform = LegacySkitchTransform.identity
 }
 struct LegacySkitchTextLine: Codable, Equatable {
     var content: String
     var position: CGPoint?
+    var attributes: [String: String] = [:]
 }
 struct LegacySkitchText: Codable, Equatable {
     var anchor: CGPoint
@@ -232,13 +234,40 @@ struct LegacySkitchText: Codable, Equatable {
     var hasOutline: Bool
     var hasShadow: Bool
     var attributes: [String: String]
+    var transform = LegacySkitchTransform.identity
+    var frame: CGRect?
 }
 struct LegacySkitchImage: Codable, Equatable {
     var rect: CGRect
     var pngData: Data
     /// Includes skShadowRadius/Scales/Offset/Color/Opacity for later model adoption.
     var attributes: [String: String]
+    var transform = LegacySkitchTransform.identity
 }
+struct LegacySkitchTransform: Codable, Equatable {
+    var a: CGFloat = 1, b: CGFloat = 0, c: CGFloat = 0, d: CGFloat = 1, tx: CGFloat = 0, ty: CGFloat = 0
+    static let identity = Self()
+    var cg: CGAffineTransform { CGAffineTransform(a: a, b: b, c: c, d: d, tx: tx, ty: ty) }
+    static func parse(_ value: String?) throws -> Self {
+        guard let value else { return .identity }
+        let expression = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard expression.hasPrefix("matrix("), expression.hasSuffix(")") else {
+            throw LegacySkitchError.unsupported("Only a finite nonsingular SVG matrix is supported")
+        }
+        let numeric = "[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?"
+        let pattern = "^matrix\\(\\s*" + Array(repeating: numeric, count: 6).joined(separator: "(?:\\s*,\\s*|\\s+)") + "\\s*\\)$"
+        guard expression.range(of: pattern, options: .regularExpression) != nil else { throw LegacySkitchError.invalidDocument("Malformed SVG matrix") }
+        let parts = expression.dropFirst(7).dropLast().split(whereSeparator: { $0.isWhitespace || $0 == "," })
+        let values = parts.compactMap { Double($0) }
+        guard values.count == 6, parts.count == 6,
+              values.allSatisfy({ $0.isFinite && abs($0) <= 1_000_000 }),
+              abs(values[0] * values[3] - values[1] * values[2]) > 1e-9 else {
+            throw LegacySkitchError.invalidDocument("Invalid SVG matrix")
+        }
+        return Self(a: values[0], b: values[1], c: values[2], d: values[3], tx: values[4], ty: values[5])
+    }
+}
+enum LegacySkitchPaint: Codable, Equatable { case path(Int), image(Int) }
 struct LegacySkitchDocument: Codable, Equatable {
     /// SVG pixel coordinates; importing need not undo the original logical crop transform.
     var size: CGSize
@@ -249,9 +278,12 @@ struct LegacySkitchDocument: Codable, Equatable {
     var texts: [LegacySkitchText] = []
     /// Brush/tool/type/source metadata, including unknown attributes, are retained.
     var attributes: [String: String]
+    var backgroundAttributes: [String: String] = [:]
+    var images: [LegacySkitchImage] = []
+    var paintOrder: [LegacySkitchPaint] = []
 }
 
-/// Read-only original-document import. No dependency on Canvas or DocumentModel.
+/// Strict SVG-native import. No dependency on Canvas or DocumentModel.
 /// Source: Document::{serialize,deSerialize} at 0x001c27a0/0x001c3770;
 /// Text at 0x001c51b4/0x001c56e6; Image at 0x001ce8e0/0x001cec3c.
 enum LegacySkitch {
@@ -270,6 +302,9 @@ enum LegacySkitch {
         guard data.count <= maximumFileBytes else { throw LegacySkitchError.limitExceeded }
         guard let xml = String(data: data, encoding: .utf8) else {
             throw LegacySkitchError.invalidXML("Expected UTF-8")
+        }
+        if requireSignature && !xml.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("<?xml ") {
+            throw LegacySkitchError.invalidDocument("Missing XML declaration before native marker")
         }
         guard !xml.localizedCaseInsensitiveContains("<!DOCTYPE") &&
               !xml.localizedCaseInsensitiveContains("<!ENTITY") else {
@@ -292,12 +327,16 @@ enum LegacySkitch {
         var document: LegacySkitchDocument?
         var stack: [String] = []
         var signature = false
+        var topLevelComments = 0
         var count = 0
         var groupAttributes: [String: String]?
         var textLines: [LegacySkitchTextLine] = []
         var lineAttributes: [String: String]?
         var lineContent = ""
         var commandCount = 0
+        var clipID: String?
+        var clips: [String: CGRect] = [:]
+        var knownShadow = false
 
         init(requireSignature: Bool) { self.requireSignature = requireSignature }
 
@@ -330,21 +369,58 @@ enum LegacySkitch {
         }
 
         func parser(_ parser: XMLParser, foundComment comment: String) {
-            if stack.isEmpty && document == nil && comment == " Skitch 1.0 " { signature = true }
+            if stack.isEmpty && document == nil {
+                if topLevelComments == 0 && comment == " Skitch 1.0 " { signature = true }
+                topLevelComments += 1
+            }
         }
         func parser(_ parser: XMLParser, didStartElement elementName: String, namespaceURI: String?,
                     qualifiedName qName: String?, attributes a: [String: String]) {
             guard error == nil else { return }
             do {
                 guard stack.count < 8 else { throw LegacySkitchError.limitExceeded }
-                guard a["transform"] == nil else {
-                    throw LegacySkitchError.unsupported("SVG transform attribute; geometry would require applying it")
+                guard !a.keys.contains(where: { $0.lowercased().hasPrefix("on") }) else {
+                    throw LegacySkitchError.unsupported("SVG event handlers")
+                }
+                let transform = try LegacySkitchTransform.parse(a["transform"])
+                if elementName != "g" && elementName != "text" && a["stroke"] != nil {
+                    throw LegacySkitchError.unsupported("SVG stroke paint; native paths must be filled outlines")
+                }
+                if elementName == "text" && a.keys.contains(where: { ["fill", "opacity", "font-family", "font-size", "style", "stroke"].contains($0) }) {
+                    throw LegacySkitchError.unsupported("Per-line text paint overrides")
+                }
+                if let filter = a["filter"], filter != "url(#skitch-redux-shadow)" { throw LegacySkitchError.unsupported("Unknown SVG filter") }
+                if a["transform"] != nil && !["path", "g", "image"].contains(elementName) {
+                    throw LegacySkitchError.unsupported("Transform on \(elementName)")
+                }
+                if let clip = a["clip-path"], !(elementName == "g" && clip.range(of: "^url\\(#skitch-redux-text-[A-Fa-f0-9-]+\\)$", options: .regularExpression) != nil) {
+                    throw LegacySkitchError.unsupported("Unknown SVG clipping")
+                }
+                for key in ["mask", "stroke-dasharray", "fill-rule", "fill-opacity"] where a[key] != nil {
+                    throw LegacySkitchError.unsupported("SVG \(key); unsupported paint semantics")
+                }
+                if let style = a["style"] {
+                    let allowed = ["font-family", "font-weight", "font-style", "filter"]
+                    for part in style.split(separator: ";", omittingEmptySubsequences: true) {
+                        let pair = part.split(separator: ":", maxSplits: 1)
+                        guard pair.count == 2 else { throw LegacySkitchError.invalidDocument("Invalid SVG style") }
+                        let key = pair[0].trimmingCharacters(in: .whitespaces)
+                        let value = pair[1].trimmingCharacters(in: .whitespaces)
+                        // Root background style is a recovered legacy exception.
+                        guard allowed.contains(key) || (elementName == "svg" && key == "background-color") else {
+                            throw LegacySkitchError.unsupported("SVG style \(key)")
+                        }
+                        if key == "filter" && value != "url(#skitch-redux-shadow)" {
+                            throw LegacySkitchError.unsupported("Unknown SVG filter")
+                        }
+                    }
                 }
                 stack.append(elementName)
                 count += 1
                 guard count <= LegacySkitch.maximumElements else { throw LegacySkitchError.limitExceeded }
                 if stack.count == 1 {
                     guard elementName == "svg", document == nil else { throw LegacySkitchError.invalidDocument("Expected svg root") }
+                    guard a["xmlns"] == nil || a["xmlns"] == "http://www.w3.org/2000/svg" else { throw LegacySkitchError.invalidDocument("Invalid SVG namespace") }
                     guard signature || !requireSignature else { throw LegacySkitchError.invalidDocument("Missing Skitch 1.0 marker") }
                     let w = try number(a, "width"), h = try number(a, "height")
                     let vw = try number(a, "skitchVisibleWidth", default: 1), vh = try number(a, "skitchVisibleHeight", default: 1)
@@ -359,19 +435,28 @@ enum LegacySkitch {
                     switch elementName {
                     case "defs": break
                     case "rect":
+                        guard document?.backgroundAttributes.isEmpty == true else { throw LegacySkitchError.unsupported("Multiple background rectangles") }
+                        let x = try number(a, "x", default: 0), y = try number(a, "y", default: 0)
+                        let w = try number(a, "width", default: document!.size.width), h = try number(a, "height", default: document!.size.height)
+                        guard x == 0, y == 0, w == document!.size.width, h == document!.size.height else { throw LegacySkitchError.unsupported("Background rectangle geometry") }
                         let previousColor = document?.backgroundColor ?? .white
                         let parsedColor = try color(a, default: previousColor)
                         document?.backgroundColor = parsedColor
+                        document?.backgroundAttributes = a
                     case "path":
                         guard let d = a["d"] else { throw LegacySkitchError.invalidDocument("Path missing d") }
                         let commands = try SVGPathParser.parse(d, maximumCommands: 1_000_000 - commandCount)
+                        guard !commands.isEmpty else { throw LegacySkitchError.invalidPath("Empty path") }
                         commandCount += commands.count
                         let fill = try color(a, default: LegacySkitchColor(red: 0, green: 0, blue: 0, alpha: 1))
+                        let index = document!.paths.count
+                        document?.paintOrder.append(.path(index))
                         document?.paths.append(LegacySkitchPath(commands: commands, originalD: d, color: fill,
-                            group: try group(a), hasShadow: try flag(a, "skitchHasShadow", default: false), attributes: a))
+                            group: try group(a), hasShadow: try flag(a, "skitchHasShadow", default: false), attributes: a, transform: transform))
                     case "g": groupAttributes = a; textLines = []
                     case "image":
-                        guard document?.background == nil else { throw LegacySkitchError.unsupported("Multiple background images") }
+                        _ = try group(a)
+                        for key in ["skShadowRadius", "skShadowOpacity", "skShadowScales"] where a[key] != nil { _ = try number(a, key) }
                         let prefix = "data:image/png;base64,"
                         guard let href = a["xlink:href"], href.hasPrefix(prefix) else {
                             throw LegacySkitchError.invalidDocument("Expected embedded base64 PNG")
@@ -384,14 +469,37 @@ enum LegacySkitch {
                         let w = try number(a, "width"), h = try number(a, "height")
                         guard w > 0, h > 0 else { throw LegacySkitchError.invalidDocument("Invalid image dimensions") }
                         let rect = CGRect(x: try number(a, "x", default: 0), y: try number(a, "y", default: 0), width: w, height: h)
-                        document?.background = LegacySkitchImage(rect: rect, pngData: png, attributes: a)
+                        guard try number(a, "opacity", default: 1) == 1 else { throw LegacySkitchError.unsupported("Image opacity; use PNG alpha") }
+                        let image = LegacySkitchImage(rect: rect, pngData: png, attributes: a, transform: transform)
+                        let index = document!.images.count
+                        document?.paintOrder.append(.image(index))
+                        document?.images.append(image)
+                        if document?.background == nil { document?.background = image }
                     default: throw LegacySkitchError.unsupported("Root child \(elementName)")
                     }
                 } else if stack[1] == "defs" {
                     // Display-only SVG shadows carry no editable geometry. The
                     // native Skitch shadow flags retain their drawing semantics.
-                    guard (stack.count == 3 && elementName == "filter") || (stack.count == 4 && stack[2] == "filter" && elementName == "feDropShadow") else {
+                    guard (stack.count == 3 && ["filter", "clipPath"].contains(elementName)) || (stack.count == 4 && ((stack[2] == "filter" && elementName == "feDropShadow") || (stack[2] == "clipPath" && elementName == "rect"))) else {
                         throw LegacySkitchError.unsupported("SVG definition \(elementName)")
+                    }
+                    if elementName == "filter" {
+                        guard a["id"] == "skitch-redux-shadow", !knownShadow else { throw LegacySkitchError.unsupported("Unknown/duplicate SVG filter") }
+                        knownShadow = true
+                    } else if elementName == "feDropShadow" {
+                        guard try number(a, "dx") == 2, try number(a, "dy") == 3, try number(a, "stdDeviation") == 4,
+                              try number(a, "flood-opacity") == 0.38, a["flood-color"] == "black" else {
+                            throw LegacySkitchError.unsupported("SVG shadow metrics")
+                        }
+                    } else if elementName == "clipPath" {
+                        guard let id = a["id"], id.hasPrefix("skitch-redux-text-"), clips[id] == nil, a["clipPathUnits"] == "userSpaceOnUse" else {
+                            throw LegacySkitchError.unsupported("Unknown/duplicate SVG text clip")
+                        }
+                        clipID = id
+                    } else if elementName == "rect", let id = clipID {
+                        let w = try number(a, "width"), h = try number(a, "height")
+                        guard w >= 0, h >= 0, clips[id] == nil else { throw LegacySkitchError.invalidDocument("Invalid SVG text clip") }
+                        clips[id] = CGRect(x: try number(a, "x"), y: try number(a, "y"), width: w, height: h)
                     }
                 } else if stack.count == 3, stack[1] == "g", elementName == "text" {
                     lineAttributes = a; lineContent = ""
@@ -400,9 +508,11 @@ enum LegacySkitch {
         }
         func parser(_ parser: XMLParser, foundCharacters string: String) {
             if stack.count == 3 && stack.last == "text" { lineContent += string }
+            else if !string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { fail(parser, LegacySkitchError.invalidDocument("Unexpected XML text")) }
         }
         func parser(_ parser: XMLParser, foundCDATA CDATABlock: Data) {
             if stack.count == 3 && stack.last == "text", let value = String(data: CDATABlock, encoding: .utf8) { lineContent += value }
+            else if !CDATABlock.isEmpty { fail(parser, LegacySkitchError.invalidDocument("Unexpected CDATA")) }
         }
         func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
             guard error == nil else { return }
@@ -410,20 +520,29 @@ enum LegacySkitch {
                 if stack.count == 3, elementName == "text", let a = lineAttributes {
                     var position: CGPoint?
                     if a["x"] != nil && a["y"] != nil { position = CGPoint(x: try number(a, "x"), y: try number(a, "y")) }
-                    textLines.append(LegacySkitchTextLine(content: lineContent, position: position))
+                    guard (a["x"] == nil) == (a["y"] == nil), a["transform"] == nil else { throw LegacySkitchError.unsupported("Text line position/transform") }
+                    textLines.append(LegacySkitchTextLine(content: lineContent, position: position, attributes: a))
                     lineAttributes = nil
                 } else if stack.count == 2, elementName == "g", let a = groupAttributes {
                     let anchor = CGPoint(x: try number(a, "skitchTextX"), y: try number(a, "skitchTextY"))
                     let fontSize = try number(a, a["skitchFontSize"] == nil ? "font-size" : "skitchFontSize", default: 12)
                     guard fontSize > 0 else { throw LegacySkitchError.invalidDocument("Invalid font size") }
+                    var frame: CGRect?
+                    if let clip = a["clip-path"] {
+                        let id = String(clip.dropFirst(5).dropLast())
+                        guard let rect = clips[id] else { throw LegacySkitchError.invalidDocument("Missing text clip definition") }
+                        frame = rect
+                    }
                     document?.texts.append(LegacySkitchText(anchor: anchor,
                         content: textLines.map(\.content).joined(separator: "\n"), lines: textLines,
                         fontName: a["font-family"] ?? "Helvetica Bold", fontSize: fontSize,
                         color: try color(a, default: LegacySkitchColor(red: 0, green: 0, blue: 0, alpha: 1)),
                         group: try group(a), hasOutline: try flag(a, "skitchHasOutline", default: true),
-                        hasShadow: try flag(a, "skitchHasShadow", default: true), attributes: a))
+                        hasShadow: try flag(a, "skitchHasShadow", default: true), attributes: a,
+                        transform: try LegacySkitchTransform.parse(a["transform"]), frame: frame))
                     groupAttributes = nil
                 }
+                if elementName == "clipPath" { clipID = nil }
                 _ = stack.popLast()
             } catch { fail(parser, error) }
         }

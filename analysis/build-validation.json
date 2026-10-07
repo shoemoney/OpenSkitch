@@ -1,120 +1,194 @@
 {
-  "verified_at": "2026-10-07T05:48:02.369062+00:00",
+  "verified_at": "2026-10-07T06:58:33.830717+00:00",
   "architectures": {
     "arm64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
-        "Sources/Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
-        "Sources/Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+        "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+        "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+        "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
         "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
         "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
-        "Sources/LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
-        "Sources/LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
-        "Sources/Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
-        "Sources/SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e",
-        "tests/AppSafetyTests.swift": "68e1d66ec14bc988e00abbb91c1583b30d75f818505b78f23df067f8e6a4d055",
-        "tests/CanvasTests.swift": "2c6b16a6c274e2a66b31055e4a1ec50599d0d394ce0ee0975e60ff9f64feb3e7",
+        "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+        "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+        "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+        "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+        "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+        "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+        "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
+        "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+        "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
-        "tests/PublishingTests.swift": "434bce62b7dc7fc531a65f18ec1c48e182718597ed9e1ecc03afe9609760c753",
-        "tests/SVGExportTests.swift": "adaf1a57a9a96233593d4e94d9cedbe957bdf1715987a45176ffce2221fc9e90"
+        "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
+        "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
+        "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
+        "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
+        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
       },
       "suite_results": {
-        "canvas": 22,
+        "canvas": 31,
         "publishing": 160,
-        "svg": 28,
-        "app_safety": 14,
-        "global_hotkeys": 117
+        "publishing_shutdown": 50,
+        "global_hotkeys": 117,
+        "svg": 29,
+        "skitch_file": 20,
+        "capture": 154,
+        "photo_browser": 19,
+        "app_safety": 34
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.4eh_agze",
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.WTLsPf"
+      "snapshot": "build/test-snapshot.egng20pz",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.N4WKhP",
+      "native_appkit_idle_termination": {
+        "actualIdleCaptureShutdowns": 1,
+        "passed": true,
+        "pendingShutdown": []
+      },
+      "raw_log": "build/final-verification-20261007-015338/arm64.log"
     },
     "x86_64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
-        "Sources/Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
-        "Sources/Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+        "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+        "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+        "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
         "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
         "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
-        "Sources/LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
-        "Sources/LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
-        "Sources/Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
-        "Sources/SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e",
-        "tests/AppSafetyTests.swift": "68e1d66ec14bc988e00abbb91c1583b30d75f818505b78f23df067f8e6a4d055",
-        "tests/CanvasTests.swift": "2c6b16a6c274e2a66b31055e4a1ec50599d0d394ce0ee0975e60ff9f64feb3e7",
+        "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+        "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+        "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+        "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+        "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+        "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+        "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
+        "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+        "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
-        "tests/PublishingTests.swift": "434bce62b7dc7fc531a65f18ec1c48e182718597ed9e1ecc03afe9609760c753",
-        "tests/SVGExportTests.swift": "adaf1a57a9a96233593d4e94d9cedbe957bdf1715987a45176ffce2221fc9e90"
+        "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
+        "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
+        "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
+        "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
+        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
       },
       "suite_results": {
-        "canvas": 22,
+        "canvas": 31,
         "publishing": 160,
-        "svg": 28,
-        "app_safety": 14,
-        "global_hotkeys": 117
+        "publishing_shutdown": 50,
+        "global_hotkeys": 117,
+        "svg": 29,
+        "skitch_file": 20,
+        "capture": 154,
+        "photo_browser": 19,
+        "app_safety": 34
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.tyrugtde",
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.LrSeUB"
+      "snapshot": "build/test-snapshot.cllkgdn8",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.h3WA98",
+      "native_appkit_idle_termination": {
+        "actualIdleCaptureShutdowns": 1,
+        "passed": true,
+        "pendingShutdown": []
+      },
+      "raw_log": "build/final-verification-20261007-015338/x86_64.log"
     }
   },
-  "full_original_parity": false,
-  "desktop_checks": [
-    "Original firstlaunch.skitch import with editable paths/text",
-    "Native rectangle drag",
-    "Pending annotation New/Cancel protection",
-    "Active-editor Undo and Redo",
-    "Recovery preserves pending annotation without closing editor",
-    "Native SFTP Publish verifies public HTTP image",
-    "Global shortcut preferences sheet visible with all bindings None",
-    "Web Snap captures the public synthetic image"
-  ],
-  "not_verified": [
-    "Original i386 runtime equivalence",
-    "Screen and camera capture permissions/hardware",
-    "Actual app-unfocused global hotkey capture",
-    "Every original feature and legacy service"
-  ],
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.UIFsbJ",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.hTPs6V",
     "source_sha256": {
-      "App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
-      "Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
-      "Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+      "App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+      "Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+      "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
       "DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
-      "Info.plist": "810e74a20e5b43b6575787a0cff0af9301cbfffe36efa0ccb9d4577da7db9bcc",
-      "LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
-      "LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
-      "Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
-      "SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e"
+      "Info.plist": "2cfa9422ebc8c2dd26d53109d8c4bd4e804de5b9a8e304f58378ac3f1edfe0ab",
+      "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+      "LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+      "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+      "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+      "SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+      "SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437"
     },
-    "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d"
+    "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
   },
   "native_startup_smoke": {
+    "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f",
+    "verified_at": "2026-10-07T06:53:48.239781+00:00",
     "arm64": {
       "passed": true,
-      "result": "native startup, editable save/load, PNG export succeeded",
       "exit_code": 0,
-      "png_bytes": 24898,
-      "editable_bytes": 4507
+      "result": "native startup, original-format editable save/load, PNG export succeeded",
+      "png_bytes": 24807,
+      "editable_bytes": 29480,
+      "editable_sha256": "d9ba6550146b367ef8319dc3631400b8c27bdcdcbfe9e8db99272138f04ae66a"
     },
     "x86_64": {
       "passed": true,
-      "result": "native startup, editable save/load, PNG export succeeded",
       "exit_code": 0,
-      "png_bytes": 24641,
-      "editable_bytes": 4507
-    },
-    "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d",
-    "verified_at": "2026-10-07T05:48:41.820451+00:00"
+      "result": "native startup, original-format editable save/load, PNG export succeeded",
+      "png_bytes": 24394,
+      "editable_bytes": 29480,
+      "editable_sha256": "8bda72dd3e5edbd69b60abc26f7edf15393ce18086dd5e11a4cdf77298301916"
+    }
   },
-  "native_startup_smoke_evidence": "build/startup-smoke-8ef9738f17"
+  "native_startup_smoke_evidence": "build/startup-smoke-c946fdd260",
+  "validation_tools_sha256": {
+    "tools/test-app-safety.sh": "f234327da750247c5bfedd4bb5dc8b22de03002e4b5fd2aa4f213cd7e37b7c16",
+    "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
+    "tools/test.py": "a5f99aa8c83a5e6308da7dc0f39f4d7eeb36c973dac70dda115da463ac0ea85b"
+  },
+  "full_original_parity": false,
+  "desktop_checks": [
+    {
+      "build_binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f",
+      "checks": [
+        "Opaque Frame controls/titlebar surrounding transparent canvas; Cancel restores editor",
+        "Native raster Open at validated 320x120 pixels",
+        "Native Publish sheet completes; unauthenticated HTTP matches SFTP bytes"
+      ],
+      "evidence": "CUA accessibility state and screenshots in this chat; independent public-image readback",
+      "public_image": {
+        "verified_at": "2026-10-07T06:56:33.742344+00:00",
+        "public_url": "https://shoemoney.com/imgs/skitch-redux-02-final-8fb7e72d-32d0-45fe-8969-e07b8f4870c9.png",
+        "http_status": 200,
+        "content_type": "image/png",
+        "bytes": 1234,
+        "sha256": "eb5e19f566952e84f0a0ab8d3e2753f7f7ef6112c8283d0e4146b46aff43416b",
+        "pixel_size": [
+          320,
+          120
+        ],
+        "http_matches_sftp": true,
+        "native_app_status": "Published image",
+        "test_content": "Synthetic gradient only",
+        "build_binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
+      }
+    },
+    {
+      "build_binary_sha256": "43bec0aee570b4e25aa2b5cffbb69432f9a3a5fccc458948bf604cf5ed320af6",
+      "checks": [
+        "Original firstlaunch import and Justype text entry/Escape commit",
+        "Tab Pencil/current-tool toggle",
+        "Editable native .skitch Save/reopen preserving typed annotation",
+        "Chosen-folder Photos thumbnails, natural sort and full-resolution double-click open"
+      ],
+      "evidence": "CUA desktop checks earlier in this milestone; subsequent changes concern shutdown and Frame chrome"
+    }
+  ],
+  "not_verified": [
+    "Original i386 runtime equivalence and historical corpus interoperability",
+    "Screen/camera capture permissions, hardware and display fidelity",
+    "System Photos-library picker",
+    "Actual app-unfocused global shortcuts",
+    "Complete original vector Boolean fill/erase and pressure/smoothing",
+    "Original window/crop/output sizing, full History, presets, preferences and legacy services"
+  ],
+  "superseded_validation": {
+    "verified_at": "2026-10-07T05:48:02.369062+00:00",
+    "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d"
+  }
 }

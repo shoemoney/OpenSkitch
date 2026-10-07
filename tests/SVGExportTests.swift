@@ -153,7 +153,7 @@ fileprivate enum SVGExportTests {
     }
     /// WebKit decodes ordinary SVG into canvas pixels, independently of SketchRenderer.
     /// No window, HTTP server, file access, or remote resources are used.
-    static func renderedDifference(_ first: Data, _ second: Data) throws -> (changed: Int, ink: Int) {
+    static func renderedDifference(_ first: Data, _ second: Data) throws -> (changed: Int, ink: Int, maskMismatch: Int) {
         _ = NSApplication.shared
         let configuration = WKWebViewConfiguration()
         configuration.websiteDataStore = .nonPersistent()
@@ -174,12 +174,15 @@ fileprivate enum SVGExportTests {
               return ctx.getImageData(0, 0, 240, 160).data;
             }
             const a = await pixels('\(first.base64EncodedString())'), b = await pixels('\(second.base64EncodedString())');
-            let changed = 0, ink = 0;
+            let changed = 0, ink = 0, maskMismatch = 0;
             for (let i = 0; i < a.length; i += 4) {
               if (a[i] !== b[i] || a[i+1] !== b[i+1] || a[i+2] !== b[i+2] || a[i+3] !== b[i+3]) changed++;
               if (a[i+3] > 0 && (a[i] < 240 || a[i+1] < 240 || a[i+2] < 240)) ink++;
+              const inkA = a[i+3] > 0 && Math.min(a[i], a[i+1], a[i+2]) < 220;
+              const inkB = b[i+3] > 0 && Math.min(b[i], b[i+1], b[i+2]) < 220;
+              if (inkA !== inkB) maskMismatch++;
             }
-            window.svgTestResult = { changed, ink };
+            window.svgTestResult = { changed, ink, maskMismatch };
           } catch (error) { window.svgTestResult = { error: String(error) }; }
         })();
         </script>
@@ -199,10 +202,10 @@ fileprivate enum SVGExportTests {
         view.stopLoading()
         guard let result else { throw Failure("Offscreen WebKit SVG rendering timed out; visual appearance unverified") }
         if let error = result["error"] { throw Failure("Offscreen WebKit SVG render: \(error)") }
-        guard let changed = result["changed"] as? NSNumber, let ink = result["ink"] as? NSNumber else {
+        guard let changed = result["changed"] as? NSNumber, let ink = result["ink"] as? NSNumber, let mismatch = result["maskMismatch"] as? NSNumber else {
             throw Failure("WebKit returned no pixel measurements")
         }
-        return (changed.intValue, ink.intValue)
+        return (changed.intValue, ink.intValue, mismatch.intValue)
     }
     static func matrix(_ node: SVGTestNode) throws -> CGAffineTransform {
         guard let raw = node.attributes["transform"], raw.hasPrefix("matrix("), raw.hasSuffix(")") else {
@@ -294,6 +297,7 @@ fileprivate enum SVGExportTests {
             ("XML text and font attributes escape all five special characters", {
                 let content = "<&>\"' &amp; café 日本語 🖊\n\nlast\n"
                 var element = text(content); element.fontName = "Font <&>\"'"
+                element.rect.size = CGSize(width: 600, height: 200)
                 let (data, root) = try exported([element]), groups = root.named("g")
                 try expect(groups.count == 1 && groups[0].attributes["font-family"] == element.fontName, "Font attribute escaping")
                 try expect(groups[0].named("text").map(\.text) == content.components(separatedBy: "\n"), "Text escaping/double escaping/blank lines")
@@ -306,11 +310,13 @@ fileprivate enum SVGExportTests {
                 try expect(node.attributes["font-family"] == element.fontName, "Font family changed")
                 try expect(try number(node, "skitchFontSize") == 32 && number(node, "skitchTextX") == 25 && number(node, "skitchTextY") == 30, "Editor typography/anchor lost")
                 try expect(node.attributes["skitchHasOutline"] == "1" && node.attributes["skitchHasShadow"] == "1", "Text flags lost")
-                try expect(lines.count == 2 && approximately(try number(lines[1], "y") - number(lines[0], "y"), 38.4), "Explicit line spacing changed")
+                let font = NSFont(name: element.fontName, size: element.fontSize)!
+                let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
+                try expect(lines.count == 2 && approximately(try number(lines[1], "y") - number(lines[0], "y"), lineHeight), "SVG spacing differs from native AppKit text layout")
             }),
             ("Text is emitted after every vector despite mixed input order", {
                 let (_, root) = try exported([text(), nativePath(), text("second")])
-                try expect(root.children.map(\.name) == ["rect", "path", "g", "g"], "Text no longer floats above drawing")
+                try expect(root.children.filter { $0.name != "defs" }.map(\.name) == ["rect", "path", "g", "g"], "Text no longer floats above drawing")
             }),
             ("Rotated cubic controls are baked exactly once", {
                 var element = nativePath(); element.transform = SketchTransform(a: 0, b: 1, c: -1, d: 0, tx: 100, ty: 30)
@@ -422,6 +428,19 @@ fileprivate enum SVGExportTests {
                 let result = try renderedDifference(exported([plain], background: background).0, exported([outlined], background: background).0)
                 print("WEBKIT text outline: \(result.changed) changed pixels")
                 try expect(result.ink > 100 && result.changed > 32, "Text outline metadata/attributes have no ordinary SVG pixel effect")
+            }),
+            ("WebKit SVG text placement and wrapping match native rendered ink", {
+                var element = text("Native text wraps across lines with spacing.")
+                element.rect = CGRect(x: 20, y: 20, width: 175, height: 130)
+                element.fontSize = 24; element.color = SketchColor(NSColor(deviceRed: 0, green: 0, blue: 0, alpha: 1))
+                var document = SketchDocument(size: CGSize(width: 240, height: 160)); document.elements = [element]
+                guard let png = SketchRenderer.bitmap(document: document)?.representation(using: .png, properties: [:]) else { throw Failure("Native text bitmap failed") }
+                let imageSVG = Data(("<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"240\" height=\"160\"><image width=\"240\" height=\"160\" xlink:href=\"data:image/png;base64," + png.base64EncodedString() + "\"/></svg>").utf8)
+                let result = try renderedDifference(imageSVG, SVGExport.encode(document))
+                print("WEBKIT native/SVG wrapped text ink: \(result.ink); mismatched ink pixels: \(result.maskMismatch)")
+                // Rasterizers differ at antialiased edges; a baseline/line-wrap shift
+                // moves most glyph ink and exceeds this meaningful silhouette bound.
+                try expect(result.ink > 500 && result.maskMismatch < max(50, result.ink / 5), "SVG text placement/wrapping differs substantially from native rendering")
             }),
             ("Original fixture export retains every vector and text line", {
                 let (original, _, bytes, root) = try originalFixture()

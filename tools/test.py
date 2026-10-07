@@ -37,8 +37,12 @@ def suite(name, sources, test, define=None, arguments=()):
 suites = [
     ("canvas-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "Canvas.swift"], "CanvasTests.swift", "CANVAS_TESTS", ("--skip-visual-proof",)),
     ("publishing-tests", ["Publishing.swift"], "PublishingTests.swift", None, ("--test",)),
+    ("publishing-shutdown-tests", ["Publishing.swift"], "PublishingShutdownTests.swift", None, ("--test",)),
     ("hotkey-tests", ["GlobalHotkeys.swift"], "GlobalHotkeysTests.swift", "GLOBAL_HOTKEY_TESTS", ()),
     ("svg-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "Canvas.swift", "SVGExport.swift"], "SVGExportTests.swift", "SVG_EXPORT_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
+    ("skitch-file-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "Canvas.swift", "SVGExport.swift", "SkitchFile.swift"], "SkitchFileTests.swift", "SKITCH_FILE_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
+    ("capture-tests", ["Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
+    ("photo-browser-tests", ["PhotoBrowser.swift"], "PhotoBrowserTests.swift", None, ()),
 ]
 with ThreadPoolExecutor(max_workers=len(suites)) as executor:
     futures = [executor.submit(suite, *args) for args in suites]

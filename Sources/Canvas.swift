@@ -7,12 +7,28 @@ private final class SketchTextEditor: NSTextView {
     // an annotation registers one canvas undo step, regardless of keystroke count.
     private let typingHistory = UndoManager()
     override var undoManager: UndoManager? { typingHistory }
+    override func keyDown(with event: NSEvent) {
+        // Original SkitchTextFieldEditor_keyDown: handles Escape before NSTextView
+        // completion handling, then textDidEndEditing: saves the field contents.
+        if event.keyCode == 53, let canvas = delegate as? CanvasView {
+            canvas.commitPendingTextEditing(); return
+        }
+        super.keyDown(with: event)
+    }
 }
 
 /// Native AppKit canvas. All model geometry stays in top-left document pixels.
 /// Assign as NSScrollView.documentView; frame/intrinsic size follow canvasSize * zoom.
 final class CanvasView: NSView, NSTextViewDelegate {
-    var tool: SketchTool = .arrow { didSet { finishTextEditing(); needsDisplay = true; resetCursorRects() } }
+    var tool: SketchTool = .arrow {
+        didSet {
+            finishTextEditing(); needsDisplay = true; resetCursorRects()
+            if oldValue != tool {
+                if !togglingPencil { pencilReturnTool = nil }
+                onToolChange?(tool)
+            }
+        }
+    }
     var strokeColor: NSColor = .systemRed
     var strokeWidth: CGFloat = 5
     var filled = false
@@ -27,8 +43,19 @@ final class CanvasView: NSView, NSTextViewDelegate {
             updateCanvasSize()
         }
     }
-    var document = SketchDocument() { didSet { updateCanvasSize(); needsDisplay = true } }
+    var document = SketchDocument() {
+        didSet {
+            if !settingPanBackground && oldValue.backgroundPNG != document.backgroundPNG { panBackground = nil }
+            updateCanvasSize(); needsDisplay = true
+        }
+    }
     var onChange: (() -> Void)?
+    var onToolChange: ((SketchTool) -> Void)?
+    var onColorChange: ((NSColor) -> Void)?
+    /// Original resource stems: wipe_brushlayer, wipe_snap, wipe_already_blank.
+    var onSound: ((String) -> Void)?
+    /// See-through framing is a view state; rendering/export/recovery keep the full document.
+    var framePreview = false { didSet { needsDisplay = true } }
     /// The shell owns open/replace decisions, including unsaved-work prompts and file identity.
     var onOpenDocument: ((URL) -> Void)?
     let editingUndoManager = UndoManager()
@@ -56,6 +83,18 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var marquee: CGRect?
     private var gestureStart: CGPoint = .zero
     private var gestureState: EditorState?
+    private var gestureDocument: SketchDocument?
+    private var gestureColor: NSColor?
+    private var lastMousePoint: CGPoint?
+    private var pointerTrackingArea: NSTrackingArea?
+    private var copyOnDrag = false
+    private var copiesCreated = false
+    private var spaceHeld = false
+    private var currentModifiers: NSEvent.ModifierFlags = []
+    private var pencilReturnTool: SketchTool?
+    private var togglingPencil = false
+    private var panBackground: PanBackground?
+    private var settingPanBackground = false
     private var dragMode: DragMode = .none
     private var resizingHandle: Int?
     private var resizeBounds: CGRect = .zero
@@ -66,11 +105,37 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var isFinishingText = false
     private var pasteOffset: CGFloat = 0
     private static let pasteboardType = NSPasteboard.PasteboardType("com.skitch-redux.editable-selection")
-    private enum DragMode { case none, create, move, resize, marquee, crop, erase }
+    private enum DragMode { case none, create, move, resize, marquee, crop, erase, pan, sampleColor }
+    /// The raster cache in SketchDocument is the visible viewport. Preserve the full
+    /// source separately so panning away/back (even after save/reopen) loses no pixels.
+    private struct PanBackground: Codable, Equatable {
+        var sourcePNG: Data
+        var sourceSize: CGSize
+        var offset: CGPoint
+    }
+    private struct CanvasFile: Codable {
+        var document: SketchDocument
+        var canvasPanBackground: PanBackground?
+        private enum CodingKeys: String, CodingKey { case canvasPanBackground }
+        func encode(to encoder: Encoder) throws {
+            try document.encode(to: encoder)
+            var c = encoder.container(keyedBy: CodingKeys.self)
+            try c.encodeIfPresent(canvasPanBackground, forKey: .canvasPanBackground)
+        }
+        init(document: SketchDocument, background: PanBackground?) {
+            self.document = document; canvasPanBackground = background
+        }
+        init(from decoder: Decoder) throws {
+            document = try SketchDocument(from: decoder)
+            canvasPanBackground = try decoder.container(keyedBy: CodingKeys.self)
+                .decodeIfPresent(PanBackground.self, forKey: .canvasPanBackground)
+        }
+    }
     private struct EditorState {
         var document: SketchDocument
         var selection: Set<UUID>
         var cropRect: CGRect?
+        var panBackground: PanBackground?
     }
 
     override init(frame frameRect: NSRect) {
@@ -88,7 +153,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         registerForDraggedTypes([.fileURL, .png, .tiff, Self.pasteboardType])
         updateCanvasSize()
     }
-    private var state: EditorState { EditorState(document: document, selection: selection, cropRect: cropRect) }
+    private var state: EditorState {
+        EditorState(document: document, selection: selection, cropRect: cropRect, panBackground: panBackground)
+    }
     private func updateCanvasSize() {
         let size = intrinsicContentSize
         if frame.size != size { setFrameSize(size) }
@@ -100,7 +167,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     private func recordUndo(_ before: EditorState, name: String) {
-        guard before.document != document else { return }
+        guard before.document != document || before.panBackground != panBackground else { return }
         let explicitGroup = !editingUndoManager.isUndoing && !editingUndoManager.isRedoing
         if explicitGroup { editingUndoManager.beginUndoGrouping() }
         editingUndoManager.registerUndo(withTarget: self) { canvas in canvas.restore(before, name: name) }
@@ -112,6 +179,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         finishTextEditing()
         let inverse = state
         document = restored.document
+        panBackground = restored.panBackground
         selection = restored.selection
         cropRect = restored.cropRect
         recordUndo(inverse, name: name)
@@ -129,7 +197,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     func newBlank(size: NSSize) {
         guard SketchDocument.validSize(size) else { return }
         edit("New Canvas") {
-            document = SketchDocument(size: integralSize(size))
+            document = SketchDocument(size: integralSize(size)); panBackground = nil
             selection.removeAll(); cropRect = nil
         }
     }
@@ -142,12 +210,48 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let normalized = NSImage(cgImage: cg, size: size)
         guard let png = SketchRenderer.png(image: normalized) else { return }
         edit("Set Background") {
-            document.size = size; document.backgroundPNG = png
+            document.size = size; document.backgroundPNG = png; panBackground = nil
             selection.removeAll(); cropRect = nil
         }
     }
     func setBackgroundColor(_ color: NSColor) {
         edit("Background Color") { document.backgroundColor = SketchColor(color) }
+    }
+    /// Re-snap fits the new image into the existing viewport. Validation and raster
+    /// creation finish before touching the document, pending editor, or undo history.
+    @discardableResult
+    func replaceSnapPreservingAnnotations(_ image: NSImage) -> Bool {
+        // NSImage(size:) reports isValid and can synthesize a blank CGImage even
+        // without image content. Reject that placeholder before committing text.
+        guard !image.representations.isEmpty, image.isValid, image.size.width.isFinite, image.size.height.isFinite,
+              image.size.width > 0, image.size.height > 0, SketchDocument.validSize(canvasSize) else { return false }
+        var proposed = CGRect(origin: .zero, size: image.size)
+        guard let cg = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil),
+              let png = SketchRenderer.png(image: NSImage(cgImage: cg, size: canvasSize)) else { return false }
+        edit("Re-Snap") { document.backgroundPNG = png; panBackground = nil }
+        return true
+    }
+    /// Stage is derived from content, so Undo naturally restores the next Wipe action.
+    func wipe() {
+        finishTextEditing()
+        if !document.elements.isEmpty {
+            clearAnnotations()
+            onSound?("wipe_brushlayer")
+        } else if document.backgroundPNG != nil || document.backgroundColor != .white {
+            edit("Wipe Snap") { document.backgroundPNG = nil; document.backgroundColor = .white; panBackground = nil }
+            onSound?("wipe_snap")
+        } else {
+            onSound?("wipe_already_blank")
+        }
+    }
+    /// Recovered keepPenEraseSnap:/setBackgroundTA removes the snap and sets white.
+    func wipeSnap() {
+        finishTextEditing()
+        guard document.backgroundPNG != nil || document.backgroundColor != .white else {
+            onSound?("wipe_already_blank"); return
+        }
+        edit("Wipe Snap Only") { document.backgroundPNG = nil; document.backgroundColor = .white; panBackground = nil }
+        onSound?("wipe_snap")
     }
     func clearAnnotations() {
         edit("Clear Annotations") { document.elements.removeAll(); selection.removeAll() }
@@ -456,16 +560,44 @@ final class CanvasView: NSView, NSTextViewDelegate {
         context.endPDFPage(); context.closePDF()
         return data as Data
     }
-    func documentData() throws -> Data { finishTextEditing(); return try document.encoded() }
+    func documentData() throws -> Data { finishTextEditing(); return try encodeCanvasDocument(document) }
     /// Recovery/autosave serialization. Does not end typing, change the live model,
     /// register undo, move the caret, or notify onChange. Empty pending text is omitted.
-    func snapshotDocumentData() throws -> Data { try documentIncludingPendingText().encoded() }
+    func snapshotDocumentData() throws -> Data { try encodeCanvasDocument(documentIncludingPendingText()) }
+    private func encodeCanvasDocument(_ value: SketchDocument) throws -> Data {
+        _ = try value.validated()
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return try encoder.encode(CanvasFile(document: value, background: panBackground))
+    }
+    /// Validate a native-file canvas supplement before writing/opening it. The
+    /// returned document can be compared to SkitchFile.document; retain the input
+    /// bytes, since re-encoding this model alone would drop hidden pan source pixels.
+    static func validatedDocumentData(_ data: Data) throws -> SketchDocument {
+        try decodeValidatedCanvasFile(data).document
+    }
+    private static func decodeValidatedCanvasFile(_ data: Data) throws -> CanvasFile {
+        var file = try JSONDecoder().decode(CanvasFile.self, from: data)
+        file.document = try file.document.validated()
+        if let background = file.canvasPanBackground {
+            guard SketchDocument.validSize(background.sourceSize), background.offset.x.isFinite,
+                  background.offset.y.isFinite, abs(background.offset.x) <= 1_000_000,
+                  abs(background.offset.y) <= 1_000_000,
+                  let bitmap = NSBitmapImageRep(data: background.sourcePNG),
+                  bitmap.pixelsWide == Int(ceil(background.sourceSize.width)),
+                  bitmap.pixelsHigh == Int(ceil(background.sourceSize.height)),
+                  bitmap.cgImage != nil, file.document.backgroundPNG != nil else {
+                throw SketchDocumentError.invalidDocument
+            }
+        }
+        return file
+    }
     func loadDocument(data: Data) throws {
-        let loaded = try SketchDocument.decode(data)
+        let file = try Self.decodeValidatedCanvasFile(data)
         finishTextEditing()
-        document = loaded
+        document = file.document
+        panBackground = file.canvasPanBackground
         selection.removeAll(); cropRect = nil; preview = nil
-        gestureState = nil; dragMode = .none
+        resetGesture()
         editingUndoManager.removeAllActions()
         onChange?()
     }
@@ -745,14 +877,20 @@ final class CanvasView: NSView, NSTextViewDelegate {
     override func draw(_ dirtyRect: NSRect) {
         NSGraphicsContext.saveGraphicsState()
         let context = NSGraphicsContext.current?.cgContext
+        if framePreview { context?.clear(dirtyRect) }
         context?.scaleBy(x: zoom, y: zoom)
-        drawCheckerboard(in: document.canvasRect)
+        if !framePreview { drawCheckerboard(in: document.canvasRect) }
         var visible = document
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
-        SketchRenderer.draw(visible)
+        SketchRenderer.draw(visible, includeBackground: !framePreview)
         if let preview { SketchRenderer.draw(preview) }
         NSGraphicsContext.restoreGraphicsState()
         drawSelectionChrome()
+        if framePreview {
+            NSColor.controlAccentColor.setStroke()
+            let boundary = NSBezierPath(rect: bounds.insetBy(dx: 1, dy: 1))
+            boundary.lineWidth = 2; boundary.stroke()
+        }
     }
     private func drawCheckerboard(in rect: CGRect) {
         NSColor.white.setFill(); rect.fill()
@@ -794,7 +932,79 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
     }
     override func resetCursorRects() {
-        addCursorRect(bounds, cursor: tool == .select ? .arrow : (tool == .text ? .iBeam : .crosshair))
+        let cursor: NSCursor = spaceHeld ? (dragMode == .pan ? .closedHand : .openHand) :
+            (effectiveTool == .select ? .arrow : (effectiveTool == .text ? .iBeam : .crosshair))
+        addCursorRect(bounds, cursor: cursor)
+    }
+    /// Modifier precedence follows recovered setModifiers: Command overrides Control;
+    /// Fill keeps its own Control handling instead of selecting the temporary eraser.
+    var effectiveTool: SketchTool {
+        if currentModifiers.contains(.command) { return .select }
+        if currentModifiers.contains(.control) && tool != .fill { return .eraser }
+        return tool
+    }
+    override func flagsChanged(with event: NSEvent) {
+        currentModifiers = event.modifierFlags
+        window?.invalidateCursorRects(for: self)
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        window?.acceptsMouseMovedEvents = true
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let area = pointerTrackingArea { removeTrackingArea(area) }
+        let area = NSTrackingArea(rect: .zero,
+            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .enabledDuringMouseDrag],
+            owner: self, userInfo: nil)
+        addTrackingArea(area); pointerTrackingArea = area
+    }
+    override func mouseMoved(with event: NSEvent) { lastMousePoint = documentPoint(event) }
+    override func resignFirstResponder() -> Bool {
+        if dragMode != .none { cancelOperation(nil) }
+        spaceHeld = false; currentModifiers = []
+        return super.resignFirstResponder()
+    }
+    private func resetGesture() {
+        preview = nil; marquee = nil; gestureState = nil; gestureDocument = nil
+        gestureColor = nil; dragMode = .none; strokePoints = []; resizingHandle = nil
+        copyOnDrag = false; copiesCreated = false
+    }
+    private func sampleColor(at point: CGPoint) {
+        guard document.canvasRect.contains(point) else { return }
+        let color: NSColor?
+        if let element = hitElement(point), element.kind != .raster && element.kind != .text {
+            color = element.color.nsColor
+        } else {
+            color = SketchRenderer.bitmap(document: document)?.colorAt(x: Int(point.x), y: Int(point.y))
+        }
+        if let color, SketchColor(color) != SketchColor(strokeColor) {
+            strokeColor = color; onColorChange?(color)
+        }
+    }
+    private func panContents(dx: CGFloat, dy: CGFloat) {
+        guard let before = gestureState else { return }
+        if abs(dx) < 0.001 && abs(dy) < 0.001 {
+            document = before.document; panBackground = before.panBackground; cropRect = before.cropRect
+            return
+        }
+        var moved = before.document
+        var background = before.panBackground
+        if background == nil, let png = before.document.backgroundPNG {
+            background = PanBackground(sourcePNG: png, sourceSize: before.document.size, offset: .zero)
+        }
+        if var source = background {
+            source.offset.x += dx; source.offset.y += dy
+            guard let image = NSImage(data: source.sourcePNG),
+                  let png = SketchRenderer.bitmap(size: moved.size, draw: {
+                    SketchRenderer.drawImage(image, in: CGRect(origin: source.offset, size: source.sourceSize))
+                  })?.representation(using: .png, properties: [:]) else { return }
+            moved.backgroundPNG = png; background = source
+        }
+        for index in moved.elements.indices { moved.elements[index].translate(x: dx, y: dy) }
+        settingPanBackground = true; document = moved; settingPanBackground = false
+        panBackground = background
+        if let rect = before.cropRect { cropRect = rect.offsetBy(dx: dx, dy: dy) }
     }
     private var effectiveStrokeWidth: CGFloat { strokeWidth.isFinite ? min(4096, max(0.5, strokeWidth)) : 5 }
     private func integralSize(_ size: CGSize) -> CGSize { CGSize(width: ceil(size.width), height: ceil(size.height)) }
@@ -880,23 +1090,25 @@ final class CanvasView: NSView, NSTextViewDelegate {
     override func mouseDown(with event: NSEvent) {
         finishTextEditing()
         window?.makeFirstResponder(self)
+        currentModifiers = event.modifierFlags
         let point = documentPoint(event)
+        lastMousePoint = point
         guard document.canvasRect.contains(point) else { return }
-        gestureStart = point; gestureState = state; strokePoints = [point]
-        dragMode = .none; resizingHandle = nil
-        if event.clickCount >= 2, let element = hitElement(point), element.kind == .text {
-            selection = [element.id]; beginTextEditing(element.id); return
+        resetGesture()
+        gestureStart = point; gestureState = state; gestureDocument = document
+        gestureColor = strokeColor; strokePoints = [point]
+        if spaceHeld { dragMode = .pan; needsDisplay = true; return }
+        let activeTool = effectiveTool
+        if [.brush, .fill, .eraser].contains(activeTool) && event.modifierFlags.contains(.option) {
+            dragMode = .sampleColor; sampleColor(at: point); return
         }
-        let activeTool: SketchTool = event.modifierFlags.contains(.command) ? .select : tool
-        if activeTool == .brush && event.modifierFlags.contains(.option) {
-            if let bitmap = SketchRenderer.bitmap(document: document),
-               let color = bitmap.colorAt(x: Int(point.x), y: Int(point.y)) { strokeColor = color; onChange?() }
-            gestureState = nil
-            return
+        if activeTool != .eraser, !event.modifierFlags.contains(.option),
+           event.clickCount >= 2, let element = hitElement(point), element.kind == .text {
+            selection = [element.id]; resetGesture(); beginTextEditing(element.id); return
         }
         switch activeTool {
         case .select:
-            if let handle = hitHandle(point), let bounds = selectionBounds {
+            if !event.modifierFlags.contains(.option), let handle = hitHandle(point), let bounds = selectionBounds {
                 resizingHandle = handle; resizeBounds = bounds; dragMode = .resize
             } else if let element = hitElement(point) {
                 let members = groupMembers(of: element)
@@ -904,13 +1116,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
                     if selection.isSuperset(of: members) { selection.subtract(members) } else { selection.formUnion(members) }
                 } else if !selection.contains(element.id) { selection = members }
                 dragMode = .move
+                copyOnDrag = event.modifierFlags.contains(.option)
             } else {
                 if !event.modifierFlags.contains(.shift) { selection.removeAll() }
                 dragMode = .marquee; marquee = CGRect(origin: point, size: .zero)
             }
-            // Snapshot after selecting so moving undo preserves the selected objects.
-            gestureState = state
-        case .fill: floodFill(at: point)
+        case .fill: floodFill(at: point); resetGesture()
         case .eraser: dragMode = .erase
         case .crop:
             selection.removeAll(); cropRect = CGRect(origin: point, size: .zero); dragMode = .crop
@@ -920,7 +1131,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             document.elements.append(element); selection = [element.id]
             beginTextEditing(element.id, before: gestureState)
         default:
-            guard let kind = SketchElement.Kind(rawValue: tool.rawValue) else { return }
+            guard let kind = SketchElement.Kind(rawValue: activeTool.rawValue) else { return }
             var element = styledElement(kind)
             element.points = [point, point]
             if kind == .brush { element.points = [point] }
@@ -930,8 +1141,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     override func mouseDragged(with event: NSEvent) {
-        autoscroll(with: event)
+        if dragMode != .pan { autoscroll(with: event) }
         var point = documentPoint(event)
+        lastMousePoint = point
         let dx = point.x - gestureStart.x, dy = point.y - gestureStart.y
         switch dragMode {
         case .create:
@@ -961,8 +1173,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
             }
             preview = element
         case .move:
-            guard let before = gestureState else { return }
-            var moved = before.document
+            guard var baseline = gestureDocument else { return }
+            if copyOnDrag && !copiesCreated && hypot(dx, dy) > 0.1 {
+                let copies = remappedCopies(baseline.elements.filter { selection.contains($0.id) }, offset: 0)
+                baseline.elements.append(contentsOf: copies); gestureDocument = baseline
+                selection = Set(copies.map(\.id)); copiesCreated = true
+            }
+            var moved = baseline
             for index in moved.elements.indices where selection.contains(moved.elements[index].id) {
                 moved.elements[index].translate(x: dx, y: dy)
             }
@@ -971,6 +1188,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         case .marquee: marquee = rect(from: gestureStart, to: point)
         case .crop: cropRect = rect(from: gestureStart, to: point).intersection(document.canvasRect)
         case .erase: strokePoints.append(point)
+        case .pan: panContents(dx: dx, dy: dy)
+        case .sampleColor: sampleColor(at: point)
         case .none: break
         }
         needsDisplay = true
@@ -984,8 +1203,11 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 document.elements.append(element); selection = [element.id]
                 if let before = gestureState { recordUndo(before, name: "Draw \(element.kind.rawValue.capitalized)") }
             }
-        case .move, .resize:
-            if let before = gestureState { recordUndo(before, name: dragMode == .move ? "Move" : "Resize") }
+        case .move, .resize, .pan:
+            if let before = gestureState {
+                let name = dragMode == .pan ? "Pan Drawing and Snap" : (dragMode == .resize ? "Resize" : (copiesCreated ? "Copy and Move" : "Move"))
+                recordUndo(before, name: name)
+            }
         case .marquee:
             if let rect = marquee {
                 for element in document.elements where element.paintBounds.intersects(rect) { selection.formUnion(groupMembers(of: element)) }
@@ -993,8 +1215,18 @@ final class CanvasView: NSView, NSTextViewDelegate {
         case .erase: eraseStroke(points: strokePoints, width: effectiveStrokeWidth)
         default: break
         }
-        preview = nil; marquee = nil; gestureState = nil; dragMode = .none; strokePoints = []
+        resetGesture()
         needsDisplay = true
+    }
+    // AppKit may deliver Control-click as a secondary-button event; it is still a pen eraser gesture.
+    override func rightMouseDown(with event: NSEvent) {
+        if event.modifierFlags.contains(.control) { mouseDown(with: event) } else { super.rightMouseDown(with: event) }
+    }
+    override func rightMouseDragged(with event: NSEvent) {
+        if dragMode != .none { mouseDragged(with: event) } else { super.rightMouseDragged(with: event) }
+    }
+    override func rightMouseUp(with event: NSEvent) {
+        if dragMode != .none { mouseUp(with: event) } else { super.rightMouseUp(with: event) }
     }
     private func rect(from a: CGPoint, to b: CGPoint) -> CGRect {
         CGRect(x: min(a.x, b.x), y: min(a.y, b.y), width: abs(b.x - a.x), height: abs(b.y - a.y))
@@ -1046,6 +1278,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private func beginTextEditing(_ id: UUID, before: EditorState? = nil) {
         guard let element = document.elements.first(where: { $0.id == id }) else { return }
         textBeforeEditing = before ?? state
+        resetGesture()
         editingTextID = id
         let editor = SketchTextEditor(frame: viewRect(element.bounds))
         editor.isRichText = false; editor.isEditable = true; editor.isSelectable = true
@@ -1071,7 +1304,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     func textDidEndEditing(_ notification: Notification) { finishTextEditing() }
     func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         if commandSelector == #selector(NSResponder.cancelOperation(_:)) {
-            finishTextEditing(cancel: true); return true
+            finishTextEditing(); return true
         }
         if commandSelector == #selector(NSResponder.insertNewline(_:)),
            NSApp.currentEvent?.modifierFlags.contains(.command) == true {
@@ -1079,6 +1312,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         return false
     }
+    /// Commit after a successful save or before entering frame preview. Validation
+    /// and failed saves can leave the editor and native typing history intact.
+    func commitPendingTextEditing() { finishTextEditing() }
     private func finishTextEditing(cancel: Bool = false) {
         guard !isFinishingText, let editor = textEditor, let id = editingTextID else { return }
         let hadPendingChanges = hasPendingTextChanges
@@ -1086,20 +1322,63 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let before = textBeforeEditing
         if cancel, let before {
             document = before.document; selection = before.selection
+            panBackground = before.panBackground
         } else {
             document = documentIncludingPendingText()
             if !document.elements.contains(where: { $0.id == id }) { selection.remove(id) }
         }
+        let returnFocusToCanvas = window?.firstResponder === editor
         editor.delegate = nil
         textEditor = nil; editingTextID = nil; textBeforeEditing = nil
         editor.removeFromSuperview()
-        if window?.firstResponder === editor { window?.makeFirstResponder(self) }
+        if returnFocusToCanvas { window?.makeFirstResponder(self) }
         isFinishingText = false
         if !cancel, let before { recordUndo(before, name: "Edit Text") }
         if cancel && hadPendingChanges { onChange?() }
         needsDisplay = true
     }
+    private func startTyping(with event: NSEvent) -> Bool {
+        guard window?.firstResponder === self, textEditor == nil, dragMode == .none, !spaceHeld,
+              event.modifierFlags.intersection([.command, .control]).isEmpty,
+              let characters = event.characters, !characters.isEmpty,
+              characters.unicodeScalars.allSatisfy({
+                  !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value)
+              }) else { return false }
+        var point = lastMousePoint
+        if point == nil, let window {
+            let viewPoint = convert(window.mouseLocationOutsideOfEventStream, from: nil)
+            let pointer = CGPoint(x: viewPoint.x / zoom, y: viewPoint.y / zoom)
+            if document.canvasRect.contains(pointer) { point = pointer }
+        }
+        let visible = documentRect(visibleRect).intersection(document.canvasRect)
+        let fallback = visible.isNull ? CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2) :
+            CGPoint(x: visible.midX, y: visible.midY)
+        var element = styledElement(.text)
+        let anchor = point ?? fallback
+        let x = min(max(0, anchor.x), max(0, canvasSize.width - min(100, canvasSize.width)))
+        let y = min(max(0, anchor.y), max(0, canvasSize.height - min(element.fontSize * 1.5, canvasSize.height)))
+        element.rect = CGRect(x: x, y: y, width: min(360, canvasSize.width - x), height: min(90, canvasSize.height - y))
+        let before = state
+        document.elements.append(element); selection = [element.id]
+        beginTextEditing(element.id, before: before)
+        // Forward the original event through native text input, including composed
+        // characters, rather than assigning its string and bypassing typing undo.
+        textEditor?.keyDown(with: event)
+        return true
+    }
     override func keyDown(with event: NSEvent) {
+        if !event.modifierFlags.contains(.command) && event.keyCode == 49 {
+            spaceHeld = true; window?.invalidateCursorRects(for: self); return
+        }
+        if event.keyCode == 48 && !event.isARepeat && !event.modifierFlags.contains(.command) && dragMode == .none {
+            togglingPencil = true
+            if tool == .brush {
+                if let previous = pencilReturnTool { tool = previous; pencilReturnTool = nil }
+            } else {
+                pencilReturnTool = tool; tool = .brush
+            }
+            togglingPencil = false; return
+        }
         if event.modifierFlags.contains(.command) {
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "z": event.modifierFlags.contains(.shift) ? redo() : undo()
@@ -1114,7 +1393,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         switch event.keyCode {
         case 51, 117: deleteSelection()
-        case 53: cancelOperation(nil)
+        case 53: textEditor != nil ? finishTextEditing() : cancelOperation(nil)
         case 36, 76: if tool == .crop { cropSelection() }
         case 123, 124, 125, 126:
             let step: CGFloat = event.modifierFlags.contains(.shift) ? 10 : 1
@@ -1125,14 +1404,27 @@ final class CanvasView: NSView, NSTextViewDelegate {
                     document.elements[index].translate(x: dx, y: dy)
                 }
             }
-        default: super.keyDown(with: event)
+        default: if !startTyping(with: event) { super.keyDown(with: event) }
         }
     }
+    override func keyUp(with event: NSEvent) {
+        if event.keyCode == 49 { spaceHeld = false; window?.invalidateCursorRects(for: self); return }
+        super.keyUp(with: event)
+    }
     override func cancelOperation(_ sender: Any?) {
+        // Programmatic cancellation retains explicit abandonment semantics; the
+        // native editor/keyboard Escape handlers above commit the text instead.
         if textEditor != nil { finishTextEditing(cancel: true); return }
-        if let before = gestureState { document = before.document; selection = before.selection }
-        preview = nil; marquee = nil; cropRect = nil; gestureState = nil; dragMode = .none
-        selection.removeAll(); needsDisplay = true
+        if let before = gestureState {
+            document = before.document; panBackground = before.panBackground
+            selection = before.selection; cropRect = before.cropRect
+            if dragMode == .sampleColor, let previous = gestureColor, SketchColor(previous) != SketchColor(strokeColor) {
+                strokeColor = previous; onColorChange?(previous)
+            }
+        } else {
+            selection.removeAll(); cropRect = nil
+        }
+        resetGesture(); needsDisplay = true
     }
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         // Window key equivalents visit views even when an unrelated name field or

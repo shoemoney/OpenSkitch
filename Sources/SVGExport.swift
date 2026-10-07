@@ -1,7 +1,36 @@
 import AppKit
 
 enum SVGExport {
-    static func encode(_ document: SketchDocument) throws -> Data {
+    struct Backdrop { var pngData: Data; var rect: CGRect }
+    struct TextLine { var content: String; var position: CGPoint }
+    static func textBaseline(font: NSFont) -> CGFloat {
+        let storage = NSTextStorage(string: "M", attributes: [.font: font, .paragraphStyle: SketchRenderer.textParagraphStyle])
+        let layout = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: 100_000, height: 100_000))
+        container.lineFragmentPadding = 0; storage.addLayoutManager(layout); layout.addTextContainer(container)
+        layout.ensureLayout(for: container)
+        return layout.location(forGlyphAt: 0).y
+    }
+    static func textLines(_ element: SketchElement) -> [TextLine] {
+        let font = NSFont(name: element.fontName, size: element.fontSize) ?? .boldSystemFont(ofSize: element.fontSize)
+        let storage = NSTextStorage(string: element.text, attributes: [.font: font, .paragraphStyle: SketchRenderer.textParagraphStyle])
+        let layout = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: max(1, element.rect.width), height: 100_000_000))
+        container.lineFragmentPadding = 0; storage.addLayoutManager(layout); layout.addTextContainer(container)
+        layout.ensureLayout(for: container)
+        var lines: [TextLine] = []
+        layout.enumerateLineFragments(forGlyphRange: layout.glyphRange(for: container)) { rect, _, _, glyphs, _ in
+            let range = layout.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            var content = (element.text as NSString).substring(with: range)
+            if content.hasSuffix("\n") { content.removeLast() }
+            if content.hasSuffix("\r") { content.removeLast() }
+            let position = layout.location(forGlyphAt: glyphs.location)
+            lines.append(TextLine(content: content, position: CGPoint(x: element.rect.minX + rect.minX + position.x, y: element.rect.minY + rect.minY + position.y)))
+        }
+        if layout.extraLineFragmentTextContainer != nil || element.text.isEmpty {
+            lines.append(TextLine(content: "", position: CGPoint(x: element.rect.minX, y: element.rect.minY + layout.extraLineFragmentRect.minY + textBaseline(font: font))))
+        }
+        return lines
+    }
+    static func encode(_ document: SketchDocument, preserving metadata: LegacyBridge.Metadata = .init(), backdrop: Backdrop? = nil) throws -> Data {
         _ = try document.validated()
         func number(_ value: CGFloat) -> String { String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), Double(value)) }
         func escape(_ text: String) -> String { text.replacingOccurrences(of: "&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;").replacingOccurrences(of:"'",with:"&apos;") }
@@ -51,18 +80,56 @@ enum SVGExport {
             }
             return path
         }
-        var xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<!-- Skitch 1.0 -->", "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" version=\"1.1\" width=\"\(number(document.size.width))\" height=\"\(number(document.size.height))\" skitchVisibleWidth=\"\(number(document.size.width))\" skitchVisibleHeight=\"\(number(document.size.height))\" skitchDocumentType=\"3\">", "<rect x=\"0\" y=\"0\" width=\"\(number(document.size.width))\" height=\"\(number(document.size.height))\" fill=\"\(color(document.backgroundColor))\" opacity=\"\(number(document.backgroundColor.alpha))\"/>"]
-        if document.elements.contains(where: { $0.shadowed }) {
-            xml.append("<defs><filter id=\"skitch-redux-shadow\" x=\"-50%\" y=\"-50%\" width=\"200%\" height=\"200%\" color-interpolation-filters=\"sRGB\"><feDropShadow dx=\"2\" dy=\"3\" stdDeviation=\"4\" flood-color=\"black\" flood-opacity=\"0.38\"/></filter></defs>")
+        func attributes(_ original: [String: String] = [:], _ current: [String: String]) -> String {
+            var merged = original
+            // Transform/style are regenerated from editable data. Never preserve stale paint.
+            for key in ["transform", "style", "filter", "stroke", "stroke-width", "paint-order", "redux:state", "xmlns:redux"] { merged.removeValue(forKey: key) }
+            merged.merge(current) { _, new in new }
+            return merged.keys.sorted().map { "\($0)=\"\(escape(merged[$0]!))\"" }.joined(separator: " ")
         }
-        if let data = document.backgroundPNG { xml.append("<image x=\"0\" y=\"0\" width=\"\(number(document.size.width))\" height=\"\(number(document.size.height))\" xlink:href=\"data:image/png;base64,\(data.base64EncodedString())\"/>") }
-        var groupIDs: [UUID:Int] = [:]
-        func group(_ id:UUID?) -> Int { guard let id else { return 0 }; if let value = groupIDs[id] { return value }; let value=groupIDs.count+1;groupIDs[id]=value;return value }
+        let width = number(ceil(document.size.width)), height = number(ceil(document.size.height))
+        var root = metadata.root
+        let defaults = ["xmlns:ev": "http://www.w3.org/2001/xml-events", "baseProfile": "full", "overflow": "hidden",
+            "skitchDocumentType": document.backgroundPNG != nil || document.elements.contains(where: { $0.kind == .raster }) ? "2" : "3",
+            "skitchVisibleWidth": number(document.size.width), "skitchVisibleHeight": number(document.size.height),
+            "skitchCustomColor": "rgb(0,0,0)", "skitchCustomColorAlpha": "1", "skitchBrushColor": "rgb(252,12,89)",
+            "skitchBrushColorAlpha": "1", "skitchBrushSize": "5", "skitchTool": "1", "skitchSourceURL": "", "skitchExternalAppDocumentPath": ""]
+        for (key, value) in defaults where root[key] == nil { root[key] = value }
+        if metadata.originalSize != document.size { root["skitchVisibleWidth"] = number(document.size.width); root["skitchVisibleHeight"] = number(document.size.height) }
+        var xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<!-- Skitch 1.0 -->",
+            "<svg " + attributes(root, ["xmlns": "http://www.w3.org/2000/svg", "xmlns:xlink": "http://www.w3.org/1999/xlink", "version": "1.1", "width": width, "height": height]) + ">",
+            "<rect " + attributes(metadata.background, ["x": "0", "y": "0", "width": width, "height": height, "fill": color(document.backgroundColor), "opacity": number(document.backgroundColor.alpha)]) + "/>" ]
+        if document.elements.contains(where: { $0.shadowed }) {
+            // A canvas-sized user-space region avoids clipping shadows on thin strokes.
+            xml.append("<defs><filter id=\"skitch-redux-shadow\" filterUnits=\"userSpaceOnUse\" x=\"-\(width)\" y=\"-\(height)\" width=\"\(number(ceil(document.size.width)*3))\" height=\"\(number(ceil(document.size.height)*3))\" color-interpolation-filters=\"sRGB\"><feDropShadow dx=\"2\" dy=\"3\" stdDeviation=\"4\" flood-color=\"black\" flood-opacity=\"0.38\"/></filter></defs>")
+        }
+        for element in document.elements where element.kind == .text {
+            xml.append("<defs><clipPath id=\"skitch-redux-text-\(element.id.uuidString)\" clipPathUnits=\"userSpaceOnUse\"><rect x=\"\(number(element.rect.minX))\" y=\"\(number(element.rect.minY))\" width=\"\(number(max(0, element.rect.width)))\" height=\"\(number(max(0, element.rect.height)))\"/></clipPath></defs>")
+        }
+        if let data = backdrop?.pngData ?? document.backgroundPNG {
+            let rect = backdrop?.rect ?? document.canvasRect
+            xml.append("<image " + attributes(metadata.backgroundImage, ["x": number(rect.minX), "y": number(rect.minY), "width": number(rect.width), "height": number(rect.height), "xlink:href": "data:image/png;base64," + data.base64EncodedString()]) + "/>")
+        }
+        var groupIDs: [UUID: Int] = [:]
+        var used = Set(metadata.groups.values)
+        func group(_ id: UUID?) -> Int {
+            guard let id else { return 0 }
+            if let value = groupIDs[id] { return value }
+            if let original = metadata.groups[id.uuidString], original != 0 { groupIDs[id] = original; return original }
+            var value = 1
+            while used.contains(value) { value += 1 }
+            used.insert(value); groupIDs[id] = value; return value
+        }
         for element in document.elements where element.kind != .text {
             let t=element.transform
             let matrix="matrix(\(number(t.a)) \(number(t.b)) \(number(t.c)) \(number(t.d)) \(number(t.tx)) \(number(t.ty)))"
             if element.kind == .raster, let png = element.imagePNG {
-                xml.append("<image x=\"\(number(element.rect.minX))\" y=\"\(number(element.rect.minY))\" width=\"\(number(element.rect.width))\" height=\"\(number(element.rect.height))\" transform=\"\(matrix)\" skitchGroup=\"\(group(element.groupID))\" style=\"\(shadowStyle(element))\" xlink:href=\"data:image/png;base64,\(png.base64EncodedString())\"/>")
+                var preserved = metadata.elements[element.id.uuidString]?.attributes ?? [:]
+                for key in ["skShadowRadius", "skShadowScales", "skShadowOffset", "skShadowColor", "skShadowOpacity"] { preserved.removeValue(forKey: key) }
+                var a = ["x": number(element.rect.minX), "y": number(element.rect.minY), "width": number(element.rect.width), "height": number(element.rect.height),
+                    "transform": matrix, "skitchGroup": "\(group(element.groupID))", "style": shadowStyle(element), "xlink:href": "data:image/png;base64," + png.base64EncodedString()]
+                if element.shadowed { a.merge(["skShadowRadius": "4", "skShadowScales": "1", "skShadowOffset": "2.000 3.000", "skShadowColor": "rgb(0,0,0)", "skShadowOpacity": "0.38"]) { _, new in new } }
+                xml.append("<image " + attributes(preserved, a) + "/>")
                 continue
             }
             var paths: [CGPath] = []
@@ -83,17 +150,29 @@ enum SVGExport {
             var transform=t.cg
             for path in paths {
                 let transformed=path.copy(using:&transform) ?? path
-                xml.append("<path d=\"\(pathString(transformed))\" fill=\"\(color(element.color))\" opacity=\"\(number(element.color.alpha))\" skitchHasShadow=\"\(element.shadowed ? 1:0)\" skitchGroup=\"\(group(element.groupID))\" style=\"\(shadowStyle(element))\"/>")
+                xml.append("<path " + attributes(metadata.elements[element.id.uuidString]?.attributes ?? [:], ["d": pathString(transformed), "fill": color(element.color), "opacity": number(element.color.alpha), "skitchHasShadow": element.shadowed ? "1" : "0", "skitchGroup": "\(group(element.groupID))", "style": shadowStyle(element)]) + "/>")
             }
         }
         for element in document.elements where element.kind == .text {
             let t=element.transform, font=NSFont(name:element.fontName,size:element.fontSize) ?? .boldSystemFont(ofSize:element.fontSize)
-            let transformAttribute = t.cg.isIdentity ? "" : " transform=\"matrix(\(number(t.a)) \(number(t.b)) \(number(t.c)) \(number(t.d)) \(number(t.tx)) \(number(t.ty)))\""
             let traits = font.fontDescriptor.symbolicTraits
             let style = "font-family:'\(font.familyName ?? font.fontName)';font-weight:\(traits.contains(.bold) ? 700:400);font-style:\(traits.contains(.italic) ? "italic":"normal");" + shadowStyle(element)
-            let outline = element.outlined ? " stroke=\"white\" stroke-width=\"\(number(element.fontSize*0.03))\" paint-order=\"stroke fill\"" : ""
-            xml.append("<g\(transformAttribute) style=\"\(escape(style))\"\(outline) font-family=\"\(escape(element.fontName))\" font-size=\"\(number(element.fontSize))\" fill=\"\(color(element.color))\" opacity=\"\(number(element.color.alpha))\" skitchTextX=\"\(number(element.rect.minX))\" skitchTextY=\"\(number(element.rect.minY))\" skitchFontSize=\"\(number(element.fontSize))\" skitchHasOutline=\"\(element.outlined ? 1:0)\" skitchHasShadow=\"\(element.shadowed ? 1:0)\" skitchGroup=\"\(group(element.groupID))\">")
-            for (index,line) in element.text.components(separatedBy:"\n").enumerated() { xml.append("<text x=\"\(number(element.rect.minX))\" y=\"\(number(element.rect.minY+font.ascender+CGFloat(index)*element.fontSize*1.2))\">\(escape(line))</text>") }
+            let record = metadata.elements[element.id.uuidString]
+            // Retain original anchor versus frame distinction and per-line positions
+            // until geometry/content/typography changes. Color/group edits are independent.
+            let unchanged = record.map { $0.importedElement.rect == element.rect && $0.importedElement.text == element.text && $0.importedElement.fontName == element.fontName && $0.importedElement.fontSize == element.fontSize && $0.importedElement.transform == element.transform } ?? false
+            let original = unchanged ? record?.originalText : nil
+            let anchor = original?.anchor ?? element.rect.origin
+            var a = ["style": style, "font-family": element.fontName, "font-size": number(element.fontSize), "fill": color(element.color), "opacity": number(element.color.alpha),
+                "skitchTextX": number(anchor.x), "skitchTextY": number(anchor.y), "skitchFontSize": number(element.fontSize), "skitchHasOutline": element.outlined ? "1" : "0", "skitchHasShadow": element.shadowed ? "1" : "0", "skitchGroup": "\(group(element.groupID))"]
+            a["clip-path"] = "url(#skitch-redux-text-\(element.id.uuidString))"
+            if !t.cg.isIdentity { a["transform"] = "matrix(\(number(t.a)) \(number(t.b)) \(number(t.c)) \(number(t.d)) \(number(t.tx)) \(number(t.ty)))" }
+            if element.outlined { a.merge(["stroke": "white", "stroke-width": number(element.fontSize*0.03), "paint-order": "stroke fill"]) { _, new in new } }
+            xml.append("<g " + attributes(record?.attributes ?? [:], a) + ">")
+            for (index, line) in textLines(element).enumerated() {
+                let preservedLine = original.flatMap { index < $0.lines.count ? $0.lines[index] : nil }
+                xml.append("<text " + attributes(preservedLine?.attributes ?? [:], ["x": number(line.position.x), "y": number(line.position.y)]) + ">" + escape(line.content) + "</text>")
+            }
             xml.append("</g>")
         }
         xml.append("</svg>")

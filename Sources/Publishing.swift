@@ -1,6 +1,7 @@
 import AppKit
 import Security
 import Darwin
+import CoreFoundation
 
 // Reconstructs the original WebpostFTP/WebpostSFTP/WebpostWebDAV destinations.
 // No Evernote account API, background publishing, or credential-bearing argv.
@@ -486,10 +487,195 @@ private final class PublishingPipeCapture {
     }
 }
 
-private enum PublishingProcess {
+func publishingCancellationError() -> NSError {
+    NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError,
+            userInfo: [NSLocalizedDescriptionKey: "Publishing was cancelled."])
+}
+
+// One context per queued operation. Cancellation is cheap; all waits and file cleanup run on workers.
+final class PublishingCancellation {
+    private let lock = NSLock()
+    private var cancelled = false
+    private var processes: [ObjectIdentifier: PublishingProcessHandle] = [:]
+    private var directories: Set<URL> = []
+    private let removeDirectory: (URL) throws -> Void
+
+    init(removeDirectory: @escaping (URL) throws -> Void = { try FileManager.default.removeItem(at: $0) }) {
+        self.removeDirectory = removeDirectory
+    }
+
+    var isCancelled: Bool { lock.lock(); defer { lock.unlock() }; return cancelled }
+    func check() throws { if isCancelled { throw publishingCancellationError() } }
+    func cancel() {
+        lock.lock(); cancelled = true; let handles = Array(processes.values); lock.unlock()
+        handles.forEach { $0.requestStop() }
+    }
+    fileprivate func register(_ handle: PublishingProcessHandle) {
+        lock.lock(); processes[ObjectIdentifier(handle)] = handle; let stop = cancelled; lock.unlock()
+        if stop { handle.requestStop() }
+    }
+    fileprivate func unregister(_ handle: PublishingProcessHandle) {
+        lock.lock(); processes.removeValue(forKey: ObjectIdentifier(handle)); lock.unlock()
+    }
+    func makeTemporaryDirectory(prefix: String) throws -> URL {
+        try check()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(prefix + UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
+        lock.lock(); directories.insert(url); lock.unlock()
+        // A cancellation racing directory creation is still registered for cleanup.
+        try check()
+        return url
+    }
+    func cleanup() throws {
+        precondition(!Thread.isMainThread, "Publishing cleanup must run off the main thread")
+        lock.lock(); let handles = Array(processes.values); lock.unlock()
+        for handle in handles { try handle.settle(stopping: true); unregister(handle) }
+        lock.lock(); let owned = Array(directories); lock.unlock()
+        for url in owned {
+            do {
+                if FileManager.default.fileExists(atPath: url.path) { try removeDirectory(url) }
+            } catch { throw PublishingFailure("Publishing temporary files could not be removed; shutdown is not complete.") }
+            lock.lock(); directories.remove(url); lock.unlock()
+        }
+    }
+}
+
+// AppKit's nested quit loop can run inside a main-dispatch block, which prevents that queue
+// from draining recursively. One run-loop block (not a polling timer) delivers in ordinary,
+// modal/tracking, and the currently active mode; registering multiple modes still runs it once.
+enum PublishingMainDelivery {
+    static func enqueue(_ body: @escaping () -> Void) {
+        let runLoop = CFRunLoopGetMain()!
+        var modes: [CFString] = [CFRunLoopMode.commonModes.rawValue, CFRunLoopMode.defaultMode.rawValue,
+                                RunLoop.Mode.modalPanel.rawValue as CFString, RunLoop.Mode.eventTracking.rawValue as CFString]
+        if let current = CFRunLoopCopyCurrentMode(runLoop) { modes.append(current.rawValue) }
+        CFRunLoopPerformBlock(runLoop, modes as CFArray, body)
+        CFRunLoopWakeUp(runLoop)
+    }
+}
+
+// Shared main-thread delivery gate: cancellation also invalidates results already queued for delivery.
+final class PublishingWorkController {
+    private let queue: DispatchQueue
+    private let makeContext: () -> PublishingCancellation
+    private var active: [UUID: PublishingCancellation] = [:]
+    private var waiters: [(Result<Void, Error>) -> Void] = []
+    private var failedCleanup: [UUID: (PublishingCancellation, Error)] = [:]
+    private(set) var isShutdown = false
+    private var isCancelling = false
+    var acceptsWork: Bool { !isShutdown && !isCancelling }
+
+    init(queue: DispatchQueue = .global(qos: .userInitiated),
+         makeContext: @escaping () -> PublishingCancellation = { PublishingCancellation() }) {
+        self.queue = queue; self.makeContext = makeContext
+    }
+    @discardableResult
+    func start<Value>(work: @escaping (PublishingCancellation) throws -> Value,
+                      completion: @escaping (Result<Value, Error>) -> Void) -> Bool {
+        precondition(Thread.isMainThread)
+        guard acceptsWork else {
+            PublishingMainDelivery.enqueue { completion(.failure(publishingCancellationError())) }
+            return false
+        }
+        let id = UUID(), context = makeContext()
+        active[id] = context // Register before dispatch so shutdown sees queued work too.
+        queue.async {
+            var result = Result { try context.check(); return try work(context) }
+            var cleanupError: Error?
+            do { try context.cleanup() } catch { cleanupError = error; result = .failure(error) }
+            let delivered = result, failedCleanup = cleanupError
+            PublishingMainDelivery.enqueue {
+                self.active.removeValue(forKey: id)
+                if let error = failedCleanup { self.failedCleanup[id] = (context, error) }
+                if context.isCancelled, failedCleanup == nil { completion(.failure(publishingCancellationError())) }
+                else { completion(delivered) }
+                self.notifyIfIdle()
+            }
+        }
+        return true
+    }
+    func stop(shutdown: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
+        precondition(Thread.isMainThread)
+        if shutdown { isShutdown = true }
+        isCancelling = true; waiters.append(completion)
+        // Retain failed resources and retry them on a later shutdown/cancel request. Never report
+        // success merely because the operation that owned them already returned an error.
+        let retry = failedCleanup; failedCleanup.removeAll()
+        for (id, entry) in retry {
+            let context = entry.0; active[id] = context
+            queue.async {
+                let result = Result { try context.cleanup() }
+                PublishingMainDelivery.enqueue {
+                    self.active.removeValue(forKey: id)
+                    if case .failure(let error) = result { self.failedCleanup[id] = (context, error) }
+                    self.notifyIfIdle()
+                }
+            }
+        }
+        active.values.forEach { $0.cancel() }
+        notifyIfIdle()
+    }
+    private func notifyIfIdle() {
+        guard active.isEmpty, !waiters.isEmpty else { return }
+        let callbacks = waiters; waiters.removeAll(); isCancelling = !failedCleanup.isEmpty
+        let result: Result<Void, Error> = failedCleanup.values.first.map { .failure($0.1) } ?? .success(())
+        callbacks.forEach { $0(result) }
+    }
+}
+
+private final class PublishingProcessHandle {
+    let task: Process
+    let io = DispatchGroup()
+    private let lock = NSLock()
+    private let group: pid_t?
+    private var closed = false
+    init(task: Process) {
+        self.task = task
+        let pid = task.processIdentifier
+        let groupID = getpgid(pid)
+        // The parent can exit before registration while a child still holds its process group.
+        group = groupID == pid || (groupID == -1 && kill(-pid, 0) == 0) ? pid : nil
+    }
+    var ownsGroup: Bool { group != nil }
+    private func groupAlive() -> Bool {
+        guard let group else { return task.isRunning }
+        return kill(-group, 0) == 0 || errno == EPERM
+    }
+    func requestStop() { signal(SIGTERM) }
+    private func signal(_ value: Int32) {
+        lock.lock(); defer { lock.unlock() }
+        guard !closed else { return }
+        if let group { kill(-group, value) }
+        else if task.isRunning { kill(task.processIdentifier, value) }
+    }
+    func settle(stopping: Bool) throws {
+        precondition(!Thread.isMainThread)
+        if stopping { requestStop() }
+        let grace = Date().addingTimeInterval(1)
+        // A helper retaining a pipe is still an active process, even if its parent already exited.
+        while task.isRunning || groupAlive() || io.wait(timeout: .now()) == .timedOut {
+            if Date() >= grace { signal(SIGKILL); break }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        let deadline = Date().addingTimeInterval(3)
+        while task.isRunning || groupAlive() || io.wait(timeout: .now()) == .timedOut {
+            guard Date() < deadline else {
+                throw PublishingFailure("A publishing process or helper did not exit; shutdown is not complete.")
+            }
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        task.waitUntilExit()
+        lock.lock(); closed = true; lock.unlock()
+    }
+}
+
+enum PublishingProcess {
     struct Output { let stdout: String; let stderr: String; let code: Int32 }
     static func run(executable: String, arguments: [String], input: Data? = nil,
-                    timeout: TimeInterval, allowSSHAgent: Bool = false) throws -> Output {
+                    timeout: TimeInterval, allowSSHAgent: Bool = false,
+                    cancellation: PublishingCancellation = PublishingCancellation()) throws -> Output {
+        precondition(!Thread.isMainThread, "Publishing processes must run off the main thread")
+        try cancellation.check()
         let task = Process()
         task.executableURL = URL(fileURLWithPath: executable)
         task.arguments = arguments
@@ -503,56 +689,45 @@ private enum PublishingProcess {
         }
         let stdin = Pipe(), stdout = PublishingPipeCapture(), stderr = PublishingPipeCapture()
         task.standardInput = stdin; task.standardOutput = stdout.pipe; task.standardError = stderr.pipe
-        let ended = DispatchSemaphore(value: 0)
-        task.terminationHandler = { _ in ended.signal() }
         do { try task.run() } catch { throw PublishingFailure("System publishing tool could not be launched.") }
         // Foundation gives a launched task its own process group on macOS. Check before using it:
         // terminating SFTP must also stop its SSH child, rather than leave an upload running.
-        let ownGroup = getpgid(task.processIdentifier) == task.processIdentifier
-        if allowSSHAgent && !ownGroup {
-            task.terminate(); try? stdin.fileHandleForWriting.close()
-            throw PublishingFailure("SFTP could not be isolated for bounded process termination.")
-        }
-        let drained = DispatchGroup()
+        let handle = PublishingProcessHandle(task: task)
+        cancellation.register(handle)
         for capture in [stdout, stderr] {
-            drained.enter()
-            DispatchQueue.global(qos: .utility).async { capture.drain(); drained.leave() }
+            handle.io.enter()
+            DispatchQueue.global(qos: .utility).async { capture.drain(); handle.io.leave() }
         }
         // Input may contain credentials. It is never written to disk or passed as an argument.
+        handle.io.enter()
         DispatchQueue.global(qos: .utility).async {
-            if let input { try? stdin.fileHandleForWriting.write(contentsOf: input) }
+            if !cancellation.isCancelled, let input { try? stdin.fileHandleForWriting.write(contentsOf: input) }
             try? stdin.fileHandleForWriting.close()
+            handle.io.leave()
         }
-        let timedOut = ended.wait(timeout: .now() + timeout) == .timedOut
-        if timedOut, task.isRunning {
-            if ownGroup { kill(-task.processIdentifier, SIGTERM) } else { task.terminate() }
-            if ended.wait(timeout: .now() + 2) == .timedOut, task.isRunning {
-                kill(ownGroup ? -task.processIdentifier : task.processIdentifier, SIGKILL)
-                _ = ended.wait(timeout: .now() + 2)
-            }
-        }
-        guard !task.isRunning else { throw PublishingFailure("The publishing tool could not be stopped after the upload deadline.") }
-        task.waitUntilExit()
-        guard drained.wait(timeout: .now() + 2) == .success else {
-            if ownGroup { kill(-task.processIdentifier, SIGKILL) }
-            throw PublishingFailure("Publishing output could not be read completely; upload success could not be verified.")
-        }
+        let deadline = Date().addingTimeInterval(timeout)
+        while task.isRunning && !cancellation.isCancelled && Date() < deadline { Thread.sleep(forTimeInterval: 0.02) }
+        let timedOut = task.isRunning && Date() >= deadline
+        let unisolatedSSH = allowSSHAgent && !handle.ownsGroup
+        try handle.settle(stopping: cancellation.isCancelled || timedOut || unisolatedSSH)
+        cancellation.unregister(handle)
+        try cancellation.check()
+        guard !unisolatedSSH else { throw PublishingFailure("SFTP could not be isolated for bounded process termination.") }
         guard !timedOut else { throw PublishingFailure("The upload timed out. Its remote state is unknown; verify the destination before retrying.") }
         return Output(stdout: stdout.text, stderr: stderr.text, code: task.terminationStatus)
     }
 }
 
 private enum PublishingCurl {
-    static func capabilities() throws -> PublishingCapabilities {
-        let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--version"], timeout: 5)
+    static func capabilities(cancellation: PublishingCancellation = PublishingCancellation()) throws -> PublishingCapabilities {
+        let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--version"], timeout: 5, cancellation: cancellation)
         guard output.code == 0 else { throw PublishingFailure("System curl capabilities could not be inspected.") }
         return try PublishingCapabilities(versionOutput: output.stdout)
     }
-    static func upload(data: Data, plan: PublishingPlan, username: String, password: String) throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SkitchPublish-" + UUID().uuidString, isDirectory: true)
-        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+    static func upload(data: Data, plan: PublishingPlan, username: String, password: String, cancellation: PublishingCancellation) throws -> URL {
+        let directory: URL
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchPublish-") }
         catch { throw PublishingFailure("A private temporary upload folder could not be created.") }
-        defer { try? FileManager.default.removeItem(at: directory) }
         let file = directory.appendingPathComponent("image")
         do {
             try data.write(to: file, options: .atomic)
@@ -560,7 +735,7 @@ private enum PublishingCurl {
         } catch { throw PublishingFailure("The image could not be prepared for upload.") }
         let config = try plan.curlConfig(file: file, username: username, password: password)
         // --disable MUST come first: no ~/.curlrc, .netrc, redirects or verbose tracing.
-        let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--config", "-"], input: config, timeout: 125)
+        let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--config", "-"], input: config, timeout: 125, cancellation: cancellation)
         return try plan.verifiedResult(stdout: output.stdout, exitCode: output.code, stderr: output.stderr,
                                        byteCount: data.count, username: username, password: password)
     }
@@ -570,12 +745,11 @@ private enum PublishingSFTP {
     static var available: Bool {
         FileManager.default.isExecutableFile(atPath: "/usr/bin/sftp") && FileManager.default.isExecutableFile(atPath: "/usr/bin/ssh")
     }
-    static func upload(data: Data, plan: PublishingPlan) throws -> URL {
+    static func upload(data: Data, plan: PublishingPlan, cancellation: PublishingCancellation) throws -> URL {
         guard available, let sftp = plan.keyedSFTP else { throw PublishingFailure("The keyed SFTP backend is unavailable.") }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SkitchSFTP-" + UUID().uuidString, isDirectory: true)
-        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+        let directory: URL
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchSFTP-") }
         catch { throw PublishingFailure("A private SFTP verification folder could not be created.") }
-        defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appendingPathComponent("image"), verification = directory.appendingPathComponent("verified-image")
         do {
             try data.write(to: source, options: .atomic)
@@ -583,7 +757,7 @@ private enum PublishingSFTP {
         } catch { throw PublishingFailure("The image could not be prepared for SFTP.") }
         let batch = try sftp.batch(upload: source, verification: verification, publicURL: plan.publicURL)
         let output = try PublishingProcess.run(executable: "/usr/bin/sftp", arguments: sftp.arguments,
-                                              input: batch, timeout: 125, allowSSHAgent: true)
+                                              input: batch, timeout: 125, allowSSHAgent: true, cancellation: cancellation)
         let downloaded = try? Data(contentsOf: verification, options: .mappedIfSafe)
         return try sftp.verifiedResult(exitCode: output.code, stderr: output.stderr, expected: data,
                                       downloaded: downloaded, publicURL: plan.publicURL)
@@ -594,22 +768,32 @@ private enum PublishingSFTP {
 // Production calls this only after the coordinator's Publish button is clicked.
 enum PublishingTransfer {
     static var sftpAvailable: Bool { PublishingSFTP.available }
-    static func upload(data: Data, plan: PublishingPlan, username: String = "", password: String = "") throws -> URL {
+    static func upload(data: Data, plan: PublishingPlan, username: String = "", password: String = "",
+                       cancellation: PublishingCancellation = PublishingCancellation()) throws -> URL {
+        precondition(!Thread.isMainThread)
+        let result = Result { try performUpload(data: data, plan: plan, username: username, password: password, cancellation: cancellation) }
+        try cancellation.cleanup()
+        try cancellation.check()
+        return try result.get()
+    }
+    private static func performUpload(data: Data, plan: PublishingPlan, username: String, password: String,
+                                      cancellation: PublishingCancellation) throws -> URL {
+        try cancellation.check()
         guard !data.isEmpty else { throw PublishingFailure("There is no image data to upload.") }
         let uploaded: URL
-        if plan.transport == .sftp { uploaded = try PublishingSFTP.upload(data: data, plan: plan) }
-        else { uploaded = try PublishingCurl.upload(data: data, plan: plan, username: username, password: password) }
+        if plan.transport == .sftp { uploaded = try PublishingSFTP.upload(data: data, plan: plan, cancellation: cancellation) }
+        else { uploaded = try PublishingCurl.upload(data: data, plan: plan, username: username, password: password, cancellation: cancellation) }
+        try cancellation.check()
         guard let publicURL = plan.publicURL else { return uploaded }
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("SkitchPublicCheck-" + UUID().uuidString, isDirectory: true)
-        do { try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700]) }
+        let directory: URL
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchPublicCheck-") }
         catch { throw PublishingFailure("The file uploaded, but a private public-URL verification folder could not be created. No link was copied.") }
-        defer { try? FileManager.default.removeItem(at: directory) }
         let download = directory.appendingPathComponent("public-image")
         let check = try PublishingPublicCheck(url: publicURL)
         let config = try check.curlConfig(download: download, byteCount: data.count)
         let output: PublishingProcess.Output
         do {
-            output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--config", "-"], input: config, timeout: 35)
+            output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--config", "-"], input: config, timeout: 35, cancellation: cancellation)
         } catch { throw PublishingFailure("The file uploaded, but public URL verification failed or timed out. No link was copied.") }
         let downloaded = try? Data(contentsOf: download, options: .mappedIfSafe)
         return try check.verifiedResult(stdout: output.stdout, exitCode: output.code, stderr: output.stderr,
@@ -618,6 +802,16 @@ enum PublishingTransfer {
 }
 
 public final class PublishingCoordinator: NSObject {
+    private let workController: PublishingWorkController
+    private let clipboardWriter: (URL) -> Void
+    private var isShuttingDown = false
+    private var isCancellationPending = false
+    private var isPreparingPublish = false
+    private var transferActive = false
+    private var endingSheets: Set<ObjectIdentifier> = []
+    private var quiescenceResult: Result<Void, Error>?
+    private var quiescenceCallbacks: [(Result<Void, Error>) -> Void] = []
+    private var successfulQuiescenceCallbacks: [() -> Void] = []
     private var settingsPanel: NSPanel?
     private var publishPanel: NSPanel?
     private var endpointField: NSTextField?
@@ -633,8 +827,90 @@ public final class PublishingCoordinator: NSObject {
     private var savedSettings = PublishingSettings()
     private var pendingUpload: (() -> Void)?
     private var pendingCompletion: ((Result<URL, Error>) -> Void)?
+    private var transferStatus: NSTextField?
+    private var transferCancelButton: NSButton?
 
-    public override init() { super.init() }
+    public override init() {
+        workController = PublishingWorkController()
+        clipboardWriter = { url in
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+        }
+        super.init()
+    }
+    // Dependency injection exercises the production completion/clipboard gate without UI or uploads.
+    init(workController: PublishingWorkController, clipboardWriter: @escaping (URL) -> Void) {
+        self.workController = workController; self.clipboardWriter = clipboardWriter
+        super.init()
+    }
+
+    /// Permanently rejects new publishing. On main, an idle publisher acknowledges synchronously;
+    /// otherwise completion runs on main after worker exit, cleanup, and sheet dismissal.
+    /// This acknowledgement is successful cleanup only; use the result overload to report failures.
+    public func shutdown(completion: @escaping () -> Void) {
+        if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.shutdown(completion: completion) }; return }
+        successfulQuiescenceCallbacks.append(completion)
+        shutdown { (_: Result<Void, Error>) in }
+    }
+    public func cancelPublishing(completion: @escaping () -> Void) {
+        if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.cancelPublishing(completion: completion) }; return }
+        successfulQuiescenceCallbacks.append(completion)
+        cancelPublishing { (_: Result<Void, Error>) in }
+    }
+    /// Permanently rejects new publishing. Completion is on main, after worker exit,
+    /// helper/pipe exit, owned temporary-file cleanup, and sheet dismissal. On failure, do not quit.
+    public func shutdown(completion: @escaping (Result<Void, Error>) -> Void) {
+        if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.shutdown(completion: completion) }; return }
+        isShuttingDown = true
+        cancelSettings()
+        requestCancellation(shutdown: true, completion: completion)
+    }
+    /// Cancels queued/running publishing and waits for the same cleanup. New publishing becomes
+    /// available after successful cancellation; shutdown remains permanent.
+    public func cancelPublishing(completion: @escaping (Result<Void, Error>) -> Void) {
+        if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.cancelPublishing(completion: completion) }; return }
+        requestCancellation(shutdown: false, completion: completion)
+    }
+    private func requestCancellation(shutdown: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
+        isCancellationPending = true; quiescenceResult = nil; quiescenceCallbacks.append(completion)
+        if pendingUpload != nil { finishPublish(.failure(publishingCancellationError())) }
+        else if transferActive {
+            transferStatus?.stringValue = "Cancelling publishing and removing temporary files…"
+            transferCancelButton?.isEnabled = false
+        }
+        workController.stop(shutdown: shutdown) { result in
+            self.quiescenceResult = result; self.flushQuiescenceCallbacks()
+        }
+    }
+    private func flushQuiescenceCallbacks() {
+        guard let result = quiescenceResult, endingSheets.isEmpty else { return }
+        quiescenceResult = nil
+        let callbacks = quiescenceCallbacks; quiescenceCallbacks.removeAll()
+        // A cleanup failure continues to block new work until the parent resolves it.
+        var successfulCallbacks: [() -> Void] = []
+        if case .success = result {
+            isCancellationPending = false
+            successfulCallbacks = successfulQuiescenceCallbacks
+            successfulQuiescenceCallbacks.removeAll()
+        }
+        callbacks.forEach { $0(result) }
+        // Keep void acknowledgements pending across a failed cleanup; a successful retry delivers
+        // every invocation once. A failure must never tell the parent it is safe to terminate.
+        successfulCallbacks.forEach { $0() }
+    }
+    private func beginSheet(_ panel: NSPanel, relativeTo window: NSWindow) {
+        window.beginSheet(panel) { [self] _ in
+            panel.orderOut(nil)
+            endingSheets.remove(ObjectIdentifier(panel))
+            flushQuiescenceCallbacks()
+        }
+    }
+    private func dismissSheet(_ panel: NSPanel) {
+        if let parent = panel.sheetParent {
+            endingSheets.insert(ObjectIdentifier(panel))
+            parent.endSheet(panel)
+        } else { panel.orderOut(nil) }
+    }
 
     public static var settingsFileURL: URL { PublishingStorage.file }
 
@@ -643,6 +919,7 @@ public final class PublishingCoordinator: NSObject {
     @discardableResult
     public func setDefaultSFTPDestination(sshAlias: String, remoteRoot: String, publicBaseURL: String,
                                           port: Int? = nil) throws -> Bool {
+        guard !isShuttingDown else { throw publishingCancellationError() }
         guard !PublishingStorage.exists else { return false }
         var settings = PublishingSettings()
         settings.transport = .sftp; settings.sshAlias = sshAlias; settings.sftpRemoteRoot = remoteRoot
@@ -654,7 +931,8 @@ public final class PublishingCoordinator: NSObject {
 
     /// Settings never start a network request. Passwords are saved only in macOS Keychain.
     public func showSettings(relativeTo window: NSWindow) {
-        if !Thread.isMainThread { DispatchQueue.main.async { self.showSettings(relativeTo: window) }; return }
+        if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.showSettings(relativeTo: window) }; return }
+        guard !isShuttingDown, !isCancellationPending, !isPreparingPublish, workController.acceptsWork else { return }
         guard publishPanel == nil else { return }
         if let panel = settingsPanel { panel.makeKeyAndOrderFront(nil); return }
         guard window.attachedSheet == nil else { return }
@@ -701,10 +979,8 @@ public final class PublishingCoordinator: NSObject {
             endpointField = endpoint; protocolField = transport; usernameField = username; passwordField = secret
             folderField = folder; publicField = publicURL; settingsStatus = status; settingsPanel = panel
             aliasField = alias; remoteRootField = remoteRoot; portField = port; protocolChanged()
-            window.beginSheet(panel) { [self] _ in _ = self }
-            DispatchQueue.global(qos: .utility).async {
-                let result = Result { try PublishingCurl.capabilities() }
-                DispatchQueue.main.async {
+            beginSheet(panel, relativeTo: window)
+            workController.start(work: { try PublishingCurl.capabilities(cancellation: $0) }) { result in
                     guard self.settingsPanel === panel else { return }
                     switch result {
                     case .success(let capabilities):
@@ -718,7 +994,6 @@ public final class PublishingCoordinator: NSObject {
                         }
                     case .failure: status.stringValue = PublishingSFTP.available ? "Keyed SFTP is available; system curl is unavailable for other protocols." : "Publishing tools are unavailable."
                     }
-                }
             }
         } catch { presentMessage(error.localizedDescription, relativeTo: window) }
     }
@@ -730,16 +1005,35 @@ public final class PublishingCoordinator: NSObject {
     public func publish(data: Data, fileName: String, presenting window: NSWindow,
                         completion: @escaping (Result<URL, Error>) -> Void) {
         if !Thread.isMainThread {
-            DispatchQueue.main.async { self.publish(data: data, fileName: fileName, presenting: window, completion: completion) }; return
+            PublishingMainDelivery.enqueue { self.publish(data: data, fileName: fileName, presenting: window, completion: completion) }; return
         }
-        guard publishPanel == nil, settingsPanel == nil, window.attachedSheet == nil else {
+        guard !isShuttingDown, !isCancellationPending, workController.acceptsWork else {
+            completion(.failure(publishingCancellationError())); return
+        }
+        guard !isPreparingPublish, !transferActive, publishPanel == nil, settingsPanel == nil, window.attachedSheet == nil else {
             completion(.failure(PublishingFailure("Close the current sheet before publishing."))); return
         }
         do {
             guard !data.isEmpty else { throw PublishingFailure("There is no image data to upload.") }
             let settings = try PublishingStorage.load()
-            let capabilities = settings.transport == .sftp ? nil : try PublishingCurl.capabilities()
-            let plan = try PublishingPlan(settings: settings, fileName: fileName, capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
+            isPreparingPublish = true
+            workController.start(work: { context in
+                let capabilities = settings.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
+                return try PublishingPlan(settings: settings, fileName: fileName, capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
+            }) { result in
+                self.isPreparingPublish = false
+                switch result {
+                case .success(let plan): self.presentPublish(data: data, fileName: fileName, settings: settings, plan: plan, window: window, completion: completion)
+                case .failure(let error): completion(.failure(error))
+                }
+            }
+        } catch { completion(.failure(error)) }
+    }
+
+    private func presentPublish(data: Data, fileName: String, settings: PublishingSettings,
+                                plan: PublishingPlan, window: NSWindow, completion: @escaping (Result<URL, Error>) -> Void) {
+            guard !isShuttingDown, !isCancellationPending, workController.acceptsWork else { completion(.failure(publishingCancellationError())); return }
+            guard window.attachedSheet == nil, publishPanel == nil else { completion(.failure(PublishingFailure("Close the current sheet before publishing."))); return }
             let panel = makePanel(title: "Publish Image", width: 700, height: 350)
             let form = verticalStack()
             let description = label("Upload \(fileName) to:\n\(plan.remoteURL.absoluteString)\n\n" +
@@ -749,28 +1043,35 @@ public final class PublishingCoordinator: NSObject {
             form.addArrangedSubview(description)
             let cancel = button("Cancel", #selector(cancelPublish)), publish = button("Publish", #selector(confirmPublish))
             form.addArrangedSubview(buttonRow([cancel, publish])); install(form, in: panel)
-            publishPanel = panel; pendingCompletion = completion
+            publishPanel = panel; pendingCompletion = completion; transferStatus = description; transferCancelButton = cancel
             // Hold self until the sheet completes so a temporary coordinator is safe to use.
-            window.beginSheet(panel) { [self] _ in _ = self }
+            beginSheet(panel, relativeTo: window)
             pendingUpload = { [self] in
-                pendingUpload = nil; cancel.isEnabled = false; publish.isEnabled = false
+                pendingUpload = nil; publish.isEnabled = false
                 description.stringValue = "Uploading \(fileName)…\nUpload and public-link verification have a three-minute deadline."
-                DispatchQueue.global(qos: .userInitiated).async {
-                    let result = Result<URL, Error> {
-                        if settings.transport == .sftp { return try PublishingTransfer.upload(data: data, plan: plan) }
+                beginTransfer(copiesPublicURL: plan.publicURL != nil, work: { context in
+                        try context.check()
+                        if settings.transport == .sftp { return try PublishingTransfer.upload(data: data, plan: plan, cancellation: context) }
                         let password = try PublishingKeychain.read(settings.credentialID)
-                        return try PublishingTransfer.upload(data: data, plan: plan, username: settings.username, password: password)
-                    }
-                    DispatchQueue.main.async {
-                        if case .success(let url) = result, plan.publicURL != nil {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(url.absoluteString, forType: .string)
-                        }
-                        self.finishPublish(result)
-                    }
-                }
+                        return try PublishingTransfer.upload(data: data, plan: plan, username: settings.username, password: password, cancellation: context)
+                }, completion: completion)
             }
-        } catch { completion(.failure(error)) }
+    }
+
+    func beginTransfer(copiesPublicURL: Bool, work: @escaping (PublishingCancellation) throws -> URL,
+                       completion: @escaping (Result<URL, Error>) -> Void) {
+        precondition(Thread.isMainThread)
+        guard !isShuttingDown, !isCancellationPending, !transferActive, workController.acceptsWork else {
+            completion(.failure(publishingCancellationError())); return
+        }
+        pendingCompletion = completion; transferActive = true
+        workController.start(work: work) { result in
+            self.transferActive = false
+            if case .success(let url) = result, copiesPublicURL, !self.isShuttingDown, !self.isCancellationPending {
+                self.clipboardWriter(url)
+            }
+            self.finishPublish(result)
+        }
     }
 
     @objc private func confirmPublish() { pendingUpload?() }
@@ -781,24 +1082,23 @@ public final class PublishingCoordinator: NSObject {
         aliasField?.isEnabled = sftp; remoteRootField?.isEnabled = sftp; portField?.isEnabled = sftp
     }
     @objc private func cancelPublish() {
-        guard pendingUpload != nil else { return }
-        finishPublish(.failure(NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError,
-                                       userInfo: [NSLocalizedDescriptionKey: "Publishing was cancelled."])))
+        cancelPublishing { _ in }
     }
     private func finishPublish(_ result: Result<URL, Error>) {
         let completion = pendingCompletion
         pendingCompletion = nil; pendingUpload = nil
-        if let panel = publishPanel { panel.sheetParent?.endSheet(panel); panel.orderOut(nil) }
-        publishPanel = nil; completion?(result)
+        if let panel = publishPanel { dismissSheet(panel) }
+        publishPanel = nil; transferStatus = nil; transferCancelButton = nil; completion?(result)
     }
     @objc private func cancelSettings() {
-        if let panel = settingsPanel { panel.sheetParent?.endSheet(panel); panel.orderOut(nil) }
+        if let panel = settingsPanel { dismissSheet(panel) }
         settingsPanel = nil; passwordField?.stringValue = ""
         endpointField = nil; protocolField = nil; usernameField = nil; passwordField = nil
         folderField = nil; publicField = nil; settingsStatus = nil
         aliasField = nil; remoteRootField = nil; portField = nil
     }
     @objc private func saveSettings() {
+        guard !isShuttingDown, !isCancellationPending else { return }
         guard let transport = protocolField, let secret = passwordField else { return }
         do {
             var settings = savedSettings
@@ -815,13 +1115,19 @@ public final class PublishingCoordinator: NSObject {
                 guard let port = Int(portText) else { throw PublishingFailure("SFTP port must be a number, or empty to use SSH configuration.") }
                 settings.sftpPort = port
             }
-            let capabilities = settings.transport == .sftp ? nil : try PublishingCurl.capabilities()
-            let plan = try PublishingPlan(settings: settings, fileName: "validation.png", capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
-            if settings.transport != .sftp {
-                _ = try plan.curlConfig(file: URL(fileURLWithPath: "/tmp/validation"), username: settings.username, password: secret.stringValue)
+            let saved = settings, password = settings.transport == .sftp ? "" : secret.stringValue, panel = settingsPanel
+            workController.start(work: { context in
+                let capabilities = saved.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
+                let plan = try PublishingPlan(settings: saved, fileName: "validation.png", capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
+                if saved.transport != .sftp { _ = try plan.curlConfig(file: URL(fileURLWithPath: "/tmp/validation"), username: saved.username, password: password) }
+                try context.check(); try PublishingStorage.save(saved, password: password)
+            }) { result in
+                guard self.settingsPanel === panel else { return }
+                switch result {
+                case .success: self.cancelSettings()
+                case .failure(let error): self.settingsStatus?.stringValue = error.localizedDescription
+                }
             }
-            try PublishingStorage.save(settings, password: settings.transport == .sftp ? "" : secret.stringValue)
-            cancelSettings()
         } catch { settingsStatus?.stringValue = error.localizedDescription }
     }
 
@@ -861,6 +1167,6 @@ public final class PublishingCoordinator: NSObject {
         let panel = makePanel(title: "Publishing Settings", width: 700, height: 300)
         let form = verticalStack(); let text = label(message); text.preferredMaxLayoutWidth = 640
         form.addArrangedSubview(text); form.addArrangedSubview(button("Close", #selector(cancelSettings)))
-        install(form, in: panel); settingsPanel = panel; window.beginSheet(panel) { [self] _ in _ = self }
+        install(form, in: panel); settingsPanel = panel; beginSheet(panel, relativeTo: window)
     }
 }

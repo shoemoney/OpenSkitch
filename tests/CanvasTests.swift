@@ -8,6 +8,13 @@
 // Fidelity checklist: vectors/text/zoom/crop/background transforms, independent erased
 // line and freehand fragments, raster pixel erasing, text above shapes/protected from
 // eraser, grouping/layer order/clipboard/undo, Command-select and Shift/Option shapes.
+// Recovered gestures: Control eraser (Command precedence/Fill exception), Space pan
+// of snap and drawing together, Tab Pencil toggle, Option eyedropper/copy, Escape
+// rollback, two-stage Wipe and white Wipe Snap, fixed-size Re-Snap and frame preview.
+// Shift+Command eyedropper is not implemented: bundled help and recovered modifier
+// dispatch establish Command cursor/Shift selection, rather than that color shortcut.
+// Justype forwards printable canvas keys to native text input; original editor Escape
+// commits/leaves editing. Explicit programmatic cancel still abandons pending text.
 // Remaining original-engine gaps: vector Boolean fills and filled-shape splitting,
 // exact ellipse arcs after splitting (sampled outlines), pressure-sensitive tablet
 // strokes, Option-polygon creation, original adaptive text outline/font panel, original
@@ -89,6 +96,23 @@ struct CanvasTests {
         window.contentView = scroll
         return window
     }
+    static func key(_ view: CanvasView, _ code: UInt16, type: NSEvent.EventType = .keyDown,
+                    flags: NSEvent.ModifierFlags = [], repeatKey: Bool = false) throws -> NSEvent {
+        let characters = code == 49 ? " " : (code == 48 ? "\t" : (code == 53 ? "\u{1b}" : ""))
+        guard let event = NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags, timestamp: 0,
+            windowNumber: view.window?.windowNumber ?? 0, context: nil, characters: characters,
+            charactersIgnoringModifiers: characters, isARepeat: repeatKey, keyCode: code) else {
+            throw Failure(description: "Key event allocation")
+        }
+        return event
+    }
+    static func backdrop(_ size: NSSize = NSSize(width: 100, height: 80)) -> NSImage {
+        let bitmap = SketchRenderer.bitmap(size: size) {
+            NSColor.blue.setFill(); CGRect(origin: .zero, size: size).fill()
+            NSColor.green.setFill(); CGRect(x: 5, y: 5, width: size.width / 4, height: size.height / 4).fill()
+        }!
+        let image = NSImage(size: size); image.addRepresentation(bitmap); return image
+    }
     static func main() {
         _ = NSApplication.shared
         let tests: [(String, () throws -> Void)] = [
@@ -114,6 +138,15 @@ struct CanvasTests {
             ("document-drop callback preserves pending editor and history", pendingDocumentDrop),
             ("text-only font/outline changes preserve colors, shapes and wrap width", textStyleSelection),
             ("text-only style safely commits pending typing with separate undo", pendingTextStyle),
+            ("Control eraser, secondary mouse and recovered modifier precedence", controlEraser),
+            ("Space pans snap and drawing, preserves offscreen pixels and undo", spacePan),
+            ("Tab Pencil toggle and Option eyedropper only notify UI", toolAndColorGestures),
+            ("Option drag copies groups as one undoable edit", optionDragCopy),
+            ("Escape restores gestures, selection, crop and existing undo/redo", gestureCancellation),
+            ("two-stage Wipe and Wipe Snap preserve undo and white backdrop", wipeLifecycle),
+            ("Re-Snap validates before mutation and fits retina background", resnap),
+            ("frame preview retains annotation pixels and capture boundary only", framePreview),
+            ("Justype focus, native typing/recovery/undo, Escape commit and pointer clamp", justype),
             ("native canvas visual proof", visualProof)
         ]
         let selectedTests = tests.filter { name, _ in
@@ -329,6 +362,7 @@ struct CanvasTests {
         c.tool = .brush
         c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 40, y: 30), flags: [.option]))
         try expect(c.strokeColor.usingColorSpace(.deviceRGB)!.redComponent > 0.9, "Option brush eyedropper")
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 40, y: 30), flags: [.option]))
         c.selectAll()
         let delete = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
             windowNumber: window.windowNumber, context: nil, characters: "\u{7f}", charactersIgnoringModifiers: "\u{7f}",
@@ -391,7 +425,10 @@ struct CanvasTests {
         c.document.elements = [path]
         try expect(path.localBounds.width == 40 && path.localBounds.minY < 10, "Native cubic tight bounds")
         try expect(try pixel(c, 30, 30).greenComponent < 0.1, "Filled native path renders")
-        let loaded = canvas(); try loaded.loadDocument(data: c.documentData())
+        let saved = try c.documentData()
+        try expect(try CanvasView.validatedDocumentData(saved) == c.document,
+                   "Native supplement validator returns the matching model while preserving complete input JSON")
+        let loaded = canvas(); try loaded.loadDocument(data: saved)
         try expect(loaded.document.elements[0].pathCommands == path.pathCommands, "Cubic control points survive save")
         let window = host(c); defer { window.close() }
         c.tool = .select
@@ -686,6 +723,312 @@ struct CanvasTests {
         c.undo(); try expect(c.document == committedTyping, "Undo font action retains the committed pending text at its previous font")
         c.undo(); try expect(c.document == original, "Separate typing undo restores the pre-editor document")
         c.redo(); c.redo(); try expect(c.document == styled, "Redo typing then font preserves both edits")
+    }
+    static func controlEraser() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        c.setBackground(backdrop()); c.tool = .arrow; c.strokeWidth = 12
+        var line = SketchElement(kind: .line)
+        line.points = [CGPoint(x: 10, y: 40), CGPoint(x: 90, y: 40)]
+        line.color = SketchColor(.red); line.strokeWidth = 4
+        c.document.elements = [line]; c.editingUndoManager.removeAllActions()
+        let original = c.document
+        c.flagsChanged(with: try key(c, 59, type: .flagsChanged, flags: [.control]))
+        try expect(c.effectiveTool == .eraser && c.tool == .arrow, "Control temporarily selects Eraser")
+        c.rightMouseDown(with: try mouse(c, .rightMouseDown, CGPoint(x: 50, y: 30), flags: [.control]))
+        c.rightMouseDragged(with: try mouse(c, .rightMouseDragged, CGPoint(x: 50, y: 50), flags: [.control]))
+        c.rightMouseUp(with: try mouse(c, .rightMouseUp, CGPoint(x: 50, y: 50), flags: [.control]))
+        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .line },
+                   "Control secondary-button erasing creates independent vector pieces")
+        try expect(try pixel(c, 50, 40).blueComponent > 0.9 && pixel(c, 20, 40).redComponent > 0.9,
+                   "Eraser exposes protected photo, retaining line pixels elsewhere")
+        c.undo(); try expect(c.document == original, "Control erasing is one exact undo")
+        c.flagsChanged(with: try key(c, 59, type: .flagsChanged))
+        try expect(c.effectiveTool == .arrow, "Releasing Control restores current tool")
+        c.flagsChanged(with: try key(c, 55, type: .flagsChanged, flags: [.control, .command]))
+        try expect(c.effectiveTool == .select, "Original Command cursor takes precedence over Control")
+        c.tool = .fill
+        c.flagsChanged(with: try key(c, 59, type: .flagsChanged, flags: [.control]))
+        try expect(c.effectiveTool == .fill, "Recovered Fill tool exception to Control eraser")
+    }
+    static func spacePan() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        c.setBackground(backdrop()); c.setZoom(2)
+        var shape = rectangle(CGRect(x: 40, y: 40, width: 15, height: 12))
+        var text = SketchElement(kind: .text)
+        text.text = "X"; text.rect = CGRect(x: 65, y: 5, width: 25, height: 35)
+        shape.groupID = UUID(); text.groupID = shape.groupID
+        c.document.elements = [shape, text]; c.selection = [shape.id]
+        c.cropRect = CGRect(x: 5, y: 5, width: 50, height: 40)
+        c.editingUndoManager.removeAllActions()
+        let original = c.document, originalCrop = c.cropRect, originalPNG = c.imageData(format: "png")
+        let viewport = (c.enclosingScrollView?.contentView.bounds)!
+        c.keyDown(with: try key(c, 49))
+        try drag(c, from: CGPoint(x: 35, y: 30), to: CGPoint(x: 45, y: 42))
+        c.keyUp(with: try key(c, 49, type: .keyUp))
+        var expectedShape = shape, expectedText = text
+        expectedShape.translate(x: 10, y: 12); expectedText.translate(x: 10, y: 12)
+        try expect(c.document.elements == [expectedShape, expectedText] && c.selection == [shape.id],
+                   "Space moves all vector/text geometry, preserving IDs/groups/selection at zoom")
+        try expect(c.cropRect == originalCrop!.offsetBy(dx: 10, dy: 12) && c.canvasSize == original.size,
+                   "Space preserves dimensions and translates crop with content")
+        try expect(c.enclosingScrollView?.contentView.bounds == viewport, "Space moves document contents rather than viewport")
+        try expect(try pixel(c, 20, 20).greenComponent > 0.9 && pixel(c, 10, 10).redComponent > 0.9 &&
+                   pixel(c, 52, 55).redComponent > 0.9, "Snap and annotations move together, leaving white uncovered pixels")
+        let panned = c.document
+        c.undo(); try expect(c.document == original && c.cropRect == originalCrop && !c.editingUndoManager.canUndo,
+                             "Space pan has one exact undo")
+        c.redo(); try expect(c.document == panned, "Space pan redo restores pixels and geometry")
+        c.undo(); c.editingUndoManager.removeAllActions()
+        c.keyDown(with: try key(c, 49))
+        try drag(c, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 20, y: 20))
+        try expect(c.document == original && !c.editingUndoManager.canUndo, "Space click is not an edit")
+        try drag(c, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 90, y: 20))
+        c.keyUp(with: try key(c, 49, type: .keyUp))
+        let saved = try c.documentData()
+        try expect(try CanvasView.validatedDocumentData(saved) == c.document,
+                   "Native supplement validator accepts the full hidden pan source")
+        var invalidFile = try JSONSerialization.jsonObject(with: saved) as! [String: Any]
+        guard var invalidBackground = invalidFile["canvasPanBackground"] as? [String: Any] else {
+            throw Failure(description: "Serialized pan source must be present")
+        }
+        invalidBackground["sourcePNG"] = Data([1, 2, 3]).base64EncodedString()
+        invalidFile["canvasPanBackground"] = invalidBackground
+        let invalidData = try JSONSerialization.data(withJSONObject: invalidFile)
+        do {
+            _ = try CanvasView.validatedDocumentData(invalidData)
+            throw Failure(description: "Malformed hidden pan pixels must not pass native supplement validation")
+        } catch SketchDocumentError.invalidDocument { }
+        let loaded = canvas(); try loaded.loadDocument(data: saved)
+        let secondWindow = host(loaded); defer { secondWindow.close() }
+        loaded.keyDown(with: try key(loaded, 49))
+        try drag(loaded, from: CGPoint(x: 90, y: 20), to: CGPoint(x: 20, y: 20))
+        loaded.keyUp(with: try key(loaded, 49, type: .keyUp))
+        try expect(loaded.document.elements == original.elements && loaded.imageData(format: "png") == originalPNG,
+                   "Offscreen snap pixels survive pan/save/reopen/pan back without clipping loss")
+    }
+    static func toolAndColorGestures() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        c.tool = .ellipse; c.setBackground(backdrop())
+        c.document.elements = [rectangle(CGRect(x: 35, y: 25, width: 30, height: 30), color: .red.withAlphaComponent(0.5))]
+        c.editingUndoManager.removeAllActions()
+        let original = c.document
+        var tools: [SketchTool] = [], colors: [SketchColor] = [], dirty = 0
+        c.onToolChange = { tools.append($0) }; c.onColorChange = { colors.append(SketchColor($0)) }; c.onChange = { dirty += 1 }
+        c.keyDown(with: try key(c, 48)); c.keyDown(with: try key(c, 48, repeatKey: true))
+        try expect(c.tool == .brush && tools == [.brush], "Tab selects Pencil; autorepeat cannot toggle back")
+        c.keyDown(with: try key(c, 48))
+        try expect(c.tool == .ellipse && tools == [.brush, .ellipse], "Tab restores remembered current tool")
+        for tool in [SketchTool.brush, .fill, .eraser] {
+            c.tool = tool; c.strokeColor = .black
+            try drag(c, from: CGPoint(x: 45, y: 40), to: CGPoint(x: 45, y: 40), flags: [.option])
+            try expect(SketchColor(c.strokeColor) == SketchColor(.red.withAlphaComponent(0.5)),
+                       "Option \(tool) samples editable graphic color including alpha")
+            try drag(c, from: CGPoint(x: 80, y: 60), to: CGPoint(x: 10, y: 10), flags: [.option])
+            try expect(c.strokeColor.usingColorSpace(.deviceRGB)!.greenComponent > 0.9,
+                       "Dragging Option eyedropper samples the new snap pixel")
+        }
+        c.strokeColor = .black; c.tool = .brush
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 80, y: 60), flags: [.option]))
+        c.keyDown(with: try key(c, 53))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 80, y: 60), flags: [.option]))
+        try expect(SketchColor(c.strokeColor) == SketchColor(.black), "Escape restores eyedropper's prior color")
+        try drag(c, from: CGPoint(x: 45, y: 40), to: CGPoint(x: 45, y: 40), flags: [.shift, .command])
+        try expect(c.selection == [original.elements[0].id] && SketchColor(c.strokeColor) == SketchColor(.black),
+                   "Evidence establishes Shift+Command cursor selection, not eyedropper")
+        try expect(c.document == original && dirty == 0 && !c.editingUndoManager.canUndo && colors.count >= 7,
+                   "Tool/color gestures notify shell UI without dirtying document or history")
+    }
+    static func optionDragCopy() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        var a = rectangle(CGRect(x: 15, y: 15, width: 30, height: 30))
+        var b = rectangle(CGRect(x: 55, y: 15, width: 20, height: 25), color: .blue)
+        a.groupID = UUID(); b.groupID = a.groupID; c.document.elements = [a, b]
+        c.tool = .arrow; let original = c.document
+        var dirty = 0; c.onChange = { dirty += 1 }
+        try drag(c, from: CGPoint(x: 30, y: 30), to: CGPoint(x: 40, y: 40), flags: [.command, .option])
+        let copied = c.document, copies = Array(copied.elements.dropFirst(2))
+        try expect(Array(copied.elements.prefix(2)) == [a, b] && copies.count == 2, "Option cursor drag retains originals and copies entire contacted group")
+        var ea = a, eb = b; ea.translate(x: 10, y: 10); eb.translate(x: 10, y: 10)
+        ea.id = copies[0].id; eb.id = copies[1].id; ea.groupID = copies[0].groupID; eb.groupID = copies[1].groupID
+        try expect(copies == [ea, eb] && copies[0].groupID == copies[1].groupID && copies[0].groupID != a.groupID &&
+                   Set(copied.elements.map(\.id)).count == 4 && c.selection == Set(copies.map(\.id)),
+                   "Copies preserve exact styles/geometry with independent IDs/group and selected copies")
+        try expect(dirty == 1 && c.tool == .arrow, "Copy/move is one edit and Command tool is temporary")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "One undo removes copies and movement")
+        c.redo(); try expect(c.document == copied, "Redo retains copied identities")
+        c.undo(); c.editingUndoManager.removeAllActions(); let notifications = dirty
+        try drag(c, from: CGPoint(x: 30, y: 30), to: CGPoint(x: 30, y: 30), flags: [.command, .option])
+        try expect(c.document == original && !c.editingUndoManager.canUndo && dirty == notifications,
+                   "Option click without movement does not duplicate")
+    }
+    static func gestureCancellation() throws {
+        let cases: [(SketchTool, CGPoint, CGPoint, NSEvent.ModifierFlags, Bool)] = [
+            (.select, CGPoint(x: 40, y: 35), CGPoint(x: 50, y: 45), [], false),
+            (.select, CGPoint(x: 60, y: 50), CGPoint(x: 75, y: 65), [], false),
+            (.rectangle, CGPoint(x: 70, y: 60), CGPoint(x: 95, y: 75), [], false),
+            (.eraser, CGPoint(x: 40, y: 10), CGPoint(x: 40, y: 65), [], false),
+            (.crop, CGPoint(x: 10, y: 10), CGPoint(x: 70, y: 70), [], false),
+            (.select, CGPoint(x: 40, y: 35), CGPoint(x: 50, y: 45), [.option], false),
+            (.arrow, CGPoint(x: 40, y: 35), CGPoint(x: 50, y: 45), [], true)
+        ]
+        for (tool, start, end, flags, pan) in cases {
+            let c = canvas(); let window = host(c); defer { window.close() }
+            c.setBackground(backdrop()); c.setBackgroundColor(.clear); c.undo()
+            let shape = rectangle(CGRect(x: 20, y: 20, width: 40, height: 30))
+            c.document.elements = [shape]; c.selection = [shape.id]
+            c.cropRect = CGRect(x: 5, y: 5, width: 80, height: 60); c.tool = tool
+            let original = c.document, crop = c.cropRect, selected = c.selection
+            let undoName = c.editingUndoManager.undoActionName, redoName = c.editingUndoManager.redoActionName
+            var dirty = 0; c.onChange = { dirty += 1 }
+            if pan { c.keyDown(with: try key(c, 49)) }
+            c.mouseDown(with: try mouse(c, .leftMouseDown, start, flags: flags))
+            c.mouseDragged(with: try mouse(c, .leftMouseDragged, end, flags: flags))
+            c.keyDown(with: try key(c, 53))
+            c.mouseUp(with: try mouse(c, .leftMouseUp, end, flags: flags))
+            if pan { c.keyUp(with: try key(c, 49, type: .keyUp)) }
+            try expect(c.document == original && c.selection == selected && c.cropRect == crop && dirty == 0,
+                       "Escape rolls back \(tool)/pan=\(pan) gesture and ignores delayed mouseUp")
+            try expect(c.editingUndoManager.canUndo && c.editingUndoManager.canRedo &&
+                       c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName,
+                       "Cancelled gesture preserves existing undo and redo branches")
+            c.redo(); try expect(c.document.backgroundColor == .clear, "Pre-existing redo still operates after cancelled gesture")
+        }
+    }
+    static func wipeLifecycle() throws {
+        let c = canvas(); c.setBackground(backdrop()); c.setBackgroundColor(.clear)
+        var a = rectangle(CGRect(x: 15, y: 15, width: 30, height: 30)); a.groupID = UUID()
+        c.document.elements = [a]; c.selection = [a.id]; c.cropRect = CGRect(x: 3, y: 4, width: 60, height: 50)
+        c.editingUndoManager.removeAllActions(); let original = c.document
+        var sounds: [String] = []; var dirty = 0
+        c.onSound = { sounds.append($0) }; c.onChange = { dirty += 1 }
+        c.wipe(); let noDrawing = c.document
+        try expect(noDrawing.elements.isEmpty && noDrawing.backgroundPNG == original.backgroundPNG &&
+                   noDrawing.backgroundColor == .clear && sounds == ["wipe_brushlayer"], "First Wipe clears drawing only")
+        c.undo(); try expect(c.document == original, "Undo first Wipe restores drawing/groups")
+        c.wipe(); try expect(c.document == noDrawing && sounds.last == "wipe_brushlayer", "Wipe stage comes from restored content")
+        c.wipe(); let blank = c.document
+        try expect(blank.backgroundPNG == nil && blank.backgroundColor == .white && blank.size == original.size &&
+                   sounds.last == "wipe_snap", "Second Wipe removes snap and resets backdrop white without resize")
+        let notifications = dirty, undoName = c.editingUndoManager.undoActionName
+        c.wipe(); try expect(dirty == notifications && c.editingUndoManager.undoActionName == undoName &&
+                            sounds.last == "wipe_already_blank", "Wiping blank canvas is sound-only no-op")
+        c.undo(); try expect(c.document == noDrawing, "Undo snap Wipe restores photo and transparency")
+        c.undo(); try expect(c.document == original, "Second undo restores first-stage drawing")
+        c.selectAll(); let selected = c.selection, crop = c.cropRect
+        c.editingUndoManager.removeAllActions(); c.wipeSnap()
+        let withoutSnap = c.document
+        try expect(withoutSnap.elements == original.elements && withoutSnap.backgroundPNG == nil &&
+                   withoutSnap.backgroundColor == .white && c.selection == selected && c.cropRect == crop,
+                   "Wipe Snap Only preserves editable annotations/IDs/groups/crop/selection and sets white")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Wipe Snap Only is one exact undo")
+        c.redo(); try expect(c.document == withoutSnap, "Wipe Snap redo")
+    }
+    static func resnap() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }
+        c.setBackground(backdrop()); c.tool = .select
+        var text = SketchElement(kind: .text)
+        text.text = "Keep"; text.rect = CGRect(x: 55, y: 5, width: 40, height: 40)
+        var shape = rectangle(CGRect(x: 30, y: 40, width: 20, height: 20))
+        shape.groupID = UUID(); text.groupID = shape.groupID
+        c.document.elements = [shape, text]; c.selection = [shape.id, text.id]
+        c.cropRect = CGRect(x: 3, y: 4, width: 60, height: 50); c.editingUndoManager.removeAllActions()
+        let original = c.document, crop = c.cropRect, selected = c.selection
+        let retina = backdrop(NSSize(width: 200, height: 160)); retina.size = NSSize(width: 100, height: 80)
+        var dirty = 0; c.onChange = { dirty += 1 }; c.framePreview = true
+        try expect(c.replaceSnapPreservingAnnotations(retina), "Valid retina Re-Snap succeeds")
+        let replaced = c.document
+        let bg = NSBitmapImageRep(data: replaced.backgroundPNG!)!
+        try expect(bg.pixelsWide == 100 && bg.pixelsHigh == 80 && replaced.size == original.size &&
+                   replaced.elements == original.elements && c.selection == selected && c.cropRect == crop && c.framePreview,
+                   "Re-Snap resamples only backdrop, preserving dimensions/all annotations/preview/crop/selection")
+        try expect(try pixel(c, 10, 10).greenComponent > 0.9 && pixel(c, 70, 60).blueComponent > 0.9,
+                   "Retina image is fitted to existing document coordinates")
+        try expect(dirty == 1, "Re-Snap sends one dirty notification")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Re-Snap is one exact undo")
+        c.redo(); try expect(c.document == replaced, "Re-Snap redo")
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 65, y: 15), clicks: 2))
+        guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Re-Snap pending editor") }
+        editor.insertText("Pending", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let pending = try c.snapshotDocumentData(), notifications = dirty, history = c.editingUndoManager.undoActionName
+        try expect(!c.replaceSnapPreservingAnnotations(NSImage(size: NSSize(width: 100, height: 80))), "Empty image is rejected")
+        try expect(c.document == replaced && c.hasPendingTextChanges && editor.superview === c &&
+                   window.firstResponder === editor && dirty == notifications && c.editingUndoManager.undoActionName == history &&
+                   c.snapshotDocumentData() == pending, "Invalid Re-Snap validates before touching editor, recovery, selection, history or dirty")
+        c.cancelOperation(nil)
+    }
+    static func framePreview() throws {
+        let c = canvas(); c.setBackground(backdrop()); c.setBackgroundColor(.clear)
+        c.document.elements = [rectangle(CGRect(x: 40, y: 35, width: 20, height: 20))]
+        c.editingUndoManager.removeAllActions()
+        let original = c.document, data = try c.snapshotDocumentData(), png = c.imageData(format: "png")
+        var dirty = 0; c.onChange = { dirty += 1 }; c.framePreview = true
+        let preview = SketchRenderer.bitmap(size: c.canvasSize) { c.draw(c.bounds) }!
+        try expect(preview.colorAt(x: 80, y: 65)!.alphaComponent < 0.01 &&
+                   preview.colorAt(x: 50, y: 45)!.usingColorSpace(.deviceRGB)!.redComponent > 0.9,
+                   "Preview clears backdrop/checkerboard while retaining visible annotation pixels")
+        try expect(preview.colorAt(x: 1, y: 40)!.alphaComponent > 0.5, "Preview displays visible capture boundary")
+        try expect(c.document == original && c.snapshotDocumentData() == data && c.imageData(format: "png") == png &&
+                   dirty == 0 && !c.editingUndoManager.canUndo, "Preview leaves document, recovery, export and undo untouched")
+        c.framePreview = false
+        let normal = SketchRenderer.bitmap(size: c.canvasSize) { c.draw(c.bounds) }!
+        try expect(normal.colorAt(x: 80, y: 65)!.usingColorSpace(.deviceRGB)!.blueComponent > 0.9,
+                   "Leaving preview restores full background display")
+    }
+    static func justype() throws {
+        let c = canvas(NSSize(width: 300, height: 150)); let window = host(c); defer { window.close() }
+        c.tool = .arrow; c.shadowed = true; c.setZoom(2)
+        c.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 25, height: 20), color: .blue)]
+        let original = c.document
+        func printable(_ characters: String, flags: NSEvent.ModifierFlags = []) -> NSEvent {
+            NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: characters,
+                charactersIgnoringModifiers: characters, isARepeat: false, keyCode: 38)!
+        }
+        let name = NSTextField(frame: CGRect(x: 110, y: 10, width: 250, height: 35))
+        name.stringValue = "Name field"; window.contentView!.addSubview(name)
+        try expect(window.makeFirstResponder(name), "Justype name-field focus")
+        let fieldEditor = window.firstResponder
+        c.keyDown(with: printable("J", flags: [.shift]))
+        try expect(c.document == original && c.subviews.isEmpty && window.firstResponder === fieldEditor &&
+                   !c.editingUndoManager.canUndo, "Printable keys cannot create canvas text while a name field owns focus")
+        try expect(window.makeFirstResponder(c), "Justype canvas focus")
+        c.mouseMoved(with: try mouse(c, .mouseMoved, CGPoint(x: 80, y: 50)))
+        var dirty = 0; var toolChanges = 0
+        c.onChange = { dirty += 1 }; c.onToolChange = { _ in toolChanges += 1 }
+        c.keyDown(with: printable("J", flags: [.shift]))
+        guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Justype native editor") }
+        try expect(window.firstResponder === editor && editor.string == "J" && c.tool == .arrow && toolChanges == 0,
+                   "First printable key creates and reaches the real editor without changing chosen tool")
+        try expect(c.document.elements.last!.rect.origin == CGPoint(x: 80, y: 50) &&
+                   c.document.elements.last!.fontSize == 24 && c.document.elements.last!.outlined && c.document.elements.last!.shadowed,
+                   "Justype anchors to last pointer in document coordinates at zoom, preserving default text style")
+        editor.keyDown(with: printable("é"))
+        try expect(editor.string == "Jé" && dirty > 0 && c.hasPendingTextChanges && c.activeEditorUndoManager === editor.undoManager,
+                   "Subsequent composed characters use native typing history and immediately dirty recovery")
+        let pending = try c.snapshotDocumentData()
+        try expect(try SketchDocument.decode(pending).elements.last!.text == "Jé" && editor.superview === c,
+                   "Justype recovery includes typed text without committing")
+        editor.breakUndoCoalescing(); editor.undoManager!.undo()
+        try expect(editor.string != "Jé" && window.firstResponder === editor, "Native Justype typing undo stays inside editor")
+        editor.undoManager!.redo(); try expect(editor.string == "Jé", "Native Justype typing redo")
+        editor.keyDown(with: try key(c, 53))
+        let committed = c.document
+        try expect(editor.superview == nil && window.firstResponder === c && !c.hasPendingTextChanges &&
+                   committed.elements.last!.text == "Jé" && c.tool == .arrow && toolChanges == 0,
+                   "Original native Escape commits text and returns focus while preserving drawing tool (removed=\(editor.superview == nil), focus=\(window.firstResponder === c), pending=\(c.hasPendingTextChanges), text=\(committed.elements.last?.text ?? "nil"), tool=\(c.tool), toolChanges=\(toolChanges))")
+        try expect(try c.snapshotDocumentData() == pending, "Escape commits exactly the pending recovery document")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Justype creation commits as one canvas undo")
+        c.redo(); try expect(c.document == committed, "Justype canvas redo retains text ID/style/geometry")
+        c.mouseMoved(with: try mouse(c, .mouseMoved, CGPoint(x: -100, y: 900)))
+        c.keyDown(with: printable("K"))
+        let clamped = c.document.elements.last!
+        try expect(clamped.rect.minX == 0 && clamped.rect.maxX <= c.canvasSize.width &&
+                   clamped.rect.minY >= 0 && clamped.rect.maxY <= c.canvasSize.height,
+                   "Justype clamps stale/outside pointer so the annotation stays within canvas")
+        c.commitPendingTextEditing()
+        try expect(c.document.elements.last!.text == "K" && c.subviews.isEmpty && !c.hasPendingTextChanges,
+                   "Parent commitPendingTextEditing API closes and saves native pending text")
+        c.undo(); try expect(c.document == committed, "Explicit parent text commit is also one undoable edit")
     }
     static func visualProof() throws {
         let c = canvas(NSSize(width: 620, height: 400))

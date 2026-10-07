@@ -60,6 +60,7 @@ for name, (path, data) in snapshot.items():
             'NSOpenPanel(': 'AppSafetyOpenPanel(',
             'CaptureCoordinator()': 'AppSafetyCaptureCoordinator()',
             'NSApp.activate(ignoringOtherApps: true)': 'AppSafetyActivation.suppress()',
+            'NSApp.terminate(nil)': 'AppSafetyTermination.request()',
         }
         for original, replacement in replacements.items():
             if original not in text:
@@ -68,6 +69,7 @@ for name, (path, data) in snapshot.items():
         # Optional for older counterfactual App inputs. Never construct a live
         # manager: even an apparently safe default can come from saved settings.
         text = text.replace('GlobalHotkeyManager()', 'AppSafetyHotkeyManager()')
+        text = text.replace('NSApp.reply(toApplicationShouldTerminate: approved)', 'AppSafetyTermination.reply(approved)')
         if re.search(r'\bGlobalHotkeyManager\b', text):
             raise SystemExit('Unrecognized live hotkey-manager construction; refusing to run.')
         target.write_text(text)
@@ -93,4 +95,32 @@ env -u SKITCH_FIXTURE SKITCH_APP_SUPPORT="$EVIDENCE/support" \
 RESULT=$?
 set -e
 cat "$EVIDENCE/run.log"
+if [ "$RESULT" -eq 0 ]; then
+    # Reproduce the real AppKit quit loop without launching a preview app or
+    # ordering any window. Bound hangs and terminate only this owned child.
+    python3 - "$EVIDENCE" "$ARCH" <<'PY'
+import json, os, pathlib, subprocess, sys
+evidence, arch = pathlib.Path(sys.argv[1]), sys.argv[2]
+env = os.environ.copy()
+env.pop('SKITCH_FIXTURE', None)
+env.update(SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
+           SKITCH_EVIDENCE_DIR=str(evidence / 'native-layout'),
+           APP_SAFETY_EVIDENCE=str(evidence), APP_SAFETY_ARCH=arch)
+(evidence / 'native-layout').mkdir()
+with (evidence / 'native-termination.log').open('w') as log:
+    try:
+        result = subprocess.run(['/usr/bin/arch', '-' + arch, str(evidence / 'AppSafetyTests'),
+                                 '--native-idle-termination'], env=env, stdout=log,
+                                stderr=subprocess.STDOUT, timeout=10)
+    except subprocess.TimeoutExpired:
+        raise SystemExit('FAIL native idle termination: test child did not exit within 10 seconds')
+if result.returncode != 0:
+    print((evidence / 'native-termination.log').read_text())
+    raise SystemExit(result.returncode)
+report = json.loads((evidence / 'native-termination.json').read_text())
+if not report['passed']:
+    raise SystemExit('FAIL native idle termination acknowledgement')
+print('PASS native AppKit idle termination (actual Capture Result shutdown, no visible windows)')
+PY
+fi
 exit "$RESULT"

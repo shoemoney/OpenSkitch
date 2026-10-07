@@ -191,7 +191,11 @@ enum PublishingTests {
         let name = "skitch-redux-backend-test-" + UUID().uuidString.lowercased() + ".png"
         let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1cAAAAASUVORK5CYII=")!
         let plan = try PublishingPlan(settings: settings, fileName: name, capabilities: nil, sftpAvailable: PublishingTransfer.sftpAvailable)
-        let url = try PublishingTransfer.upload(data: png, plan: plan)
+        let worker = PublishingWorkController()
+        var uploadResult: Result<URL, Error>?
+        worker.start(work: { context in try PublishingTransfer.upload(data: png, plan: plan, cancellation: context) }) { uploadResult = $0 }
+        while uploadResult == nil { _ = RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.05)) }
+        let url = try uploadResult!.get()
         guard url == plan.publicURL else { throw PublishingFailure("The backend did not return the exact public image URL.") }
         print("SFTP and public HTTP 200 verified exact PNG bytes. Public URL: " + url.absoluteString)
     }
