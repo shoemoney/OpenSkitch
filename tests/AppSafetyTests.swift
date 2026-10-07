@@ -108,6 +108,7 @@ final class AppSafetyHotkeyManager {
     static var unregistrations = 0
     var screen: (@MainActor () -> Void)?
     var fullscreen: (@MainActor () -> Void)?
+    var frame: (@MainActor () -> Void)?
     var settingsParents: [NSWindow?] = []
     func install(globalScreen: @escaping @MainActor () -> Void,
                  globalWindow: @escaping @MainActor () -> Void,
@@ -115,7 +116,7 @@ final class AppSafetyHotkeyManager {
                  globalFrame: @escaping @MainActor () -> Void,
                  globalCamera: @escaping @MainActor () -> Void) throws {
         Self.installations += 1
-        screen = globalScreen; fullscreen = globalFullscreen
+        screen = globalScreen; fullscreen = globalFullscreen; frame = globalFrame
     }
     func unregister() throws { Self.unregistrations += 1 }
     func showSettings(attachedTo parent: NSWindow? = nil) {
@@ -199,6 +200,9 @@ final class AppSafetyAlert: NSAlert {
 @MainActor
 final class AppSafetyCaptureCoordinator {
     var frameRect: NSRect?
+    var onSound: ((String) -> Void)?
+    var isCapturing: Bool { Self.holdCapture && !Self.captureCallbacks.isEmpty }
+    func cancelCapture(completion: @escaping (Result<Void, Error>) -> Void) { let callbacks = Self.captureCallbacks; Self.captureCallbacks.removeAll(); callbacks.forEach { $0(.failure(Self.cancellation)) }; completion(.success(())) }
     static var requests: [String] = []
     struct ScreenRequest { let mode: String; let delay: Double; let includeApp: Bool }
     static var screenRequests: [ScreenRequest] = []
@@ -576,7 +580,7 @@ enum AppSafetyTests {
                    "Capture cancellation must preserve pending content and saved bytes")
 
         // Finish the annotation explicitly before checking view-only framing.
-        // Screen Snap changes meaning in Frame mode; picker cancellation keeps
+        // The primary Snap button changes meaning in Frame mode; picker cancellation keeps
         // the preview ready instead of leaving it or replacing the document.
         app.canvas.tool = .select
         let framed = app.canvas.document, framedPending = try app.canvas.snapshotDocumentData()
@@ -585,10 +589,10 @@ enum AppSafetyTests {
         try expect(app.frameMode && !app.frameKeepsAnnotations && app.canvas.framePreview &&
                    AppSafetyCaptureCoordinator.requests == ["crosshair", "camera", "web"],
                    "Frame enters preview without starting a capture or asking to discard")
-        app.screenSnap()
+        app.snapButtonPressed()
         try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "camera", "web", "frame"] &&
                    app.frameMode && app.canvas.framePreview && !app.frameCaptureInProgress,
-                   "Screen Snap in Frame mode must request frame capture; cancellation must leave it ready")
+                   "The Snap button in Frame mode must request frame capture; cancellation must leave it ready")
         try expect(app.canvas.document == framed && app.currentURL == a && app.dirty &&
                    app.canvas.editingUndoManager.canUndo && app.canvas.editingUndoManager.undoActionName == undoName,
                    "Cancelled frame capture must preserve the document, destination, dirty state and history")
@@ -708,7 +712,7 @@ enum AppSafetyTests {
         app.canvas.tool = .select
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
         let undoName = app.canvas.editingUndoManager.undoActionName
-        app.frameSnap(); app.screenSnap()
+        app.frameSnap(); app.snapButtonPressed()
         try expect(AppSafetyCaptureCoordinator.requests == ["frame"] && app.frameMode && !app.frameCaptureInProgress && AppSafetyAlert.seen.isEmpty,
                    "Cancelled Frame picker must leave preview ready without a discard prompt")
         try expect(app.canvas.document == before && app.currentURL == a && app.dirty &&
@@ -1997,9 +2001,39 @@ enum AppSafetyTests {
         app.timedSnap()
         let timed = AppSafetyCaptureCoordinator.screenRequests.last!
         try expect(timed.mode == "crosshair" && timed.delay == 7 && timed.includeApp, "Timed Snap samples Option before the modal prompt and carries it into the delayed request")
-        AppSafetyAlert.beforeReply = nil; app.frameSnap(); app.screenSnap()
+        AppSafetyAlert.beforeReply = nil; app.frameSnap(); app.snapButtonPressed()
         try expect(AppSafetyCaptureCoordinator.screenRequests.last!.mode == "frame" && !AppSafetyCaptureCoordinator.screenRequests.last!.includeApp,
                    "Snap in Frame mode keeps frame routing and exclusion instead of using the crosshair preference")
+    }
+    static func captureTimingRouting() throws {
+        let fixture = try Fixture(), app = fixture.app
+        defer { AppSafetyEvents.current = nil; AppSafetyCaptureCoordinator.holdCapture = false }
+        func flags(_ flags: NSEvent.ModifierFlags) {
+            AppSafetyEvents.current = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 0)
+        }
+        flags(.shift); app.fullscreenSnap()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.delay == 6, "Manual Shift Fullscreen uses the original six-second countdown")
+        app.hotkeys.fullscreen?()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.delay == 0, "Global Fullscreen ignores an unrelated current Shift event")
+        app.hotkeys.frame?(); flags([]); app.snapButtonPressed()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.delay == 0, "Global Frame ignores an unrelated current Shift event")
+        app.cancelFrame(); flags(.shift); app.frameSnap(); flags([]); app.snapButtonPressed()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.mode == "frame" && AppSafetyCaptureCoordinator.screenRequests.last!.delay == 6,
+                   "Shift at Frame entry remains latched when Snap is pressed without Shift")
+        app.cancelFrame(); app.frameSnap(); flags(.shift); app.snapButtonPressed()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.delay == 6, "Shift at Frame Snap also requests six seconds")
+        app.cancelFrame(); flags([]); app.frameSnap(); app.snapButtonPressed()
+        try expect(AppSafetyCaptureCoordinator.screenRequests.last!.delay == 0, "Leaving Frame clears the previous timed latch")
+        app.screenSnap()
+        try expect(!app.frameMode && AppSafetyCaptureCoordinator.screenRequests.last!.mode == "crosshair", "Crosshair menu action leaves Frame and starts selection")
+        AppSafetyCaptureCoordinator.holdCapture = true
+        app.screenSnap()
+        let item = NSMenuItem(title: "Cancel Snapshot", action: #selector(AppDelegate.cancelSnapshot), keyEquivalent: "")
+        try expect(app.validateMenuItem(item), "An active selection enables Cancel Snapshot")
+        let before = app.canvas.document
+        app.cancelSnapshot()
+        try expect(!app.validateMenuItem(item) && app.canvas.document == before, "Cancel Snapshot drains the request without replacing the drawing")
     }
     static func originalSoundRouting() throws {
         let key = "disableSounds", defaults = UserDefaults.standard, previous = UserDefaults.standard.object(forKey: "disableSounds")
@@ -2744,6 +2778,7 @@ enum AppSafetyTests {
             ("Native Preferences routes original defaults without disturbing pending text or history", generalPreferencesIntegration),
             ("Original hint shell routes modifiers, suppression, lifecycle and screen-fit reserves", hintShellRouting),
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
+            ("Original screen timing, sticky Frame Shift, crosshair routing and cancellation", captureTimingRouting),
             ("Original sound toggle controls Wipe and accepted Snap feedback", originalSoundRouting),
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),

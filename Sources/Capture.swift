@@ -372,6 +372,12 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     private var timeout: Task<Void, Never>?
     private var delayedCapture: Task<Void, Never>?
     private var screenshot: ScreenshotProcess?
+    private var selectionPicker: (any CaptureSelectionPicking)?
+    private var countdown: (any CaptureCountdownPresenting)?
+    private let nativeSelection: Bool
+    private let nativeCountdown: Bool
+    var onSound: ((String) -> Void)?
+    var isCapturing: Bool { operationID != nil || cleaningUp }
     private var hidApplication = false
     private var wasActive = false
     private var previousKeyWindowRestorer: (@MainActor () -> Void)?
@@ -392,6 +398,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
 
     nonisolated override init() {
         environment = CaptureEnvironment()
+        nativeSelection = true; nativeCountdown = true
         applicationVisibility = NativeCaptureApplicationVisibility()
         super.init()
     }
@@ -402,12 +409,16 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     nonisolated init(testHelper: URL, arguments: [String], temporaryRoot: URL,
                      displays: [NSRect] = [NSRect(x: -1000, y: -1000, width: 3000, height: 3000)],
                      settleDelay: Double = 0, timeout: Double = 2, killDelay: Double = 0.1,
-                     applicationVisibility: (any CaptureApplicationVisibility)? = nil) {
+                     applicationVisibility: (any CaptureApplicationVisibility)? = nil,
+                     selectionPicker: (any CaptureSelectionPicking)? = nil,
+                     countdown: (any CaptureCountdownPresenting)? = nil) {
         environment = CaptureEnvironment(executable: testHelper, arguments: arguments,
                                          temporaryRoot: temporaryRoot, testDisplays: displays,
                                          settleDelay: settleDelay,
                                          screenTimeout: timeout, killDelay: killDelay)
         self.applicationVisibility = applicationVisibility
+        self.selectionPicker = selectionPicker; self.countdown = countdown
+        nativeSelection = selectionPicker != nil; nativeCountdown = countdown != nil
         super.init()
     }
     #endif
@@ -539,12 +550,14 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         // Invalidate before tearing down delegates, sheets or processes; those
         // can cause late callbacks and must never complete a newer request.
         operationID = nil
+        cleaningUp = true
+        finishingResult = result
+        selectionPicker?.cancel()
+        countdown?.cancel()
         timeout?.cancel()
         timeout = nil
         delayedCapture?.cancel()
         delayedCapture = nil
-        cleaningUp = true
-        finishingResult = result
         let request = screenshot
         screenshot = nil
         if hidApplication {
@@ -696,20 +709,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
             screenshot = request
             let process = request.process
             process.executableURL = environment.executable
-            var arguments = ["-x", "-t", "png"]
-            switch mode {
-            case "fullscreen": arguments += ["-m"]
-            case "window": arguments += ["-i", "-w"]
-            case "frame": arguments += ["-R", rectangleArgument!]
-            default: arguments += ["-i", "-s"]
-            }
-            // Each argument is separate; no shell and no clipboard/default-file flags.
-            process.arguments = environment.arguments + arguments + [request.imageURL.path]
-            process.standardInput = FileHandle.nullDevice
-            process.standardOutput = FileHandle.nullDevice
-            // A file, rather than an undrained pipe, cannot deadlock on stderr.
-            process.standardError = request.diagnosticHandle
-            let interactive = mode == "crosshair" || mode == "window"
+            // Picker/timer teardown shares the same operation identity as the
+            // subprocess. Native selection occurs before the timed countdown.
             if let app = applicationVisibility, !includeApp, !app.isHidden {
                 hidApplication = true
                 wasActive = app.isActive
@@ -717,29 +718,90 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
                 app.hide()
             }
             armTimeout(delay + environment.screenTimeout, id: id, message: "Screen capture timed out.")
-            let launchDelay = delay + environment.settleDelay
-            delayedCapture = Task { [weak self, request] in
-                // Give WindowServer time to remove this app before the shot.
-                do { try await Task.sleep(nanoseconds: UInt64(launchDelay * 1_000_000_000)) }
+            if nativeSelection, mode == "crosshair" || mode == "window" {
+                if selectionPicker == nil { selectionPicker = OriginalCapturePicker() }
+                selectionPicker?.begin(windowOnly: mode == "window") { [weak self, request] result in
+                    guard let self, self.operationID == id else { return }
+                    switch result {
+                    case .failure(let error): self.finish(.failure(error), id: id)
+                    case .success(let selection):
+                        guard let region = self.screenRectangleArgument(selection.rect) else {
+                            self.finish(.failure(captureFailure(9, "The selected area is outside the attached displays.")), id: id)
+                            return
+                        }
+                        self.requestedFrame = selection.rect
+                        self.capturedFrame = selection.windowID == nil ? selection.rect.integral : nil
+                        var args = ["-x", "-t", "png"]
+                        if let window = selection.windowID { args += ["-l", String(window)] }
+                        else { args += ["-R", region] }
+                        let chosenDelay = OriginalCaptureTiming.selectedDelay(flags: selection.modifiers, explicitDelay: delay)
+                        if chosenDelay > 0 { args += ["-C"] }
+                        let top = NSScreen.screens.first?.frame.maxY ?? 0
+                        let rect = NSRect(x: selection.rect.minX, y: top - selection.rect.maxY,
+                                          width: selection.rect.width, height: selection.rect.height)
+                        self.prepareScreenshot(request, arguments: args, delay: chosenDelay, rect: rect, interactive: false, id: id)
+                    }
+                }
+            } else {
+                var args = ["-x", "-t", "png"]
+                switch mode {
+                case "fullscreen": args += ["-m"]
+                case "window": args += ["-i", "-w"]
+                case "frame": args += ["-R", rectangleArgument!]
+                default: args += ["-i"] // Crosshair also allows clicking a window.
+                }
+                if delay > 0, mode == "fullscreen" || mode == "frame" { args += ["-C"] }
+                let top = NSScreen.screens.first?.frame.maxY ?? 0
+                let rect: NSRect
+                if let frame = requestedFrame { rect = NSRect(x: frame.minX, y: top - frame.maxY, width: frame.width, height: frame.height) }
+                else { rect = NSScreen.screens.first?.frame ?? .zero }
+                prepareScreenshot(request, arguments: args, delay: delay, rect: rect,
+                                  interactive: mode == "crosshair" || mode == "window", id: id)
+            }
+        } catch {
+            finish(.failure(error), id: id)
+        }
+    }
+
+    private func prepareScreenshot(_ request: ScreenshotProcess, arguments: [String], delay: Double,
+                                   rect: NSRect, interactive: Bool, id: UUID) {
+        guard operationID == id else { return }
+        request.process.arguments = environment.arguments + arguments + [request.imageURL.path]
+        request.process.standardInput = FileHandle.nullDevice
+        request.process.standardOutput = FileHandle.nullDevice
+        request.process.standardError = request.diagnosticHandle
+        armTimeout(delay + environment.screenTimeout, id: id, message: "Screen capture timed out.")
+        let launch = { [weak self, request] in
+            guard let self, self.operationID == id else { return }
+            self.delayedCapture = Task { [weak self, request] in
+                do { try await Task.sleep(nanoseconds: UInt64((self?.environment.settleDelay ?? 0) * 1_000_000_000)) }
                 catch { return }
                 guard let self, self.operationID == id else { return }
                 do {
-                    try request.process.run()
-                    request.launched = true
+                    try request.process.run(); request.launched = true
                     request.monitor(interactive: interactive)
                     Task { @MainActor [weak self, request] in
                         let outcome = await request.exited()
                         guard let self, self.operationID == id else { return }
                         self.finish(self.decode(outcome.result, frame: self.capturedFrame), id: id)
                     }
-                }
-                catch {
-                    self.finish(.failure(error), id: id)
-                }
+                } catch { self.finish(.failure(error), id: id) }
             }
-        } catch {
-            finish(.failure(error), id: id)
         }
+        if delay > 0, nativeCountdown {
+            if countdown == nil { countdown = OriginalCaptureCountdown() }
+            countdown?.start(rect: rect, parent: nil, delay: delay, cue: { [weak self] in
+                guard let self, self.operationID == id else { return }
+                self.onSound?("pre-snap-countdown")
+            }, completion: launch)
+        } else if delay > 0 {
+            delayedCapture = Task { [weak self] in
+                do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+                catch { return }
+                guard let self, self.operationID == id else { return }
+                launch()
+            }
+        } else { launch() }
     }
 
     private func screenRectangleArgument(_ rect: NSRect) -> String? {

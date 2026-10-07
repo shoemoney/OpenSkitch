@@ -35,6 +35,9 @@ def suite(name, sources, test, define=None, arguments=()):
     return name
 
 suites = [
+    ("original-capture-timing-tests", ["OriginalCaptureTiming.swift"], "OriginalCaptureTimingTests.swift", "ORIGINAL_CAPTURE_TIMING_TESTS", ()),
+    ("original-capture-picker-tests", ["OriginalCapturePicker.swift"], "OriginalCapturePickerTests.swift", "ORIGINAL_CAPTURE_PICKER_TESTS", ()),
+    ("original-capture-countdown-tests", ["OriginalCaptureTiming.swift", "OriginalCaptureCountdown.swift"], "OriginalCaptureCountdownTests.swift", "ORIGINAL_CAPTURE_COUNTDOWN_TESTS", ()),
     ("original-hint-messages-tests", ["LegacySkitch.swift", "DocumentModel.swift", "OriginalHintMessages.swift"], "OriginalHintMessagesTests.swift", "ORIGINAL_HINT_MESSAGES_TESTS", ()),
     ("original-help-bevel-tests", ["OriginalHelpBevel.swift"], "OriginalHelpBevelTests.swift", "ORIGINAL_HELP_BEVEL_TESTS", ()),
     ("window-zoom-tests", ["WindowZoom.swift"], "WindowZoomTests.swift", "WINDOW_ZOOM_TESTS", ()),
@@ -60,7 +63,7 @@ suites = [
     ("hotkey-tests", ["GlobalHotkeys.swift"], "GlobalHotkeysTests.swift", "GLOBAL_HOTKEY_TESTS", ()),
     ("svg-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift", "SVGExport.swift"], "SVGExportTests.swift", "SVG_EXPORT_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
     ("skitch-file-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift", "SVGExport.swift", "SkitchFile.swift"], "SkitchFileTests.swift", "SKITCH_FILE_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
-    ("capture-tests", ["Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
+    ("capture-tests", ["OriginalCaptureTiming.swift", "OriginalCapturePicker.swift", "OriginalCaptureCountdown.swift", "Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
     ("photo-browser-tests", ["PhotoBrowser.swift"], "PhotoBrowserTests.swift", None, ()),
 ]
 with ThreadPoolExecutor(max_workers=len(suites)) as executor:

@@ -27,6 +27,7 @@ cp "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch.png" "$ROOT/o
 cp "$ROOT"/original/Skitch.app/Contents/Resources/docWin_*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchTitle.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider.png" "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider-indicator.png" "$APP/Contents/Resources/"
+cp "$ROOT"/original/Skitch.app/Contents/Resources/SkitchCount*.png "$APP/Contents/Resources/"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/*.m4a "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"

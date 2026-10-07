@@ -282,6 +282,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var frameMode = false
     var frameKeepsAnnotations = false
     var frameCaptureInProgress = false
+    var frameTimedSnap = false
     var activeFrameScreenSize: NSSize?
     var frameWindowWasOpaque = true
     var frameWindowBackground: NSColor?
@@ -300,6 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
         canvas.onSound = { [weak self] name in self?.playOriginalSound(name) }
+        capture.onSound = { [weak self] name in self?.playOriginalSound(name) }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
         canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection() }
         canvas.onViewportEditCancelled = { [weak self] in
@@ -327,7 +329,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
-            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.frameSnap() }, globalCamera: { [weak self] in self?.cameraSnap() })
+            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.cameraSnap() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
         writeLayoutEvidence()
         if CommandLine.arguments.contains("--smoke-test") {
@@ -647,7 +649,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let top = stack([toolbox, photos, beforeTitle, title, afterTitle, button("Save", #selector(saveHistory)), button("History", #selector(showHistory))], horizontal: true)
         beforeTitle.widthAnchor.constraint(equalTo: afterTitle.widthAnchor).isActive = true
         top.spacing = 8
-        snapButton = button("Snap", #selector(screenSnap)); snapButton.toolTip = "Crosshair snapshot; capture modes are in Toolbox and the Capture menu"
+        snapButton = button("Snap", #selector(snapButtonPressed)); snapButton.toolTip = "Crosshair snapshot; capture modes are in Toolbox and the Capture menu"
         frameButton = button("Frame", #selector(frameSnap))
         cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
         var sidebarViews: [NSView] = [label("Tools")]
@@ -805,7 +807,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             spelling.addItem(NSMenuItem(title: title, action: Selector(action), keyEquivalent: key))
         }
         let spellingItem = NSMenuItem(title: "Spelling", action: nil, keyEquivalent: ""); spellingItem.submenu = spelling; text.addItem(spellingItem)
-        let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
+        let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Cancel Snapshot", #selector(cancelSnapshot), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
         let drawing = menu("Drawing", items: [])
         let smoothing = menu("Pencil Smoothing", items: [])
         for mode in [StrokeSmoothing.precise, .medium, .loose] {
@@ -840,6 +842,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         preferencesForm?.synchronize(generalPreferences.state)
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(cancelSnapshot) { return !terminationStarted && capture.isCapturing }
         if menuItem.action == #selector(showPreferences) { return !terminationStarted && !frameCaptureInProgress && window?.attachedSheet == nil }
         if menuItem.action == #selector(changeArrowHead(_:)) {
             menuItem.state = ((canvas.arrowHeadPreference == 1) == (menuItem.tag == 1)) ? .on : .off
@@ -1546,12 +1549,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func screenSnap() {
         captureCrosshair(manualOption: NSApp.currentEvent?.modifierFlags.contains(.option) == true)
     }
+    @objc func snapButtonPressed() {
+        if frameMode {
+            frameTimedSnap = frameTimedSnap || NSApp.currentEvent?.modifierFlags.contains(.shift) == true
+            performFrameSnap(delay: frameTimedSnap ? OriginalCaptureTiming.originalDelay : 0)
+        }
+        else { screenSnap() }
+    }
+    @objc func cancelSnapshot() {
+        capture.cancelCapture { [weak self] result in
+            guard let self, !self.terminationStarted else { return }
+            self.updateStatus()
+            if case .failure(let error) = result { self.error(error) }
+        }
+    }
     func captureCrosshair(manualOption: Bool) {
-        if frameMode { performFrameSnap(); return }
         startCapture("crosshair", manualOption: manualOption)
     }
-    @objc func fullscreenSnap() { captureFullscreen(manualOption: NSApp.currentEvent?.modifierFlags.contains(.option) == true) }
-    func captureFullscreen(manualOption: Bool) { startCapture("fullscreen", manualOption: manualOption) }
+    @objc func fullscreenSnap() {
+        let flags = NSApp.currentEvent?.modifierFlags ?? []
+        captureFullscreen(manualOption: flags.contains(.option), delay: OriginalCaptureTiming.manualDelay(flags: flags))
+    }
+    func captureFullscreen(manualOption: Bool, delay: Double = 0) { startCapture("fullscreen", delay: delay, manualOption: manualOption) }
     @objc func windowSnap() { startCapture("window") }
     @objc func frameSnap() {
         enterFrame(keepingAnnotations: false)
@@ -1559,7 +1578,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func resnap() {
         enterFrame(keepingAnnotations: true)
     }
-    func enterFrame(keepingAnnotations: Bool) {
+    func enterFrame(keepingAnnotations: Bool, manualFlags: NSEvent.ModifierFlags? = nil) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
         activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
         canvas.commitPendingTextEditing()
@@ -1568,6 +1587,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             frameWindowBackground = window.backgroundColor
             frameScrollDrewBackground = canvas.enclosingScrollView?.drawsBackground ?? true
         }
+        frameTimedSnap = frameTimedSnap || (manualFlags ?? NSApp.currentEvent?.modifierFlags ?? []).contains(.shift)
         frameMode = true; frameKeepsAnnotations = keepingAnnotations
         window.isOpaque = false; window.backgroundColor = .clear
         window.titlebarAppearsTransparent = false
@@ -1593,7 +1613,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func leaveFrame() {
         guard frameMode else { return }
-        frameMode = false; frameKeepsAnnotations = false
+        frameMode = false; frameKeepsAnnotations = false; frameTimedSnap = false
         frameTitlebarBackdrop?.removeFromSuperview(); frameTitlebarBackdrop = nil
         canvas.framePreview = false
         (window.contentView as? FrameChromeView)?.showsCanvasHole = false
@@ -1603,7 +1623,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         snapButton.title = "Snap"; frameButton.isHidden = false; cancelFrameButton.isHidden = true
         updateStatus()
     }
-    func performFrameSnap() {
+    func performFrameSnap(delay: Double = 0) {
         guard !terminationStarted, frameMode, !frameCaptureInProgress else { return }
         if frameKeepsAnnotations, !canvasIsFullyVisible {
             status.stringValue = "Re-Snap needs the whole drawing visible. Reduce zoom or enlarge the window, then try again."
@@ -1617,7 +1637,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let keepingAnnotations = frameKeepsAnnotations
         let generation = documentGeneration, size = canvas.canvasSize, visibleRect = canvas.visibleRect, zoom = canvas.zoom
         frameCaptureInProgress = true
-        capture.capture(mode: "frame") { [weak self] result in
+        capture.capture(mode: "frame", delay: delay) { [weak self] result in
             guard let self else { return }
             self.frameCaptureInProgress = false
             guard self.documentGeneration == generation else { return }
@@ -1667,7 +1687,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func timedSnap() {
         let option = NSApp.currentEvent?.modifierFlags.contains(.option) == true
-        if let s = prompt("Timed Snapshot", text: "Delay in seconds", value: "5"), let d = Double(s), d >= 0, d <= 120 {
+        if let s = prompt("Timed Snapshot", text: "Delay in seconds", value: "6"), let d = Double(s), d >= 0, d <= 120 {
             startCapture("crosshair", delay: d, manualOption: option)
         }
     }

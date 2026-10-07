@@ -5,7 +5,8 @@ import Foundation
 import CoreFoundation
 
 // xcrun swiftc -swift-version 6 -D CAPTURE_TESTS -target arm64-apple-macosx13.0
-// Sources/Capture.swift tests/CaptureTests.swift -o /tmp/skitch-capture-tests
+// Sources/{Capture,OriginalCapturePicker,OriginalCaptureCountdown,OriginalCaptureTiming}.swift
+// tests/CaptureTests.swift -o /tmp/skitch-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
 // Pure checks use no screen/camera permissions, network or NSApplication.
 // --termination-probe runs a separate headless NSApplication with no windows.
@@ -34,6 +35,75 @@ private actor FakeCameraSession: CaptureSessionStopping {
         stopped = true
     }
     func state() -> (Bool, Bool, Int) { (stopping, stopped, calls) }
+}
+
+@MainActor
+private final class CapturePhaseJournal {
+    var events: [String] = []
+}
+
+/// Retain callbacks deliberately: tests can deliver a picker result after cancel
+/// or after a newer capture starts, without constructing native overlay windows.
+@MainActor
+private final class FakeCaptureSelectionPicker: CaptureSelectionPicking {
+    struct Request {
+        let windowOnly: Bool
+        let completion: (Result<OriginalCaptureSelection, Error>) -> Void
+    }
+    let journal: CapturePhaseJournal
+    var requests: [Request] = []
+    var cancellations = 0
+    var respondDuringCancel = false
+    var onCancel: (() -> Void)?
+    var cancellationCompleted = false
+    init(_ journal: CapturePhaseJournal) { self.journal = journal }
+    func begin(windowOnly: Bool, completion: @escaping (Result<OriginalCaptureSelection, Error>) -> Void) {
+        journal.events.append("selection")
+        requests.append(Request(windowOnly: windowOnly, completion: completion))
+    }
+    func cancel() {
+        cancellations += 1
+        cancellationCompleted = false
+        onCancel?()
+        if respondDuringCancel {
+            requests.last?.completion(.failure(NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError)))
+        }
+        cancellationCompleted = true
+    }
+}
+
+@MainActor
+private final class FakeCaptureCountdown: CaptureCountdownPresenting {
+    struct Request {
+        let rect: NSRect
+        let hasParent: Bool
+        let delay: Double
+        let cue: () -> Void
+        let completion: () -> Void
+    }
+    let journal: CapturePhaseJournal
+    var requests: [Request] = []
+    var cancellations = 0
+    var respondDuringCancel = false
+    var onCancel: (() -> Void)?
+    var cancellationCompleted = false
+    init(_ journal: CapturePhaseJournal) { self.journal = journal }
+    func start(rect: NSRect, parent: NSWindow?, delay: Double,
+               cue: @escaping () -> Void, completion: @escaping () -> Void) {
+        journal.events.append("countdown")
+        requests.append(Request(rect: rect, hasParent: parent != nil, delay: delay,
+                                cue: cue, completion: completion))
+    }
+    func cancel() {
+        cancellations += 1
+        cancellationCompleted = false
+        onCancel?()
+        if respondDuringCancel {
+            requests.last?.cue()
+            requests.last?.completion()
+        }
+        cancellationCompleted = true
+    }
 }
 
 @MainActor
@@ -260,6 +330,11 @@ private enum CaptureTests {
             try await queuedCancellation()
             try await queuedShutdown()
             try await delayedCancellation()
+            try await nativeSelectionAndTiming()
+            try await nativeSelectionFailures()
+            try await nativePhaseCancellation()
+            try await nativeCleanupReentrantStops()
+            try await nativeCountdownWithoutSelection()
             try await runningCancellation()
             try await lateExitShutdown()
             try await repeatedFrame()
@@ -325,7 +400,9 @@ private enum CaptureTests {
 
     static func make(_ behavior: String = "instant", timeout: Double = 10,
                      killDelay: Double = 0.15, missingExecutable: Bool = false,
-                     visibility: FakeApplicationVisibility? = nil) throws -> Rig {
+                     visibility: FakeApplicationVisibility? = nil,
+                     selectionPicker: (any CaptureSelectionPicking)? = nil,
+                     countdown: (any CaptureCountdownPresenting)? = nil) throws -> Rig {
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let temporary = directory.appendingPathComponent("captures", isDirectory: true)
         let marker = directory.appendingPathComponent("helper.json")
@@ -335,7 +412,7 @@ private enum CaptureTests {
         let coordinator = CaptureCoordinator(testHelper: helper,
             arguments: ["--capture-test-helper", behavior, marker.path, fixture.path],
             temporaryRoot: temporary, timeout: timeout, killDelay: killDelay,
-            applicationVisibility: visibility)
+            applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown)
         coordinators.append(coordinator)
         return Rig(coordinator: coordinator, directory: directory, temporary: temporary, marker: marker)
     }
@@ -433,6 +510,236 @@ private enum CaptureTests {
         try await pause(0.35)
         try expect(!FileManager.default.fileExists(atPath: rig.marker.path), "cancelled delay must never launch later")
         try expect(record.results.count == 1, "cancelled timers must not deliver late callbacks")
+    }
+
+    static func nativeSelectionAndTiming() async throws {
+        // Independent expected outcomes: selected Shift means six seconds;
+        // the caller's nonzero explicit delay takes priority over that modifier.
+        let cases: [(String, UInt32?, NSEvent.ModifierFlags, Double, Double, [String])] = [
+            ("crosshair", nil, [], 0, 0, ["-R", "-51,20,161,91"]),
+            ("crosshair", nil, [.shift], 0, 6, ["-R", "-51,20,161,91", "-C"]),
+            ("window", 412, [], 0, 0, ["-l", "412"]),
+            ("window", 412, [.shift], 0, 6, ["-l", "412", "-C"]),
+            ("crosshair", 731, [.shift], 0, 6, ["-l", "731", "-C"]),
+            ("crosshair", nil, [.shift], 2.5, 2.5, ["-R", "-51,20,161,91", "-C"]),
+            ("crosshair", nil, [], 2.5, 2.5, ["-R", "-51,20,161,91", "-C"]),
+            ("crosshair", nil, [.option, .control, .command], 0, 0, ["-R", "-51,20,161,91"])
+        ]
+        let region = NSRect(x: -50.25, y: 20.5, width: 160, height: 90)
+        for (mode, windowID, flags, explicit, expectedDelay, suffix) in cases {
+            let journal = CapturePhaseJournal()
+            let selection = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
+            let rig = try make(selectionPicker: selection, countdown: countdown)
+            let record = start(rig, mode: mode, delay: explicit)
+            try await wait { selection.requests.count == 1 }
+            try expect(journal.events == ["selection"] && countdown.requests.isEmpty,
+                       "selection must precede countdown even with an explicit delay")
+            try expect(!FileManager.default.fileExists(atPath: rig.marker.path), "selection cannot launch a capture helper")
+            try expect(selection.requests[0].windowOnly == (mode == "window"), "window mode must request window-only selection")
+            selection.requests[0].completion(.success(OriginalCaptureSelection(rect: region, windowID: windowID, modifiers: flags)))
+            if expectedDelay > 0 {
+                try expect(journal.events == ["selection", "countdown"] && countdown.requests.count == 1,
+                           "completed selection must enter precisely one native countdown")
+                try expect(countdown.requests[0].delay == expectedDelay, "completion Shift and explicit-delay precedence must be preserved")
+                try expect(!countdown.requests[0].hasParent, "screen countdown must not attach to a potentially hidden editor")
+                try expect(!FileManager.default.fileExists(atPath: rig.marker.path), "helper must wait for countdown completion")
+                countdown.requests[0].completion()
+            } else {
+                try expect(countdown.requests.isEmpty, "unmodified immediate selection must bypass countdown")
+            }
+            try await wait { record.results.count == 1 }
+            let args = try launch(rig)["arguments"] as! [String]
+            try expect(Array(args.dropLast()) == ["-x", "-t", "png"] + suffix,
+                       "selected window/region and timed cursor inclusion must reach the helper without interactive flags")
+            try expect(errorCode(record.results.first) == nil && record.allMain, "native selection must deliver one successful main callback")
+            let metadata = rig.coordinator.lastCaptureMetadata
+            try expect(metadata?.requestedFrameRect == region, "selected coordinates must survive into result metadata")
+            try expect(metadata?.capturedFrameRect == (windowID == nil ? region.integral : nil),
+                       "window capture must not claim a region's logical pixel extent")
+            try expect(directories(rig).isEmpty, "selected capture callback must follow temporary-file cleanup")
+            // A presenter retaining callbacks cannot replay a finished capture.
+            for request in countdown.requests { request.cue(); request.completion() }
+            selection.requests[0].completion(.success(OriginalCaptureSelection(rect: region, windowID: windowID, modifiers: [.shift])))
+            try await pause(0.03)
+            try expect(record.results.count == 1 && countdown.requests.count == (expectedDelay > 0 ? 1 : 0),
+                       "finished picker/countdown callbacks must not reopen or double-complete a capture")
+        }
+    }
+
+    static func nativeSelectionFailures() async throws {
+        for invalidGeometry in [false, true] {
+            let journal = CapturePhaseJournal()
+            let selection = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
+            let rig = try make(selectionPicker: selection, countdown: countdown)
+            let record = start(rig, mode: "crosshair", delay: 4)
+            try await wait { selection.requests.count == 1 }
+            if invalidGeometry {
+                selection.requests[0].completion(.success(OriginalCaptureSelection(rect: .zero, windowID: nil, modifiers: [.shift])))
+            } else {
+                selection.requests[0].completion(.failure(NSError(domain: "PickerFixture", code: 917)))
+            }
+            try await wait { record.results.count == 1 }
+            try expect(errorCode(record.results.first) == (invalidGeometry ? 9 : 917), "selection errors and invalid areas must preserve their distinct failure")
+            try expect(countdown.requests.isEmpty && !FileManager.default.fileExists(atPath: rig.marker.path),
+                       "failed selection must neither count down nor capture")
+            try expect(directories(rig).isEmpty && record.allMain, "failed selection must clean resources before main delivery")
+            selection.requests[0].completion(.success(OriginalCaptureSelection(rect: NSRect(x: 0, y: 0, width: 100, height: 80), windowID: nil, modifiers: [.shift])))
+            try await pause(0.03)
+            try expect(record.results.count == 1 && countdown.requests.isEmpty, "late success cannot revive a failed selection")
+        }
+    }
+
+    static func nativePhaseCancellation() async throws {
+        let region = NSRect(x: 25, y: 40, width: 160, height: 90)
+        for duringCountdown in [false, true] {
+            for shutdown in [false, true] {
+                let journal = CapturePhaseJournal()
+                let picker = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
+                picker.respondDuringCancel = true; countdown.respondDuringCancel = true
+                let rig = try make(selectionPicker: picker, countdown: countdown)
+                var sounds: [String] = []
+                rig.coordinator.onSound = { sounds.append($0) }
+                let record = start(rig, mode: "crosshair")
+                try await wait { picker.requests.count == 1 }
+                let oldSelection = picker.requests[0]
+                if duringCountdown {
+                    oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
+                    try expect(countdown.requests.count == 1 && countdown.requests[0].delay == 6, "selected Shift must enter a cancellable six-second countdown")
+                    countdown.requests[0].cue()
+                    try expect(sounds == ["pre-snap-countdown"], "active native countdown must route its original cue")
+                }
+                let oldCountdown = countdown.requests.first
+                try await stopped(rig, record, shutdown: shutdown)
+                try expect(picker.cancellations == 1 && countdown.cancellations == 1,
+                           "selection/countdown owners must be cancelled before acknowledgement")
+                let frozenSounds = sounds
+                oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: 987, modifiers: [.shift])))
+                oldCountdown?.cue(); oldCountdown?.completion()
+                try await pause(0.03)
+                try expect(sounds == frozenSounds && record.results.count == 1 && record.acknowledgements.count == 1,
+                           "synchronous teardown and late callbacks must not emit cues or complete twice")
+                try expect(!FileManager.default.fileExists(atPath: rig.marker.path), "stopped native phases must never launch a helper")
+                let resumed = start(rig, mode: "crosshair")
+                if shutdown {
+                    try await wait { resumed.results.count == 1 }
+                    try expect(errorCode(resumed.results.first) == 40 && picker.requests.count == 1,
+                               "shutdown must reject new selection without reopening UI")
+                } else {
+                    try await wait { picker.requests.count == 2 }
+                    oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
+                    oldCountdown?.cue(); oldCountdown?.completion()
+                    try expect(countdown.requests.count == (duringCountdown ? 1 : 0) && sounds == frozenSounds,
+                               "old operation callbacks must not modify a newer selection")
+                    picker.requests[1].completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
+                    let fresh = countdown.requests.last!
+                    fresh.cue()
+                    try expect(sounds == frozenSounds + ["pre-snap-countdown"], "a fresh capture must still receive its own countdown cue")
+                    fresh.completion()
+                    try await wait { resumed.results.count == 1 }
+                    try expect(errorCode(resumed.results.first) == nil && resumed.allMain, "cancelled native flow must remain reusable")
+                    let completedSounds = sounds
+                    fresh.cue(); fresh.completion()
+                    try await pause(0.03)
+                    try expect(sounds == completedSounds && resumed.results.count == 1, "finished countdown cues and completions must be ignored")
+                }
+                let repeated = CaptureRecord()
+                rig.coordinator.cancelCapture(completion: repeated.acknowledged)
+                try await wait { repeated.acknowledgements.count == 1 }
+                try expect(succeeded(repeated.acknowledgements.first) && record.results.count == 1,
+                           "repeated cancellation must acknowledge without redelivering the original capture")
+            }
+        }
+        try expect(NSApp == nil, "native-phase mocks must never construct NSApplication or real picker/countdown UI")
+    }
+
+    static func nativeCleanupReentrantStops() async throws {
+        let region = NSRect(x: 25, y: 40, width: 160, height: 90)
+        for duringCountdown in [false, true] {
+            for nestedShutdown in [false, true] {
+                let journal = CapturePhaseJournal()
+                let picker = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
+                picker.respondDuringCancel = true; countdown.respondDuringCancel = true
+                let rig = try make(selectionPicker: picker, countdown: countdown)
+                var sounds: [String] = []
+                rig.coordinator.onSound = { sounds.append($0) }
+                let record = start(rig, mode: "crosshair")
+                try await wait { picker.requests.count == 1 && directories(rig).count == 1 }
+                let ownedDirectory = directories(rig)[0]
+                let selection = picker.requests[0]
+                if duringCountdown {
+                    selection.completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
+                    try expect(countdown.requests.count == 1, "reentrant countdown fixture must reach its active presenter")
+                }
+                let countdownRequest = countdown.requests.first
+                var hookCalls = 0
+                var hookSawOwnedResources = false
+                var nestedAckWasDeferred = false
+                var outerAckSawCleanup = false
+                var nestedAckSawCleanup = false
+                let nested = CaptureRecord()
+                let cleanupFinished = {
+                    Thread.isMainThread && picker.cancellationCompleted && countdown.cancellationCompleted &&
+                    directories(rig).isEmpty && !FileManager.default.fileExists(atPath: ownedDirectory.path) &&
+                    record.results.count == 1 && cancellation(record.results.first)
+                }
+                let hook = {
+                    hookCalls += 1
+                    // Make the external callback one-shot without relying on the
+                    // coordinator to prevent recursive owner cancellation.
+                    picker.onCancel = nil; countdown.onCancel = nil
+                    hookSawOwnedResources = FileManager.default.fileExists(atPath: ownedDirectory.path) && record.results.isEmpty
+                    let acknowledge: (Result<Void, Error>) -> Void = { result in
+                        nestedAckSawCleanup = cleanupFinished()
+                        nested.acknowledged(result)
+                    }
+                    if nestedShutdown { rig.coordinator.shutdown(completion: acknowledge) }
+                    else { rig.coordinator.cancelCapture(completion: acknowledge) }
+                    nestedAckWasDeferred = nested.acknowledgements.isEmpty
+                }
+                if duringCountdown { countdown.onCancel = hook }
+                else { picker.onCancel = hook }
+                rig.coordinator.cancelCapture { result in
+                    outerAckSawCleanup = cleanupFinished()
+                    record.acknowledged(result)
+                }
+                try await wait { record.acknowledgements.count == 1 && nested.acknowledgements.count == 1 }
+                try expect(hookCalls == 1 && hookSawOwnedResources, "cancel hook must reenter while actual owned resources still await cleanup")
+                try expect(nestedAckWasDeferred, "a reentrant stop must not acknowledge inside external owner cancellation")
+                try expect(outerAckSawCleanup && nestedAckSawCleanup, "both stop acknowledgements must observe completed owners, removed files, and capture delivery")
+                try expect(succeeded(record.acknowledgements.first) && succeeded(nested.acknowledgements.first), "reentrant cancellation/shutdown must acknowledge clean teardown")
+                try expect(picker.cancellations == 1 && countdown.cancellations == 1, "reentrant stop must not cancel either owner twice")
+                try expect(record.results.count == 1 && record.allMain && nested.allMain, "reentrant teardown must deliver one main-thread cancellation")
+                selection.completion(.success(OriginalCaptureSelection(rect: region, windowID: 987, modifiers: [.shift])))
+                countdownRequest?.cue(); countdownRequest?.completion()
+                try await pause(0.03)
+                try expect(record.results.count == 1 && record.acknowledgements.count == 1 && nested.acknowledgements.count == 1,
+                           "stale callbacks after reentrant teardown must not redeliver capture or acknowledgements")
+                try expect(sounds.isEmpty && !FileManager.default.fileExists(atPath: rig.marker.path) && directories(rig).isEmpty,
+                           "reentrant native teardown must leave no files, helper launch, or cancellation/stale countdown cues")
+            }
+        }
+        try expect(NSApp == nil, "reentrant cleanup fixtures must not construct native windows or NSApplication")
+    }
+
+    static func nativeCountdownWithoutSelection() async throws {
+        for mode in ["fullscreen", "frame"] {
+            let journal = CapturePhaseJournal()
+            let picker = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
+            let rig = try make(selectionPicker: picker, countdown: countdown)
+            rig.coordinator.frameRect = NSRect(x: -50, y: 20, width: 160, height: 90)
+            let record = start(rig, mode: mode, delay: 1.25)
+            try await wait { countdown.requests.count == 1 }
+            try expect(picker.requests.isEmpty && journal.events == ["countdown"], "fullscreen/frame must bypass selection and use native countdown directly")
+            try expect(countdown.requests[0].delay == 1.25 && !FileManager.default.fileExists(atPath: rig.marker.path),
+                       "fullscreen/frame explicit delay must wait for the presenter")
+            countdown.requests[0].completion()
+            try await wait { record.results.count == 1 }
+            let args = try launch(rig)["arguments"] as! [String]
+            let expected = mode == "fullscreen" ? ["-m", "-C"] : ["-R", "-50,20,160,90", "-C"]
+            try expect(Array(args.dropLast()) == ["-x", "-t", "png"] + expected, "timed fullscreen/frame must retain its mode and include the cursor")
+            try expect(errorCode(record.results.first) == nil && record.results.count == 1 && record.allMain,
+                       "native fullscreen/frame countdown must deliver exactly one successful main result")
+        }
     }
 
     static func runningCancellation() async throws {
