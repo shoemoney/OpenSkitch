@@ -2837,13 +2837,108 @@ enum AppSafetyTests {
                            "Accepted Page Setup must retain the chosen settings without changing the prior object")
                 try expect(baseline.orientation == .portrait && baseline.leftMargin == 37, "Page Setup edits a copy")
             }),
+            ("Recovered palette keeps original tags and translucent values", {
+                let presets = OriginalDrawingControls.presets
+                try expect(presets.map(\.tag) == Array(100...109), "Original palette tag order")
+                try expect(presets.map(\.name) == ["Red","Yellow","Blue","Pink","Translucent gray","Orange","Green","White","Black","Highlighter"], "Original palette names")
+                let red = presets[0].swatchColor.usingColorSpace(.genericRGB)!
+                let blue = presets[2].swatchColor.usingColorSpace(.genericRGB)!
+                try expect(abs(red.redComponent-1) < 0.001 && red.greenComponent < 0.001 && red.blueComponent < 0.001,
+                           "Original red is full calibrated red, independent of system accent/theme")
+                try expect(abs(blue.redComponent-25/255.0) < 0.001 && abs(blue.greenComponent-119/255.0) < 0.001 && abs(blue.blueComponent-1) < 0.001,
+                           "Original blue keeps its calibrated RGB components")
+                try expect(abs(presets[4].color.alphaComponent-0.43) < 0.00001 && abs(presets[9].color.alphaComponent-0.35) < 0.00001,
+                           "Original translucent gray and yellow highlighter retain separate alphas")
+                for preset in presets {
+                    let raw = SketchColor(preset.color)
+                    try expect([raw.red,raw.green,raw.blue,raw.alpha] == preset.bits.map { CGFloat(Float(bitPattern: $0)) },
+                               "Stored drawing values must retain the exact original float table instead of converting calibrated swatch colors")
+                }
+            }),
+            ("Recovered Size uses five original steps, Shift continuity and brush font mapping", {
+                try expect(OriginalDrawingControls.sizeSteps == [1.5,4.125,6.75,9.375,12], "Original five step values")
+                let slider = BezelSizeSlider(frame: NSRect(x: 0, y: 0, width: 40, height: 82))
+                slider.setValueForPoint(NSPoint(x: 20, y: 16), modifiers: [])
+                try expect(slider.doubleValue == 9.375, "Original ordinary point mapping")
+                slider.setValueForPoint(NSPoint(x: 20, y: 10), modifiers: [.shift])
+                try expect(slider.doubleValue == 10.359375, "Shift keeps intermediate values")
+                slider.setValueForPoint(NSPoint(x: 20, y: -100), modifiers: [.shift]); try expect(slider.doubleValue == 12, "Top clamps to original maximum")
+                slider.setValueForPoint(NSPoint(x: 20, y: 100), modifiers: []); try expect(slider.doubleValue == 1.5, "Bottom clamps to original minimum")
+                slider.setValueForPoint(NSPoint(x: 20, y: CGFloat.nan), modifiers: []); try expect(slider.doubleValue == 1.5, "Nonfinite input is ignored")
+                try expect(abs(OriginalDrawingControls.originalFontSize(1.5)-10) < 0.001 && abs(OriginalDrawingControls.originalFontSize(12)-64) < 0.001,
+                           "Recovered polynomial endpoints")
+                try expect(OriginalDrawingControls.readableFontSize(1.5) == 18, "Explicit readability floor retains18 points")
+                try expect(slider.accessibilityRole() == .slider && slider.accessibilityPerformIncrement() && slider.doubleValue == 4.125,
+                           "Keyboard/assistive stepping exposes a real slider")
+            }),
+            ("Palette recolor preserves mixed annotation style and pending typing", {
+                let fixture = try Fixture(), app = fixture.app
+                var shape = SketchElement(kind: .rectangle); shape.strokeWidth = 19; shape.filled = true; shape.shadowed = false
+                app.canvas.document.elements = [shape]; app.canvas.selection = [shape.id]
+                app.applyChosenColor(OriginalDrawingControls.presets[2].color, modifiers: [])
+                var expected = shape; expected.color = SketchColor(OriginalDrawingControls.presets[2].color)
+                try expect(app.canvas.document.elements == [expected], "Color must preserve stroke, fill, shadow and geometry")
+                app.undo(); try expect(app.canvas.document.elements == [shape], "Color Undo restores the exact mixed style")
+                let text = try editor(app, text: "Palette pending text"), caret = text.selectedRange()
+                app.applyChosenColor(OriginalDrawingControls.presets[9].color, modifiers: [])
+                try expect(text.superview === app.canvas && text.string == "Palette pending text" && text.selectedRange() == caret,
+                           "Color keeps pending typing and caret")
+                let raw = try app.canvas.snapshotDocumentData(), document = try CanvasView.validatedDocumentData(raw)
+                let encoded = try SkitchFile(document: document, metadata: app.legacyMetadata, canvasData: raw).encoded()
+                let snapshot = try SkitchFile.decode(encoded).document
+                try expect(snapshot.elements.last?.color == SketchColor(OriginalDrawingControls.presets[9].color), "Pending highlighter alpha reaches native save snapshot")
+                app.canvas.commitPendingTextEditing(); app.undo()
+                try expect(app.canvas.document.elements == [shape], "One text transaction removes typing plus its staged color")
+            }),
+            ("Size changes selected text and future brush while preserving paths and groups Undo", {
+                let fixture = try Fixture(), app = fixture.app
+                var text = SketchElement(kind: .text); text.text = "Size proof"; text.fontName = "Courier"; text.fontSize = 26; text.outlined = false; text.shadowed = false
+                var shape = SketchElement(kind: .rectangle); shape.strokeWidth = 19; shape.filled = true
+                app.canvas.document.elements = [text,shape]; app.canvas.selection = [text.id,shape.id]
+                app.canvas.editingUndoManager.removeAllActions()
+                try expect(app.widthControl.onBegin?() == true, "Native size gesture starts one undo group")
+                for size in [4.125,6.75,9.375,12.0] { app.widthControl.doubleValue = size; app.changeWidth(app.widthControl) }
+                app.endDrawingSizeGesture()
+                let edited = app.canvas.document
+                try expect(edited.elements[0].fontSize == 64 && edited.elements[0].fontName == "Courier" && !edited.elements[0].outlined && !edited.elements[0].shadowed,
+                           "Brush mapping changes only text size, preserving original mixed font and effects")
+                try expect(edited.elements[1] == shape && app.canvas.strokeWidth == 12, "Original Size updates future brush without rewriting selected paths")
+                app.undo(); try expect(app.canvas.document.elements == [text,shape] && !app.canvas.editingUndoManager.canUndo, "Continuous size updates have one document Undo")
+                app.redo(); try expect(app.canvas.document == edited, "Size Redo restores final text size")
+                let pending = try editor(app, text: "Size pending")
+                app.widthControl.performValueChange(9.375, continuous: false)
+                try expect(pending.superview === app.canvas && pending.string == "Size pending" && !app.sizeUndoGrouping,
+                           "Size preserves the native pending editor and closes its gesture group")
+                let location = app.widthControl.convert(NSPoint(x: 20, y: 16), to: nil)
+                let event = NSEvent.mouseEvent(with: .leftMouseDown, location: location, modifierFlags: [], timestamp: 0,
+                                              windowNumber: app.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1)!
+                app.widthControl.mouseDown(with: event); app.widthControl.mouseUp(with: event)
+                try expect(app.window.firstResponder === pending && pending.superview === app.canvas && !app.sizeUndoGrouping,
+                           "Actual slider mouse handling keeps pending annotation focus, not only its staged model")
+                app.canvas.document.renderSize = NSSize(width: 200, height: 150)
+                app.widthControl.performValueChange(12, continuous: false)
+                try expect(app.canvas.fontSize == 256 && pending.font?.pointSize == 64,
+                           "Quarter-size output needs256 logical points for64-point displayed text")
+                app.canvas.zoom = 2
+                app.widthControl.performValueChange(9.375, continuous: false)
+                app.widthControl.performValueChange(12, continuous: false)
+                try expect(app.canvas.fontSize == 256 && pending.font?.pointSize == 128,
+                           "Recovered document font scale excludes editor zoom")
+                let resized = try CanvasView.validatedDocumentData(app.canvas.snapshotDocumentData())
+                try expect(resized.elements.last?.fontSize == 256,
+                           "Pending scaled text stores its logical size in the native document")
+                try expect(OriginalDrawingControls.readableFontSize(12, displayFontScale: .nan) == 64 &&
+                           OriginalDrawingControls.readableFontSize(12, displayFontScale: 0.00001) == 4096 &&
+                           OriginalDrawingControls.readableFontSize(1.5, displayFontScale: 10) == 18,
+                           "Invalid and extreme scales retain valid document font bounds")
+            }),
             ("Recovered bezel keeps readable reachable controls and existing menu actions at default and minimum sizes", {
                 let fixture = try Fixture(), app = fixture.app
                 guard let content = app.window.contentView else { throw Failure(description: "Bezel content") }
                 var controls: [NSControl] = []
                 func collect(_ view: NSView) {
                     guard view !== app.canvas else { return }
-                    if let control = view as? NSControl, control is NSButton || control is NSTextField { controls.append(control) }
+                    if let control = view as? NSControl, control is NSButton || control is NSTextField || control is BezelSizeSlider { controls.append(control) }
                     for child in view.subviews { collect(child) }
                 }
                 collect(content)

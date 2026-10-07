@@ -296,15 +296,18 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var textEditorGrip: SketchTextGrip?
     private var textEditorOffset: CGPoint = .zero
     private struct PendingTextStyle: Equatable {
+        var color: SketchColor
         var fontName: String
         var fontSize: CGFloat
         var outlined: Bool
         var shadowed: Bool
         init(_ element: SketchElement) {
+            color = element.color
             fontName = element.fontName; fontSize = element.fontSize
             outlined = element.outlined; shadowed = element.shadowed
         }
         func apply(to element: inout SketchElement) {
+            element.color = color
             element.fontName = fontName; element.fontSize = fontSize
             element.outlined = outlined; element.shadowed = shadowed
         }
@@ -689,6 +692,31 @@ final class CanvasView: NSView, NSTextViewDelegate {
                     document.elements[index].fontName = fontName
                     document.elements[index].fontSize = fontSize.isFinite ? min(4096, max(18, fontSize)) : 24
                     document.elements[index].outlined = outlined
+                }
+            }
+        }
+    }
+    /// A color choice changes only color, preserving mixed stroke/font/effects.
+    /// Pending typing and selected text colors stay in the existing text edit.
+    func applyColorToSelection(_ color: NSColor) {
+        let chosen = SketchColor(color)
+        if let editor = textEditor {
+            let caret = editor.selectedRange()
+            for element in selectedTextElements {
+                var style = PendingTextStyle(element); style.color = chosen
+                pendingTextStyles[element.id] = style
+            }
+            mutateDocument {
+                for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind != .raster && document.elements[index].kind != .text {
+                    document.elements[index].color = chosen
+                }
+            }
+            updateCanvasSize(); editor.setSelectedRange(caret)
+            onTextStyleContextChange?(); onChange?()
+        } else {
+            edit("Change Color") {
+                for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind != .raster {
+                    document.elements[index].color = chosen
                 }
             }
         }

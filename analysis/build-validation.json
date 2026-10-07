@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-10-07T19:02:18.742516+00:00",
-  "checkpoint_id": "bezel-b2e2c8173d",
+  "verified_at": "2026-10-07T19:59:46.361542+00:00",
+  "checkpoint_id": "drawing-controls-26ce14c994",
   "checkpoint_state": "current_build_suites_startup_and_listed_desktop_checks_verified",
   "build": {
     "architectures": [
@@ -8,11 +8,12 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.tPUXO2",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.u0R6KU",
     "source_sha256": {
-      "App.swift": "362071bb0ef05ec4df8d3e66741b356c58f69fa4803cabd6db1962ae5a7932a0",
+      "App.swift": "fe51d61e5c6cb9911aaa2783843b8be91c3d960f730e626ae726abc95e58fe65",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
-      "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
+      "BezelDrawingControls.swift": "3cfc5efd7660a566b5488f082a57bc18c7848d43b771e37a2a4e5200630dfa17",
+      "Canvas.swift": "135e1d62588b43f47531f06dd8a180493c26010a07aa9938dcc4a69890813420",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -78,25 +79,27 @@
       "docWin_TopRight.png": "5c7da7e2f7a0815be8a2bd831bd3b0acf7946e13df67a765ddd22f5145ecd598",
       "docWin_TopRightBlank.png": "1387c18a861695a3706205fa4d7ad8d4ccee2117ad3cf005361728b976d1ca25",
       "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
-      "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52"
+      "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52",
+      "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
+      "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac"
+    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "5ed4093321bbd0b47e06be67a36a1e39ce15b772640574beba7eb320a9afcf50",
+  "build_manifest_sha256": "477e04e851b103c50535cf282ed88563f1ab9e019baa34f312c9d33919590daf",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/bezel-verification/build.log",
-  "build_log_sha256": "eb1ae9e0f6014c264b90e32747f98cd04f59ebb55cc8f502330791d8c79f36c1",
+  "build_log_path": "build/drawing-controls-verification/build.log",
+  "build_log_sha256": "9d002ac355cdb2d59d4adf93ab2f621b58d003967b68c4efbdf73b4e52e942c0",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.y51vhldo",
-      "log_path": "build/bezel-verification/arm64.log",
-      "log_sha256": "7054fc4b02891c46a41ba34ca0829e11dffbc40d2e146fb3ace7e270b8294c3e",
-      "checks": 2533,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.b9oc7sx5",
+      "log_path": "build/drawing-controls-verification/arm64.log",
+      "log_sha256": "1a9ac6b83b5875018324446afad4ce6b5d094ba31947ab26485a41163a4cdf6d",
+      "checks": 2537,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -104,27 +107,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.wmr134op",
-      "log_path": "build/bezel-verification/x86_64.log",
-      "log_sha256": "9aa0c688bd4e9256d815f25572da859e501915c862297708eafa68d33b19beec",
-      "checks": 2533,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.yobcoxw9",
+      "log_path": "build/drawing-controls-verification/x86_64.log",
+      "log_sha256": "8bf4deea76829921fcad73c0b22c71f7249e315f3b475851ec9d95c5af2cd68a",
+      "checks": 2537,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/bezel-verification/results.json",
-  "full_suite_results_sha256": "8a320fb42398e6441e91a2e93a59e2733bcfc6d6e34562665d075d71c74d4507",
+  "full_suite_results_path": "build/drawing-controls-verification/results.json",
+  "full_suite_results_sha256": "fc5b4456acac7ab3c125967fcbb2834df5a3bde2ab2ba3e0b9e3f4e5a34c394c",
   "native_startup_smoke": {
-    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac",
-    "verified_at": "2026-10-07T18:39:32.867697+00:00",
+    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d",
+    "verified_at": "2026-10-07T19:51:57.804636+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "b924e358862e123535b4df9f6eeae2bcc64d15d2838bcfa16ea255f3e528474d"
+      "editable_sha256": "1fdeacc7783ca39b07354d3639456ddb773fd3377825d95a9d61b625953858c2"
     },
     "x86_64": {
       "passed": true,
@@ -132,55 +135,55 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "61c33e9ac0314f9feca48f6e3ae53d25ba58d3bcfae40ba4d6a179bad85df70a"
+      "editable_sha256": "ab01392a17df99bce3e2fa4912fca8ba91a48b82e3409f387e02178a2633adff"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-b2e2c8173d/results.json",
-  "native_startup_smoke_results_sha256": "dd83f99a9d944a19a829a89977549af17d52b1e791525f542957f387aad1b4ff",
+  "native_startup_smoke_results_path": "build/startup-smoke-26ce14c994/results.json",
+  "native_startup_smoke_results_sha256": "e1b10c856491ab3f92e8c2f8d9bda1569156d9eb529379e5edbaa3c7578f4c21",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
-    "tools/build.sh": "75ec01dc99326b2bd4cf30d595cabe0584dbdccf7137bfd8b93648d4ac8f5d1f",
+    "tools/build.sh": "6d0136cd6131d3fe0c742b44abcb1e1a4a483a8efec98aafd290ba7fabfff7ae",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
     "tools/test-app-safety.sh": "cc42833b8183e663ebcbeb970874ea70482a4e46538efefd5bc7703885ca2b17"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2533,
+    "checks_per_architecture": 2537,
     "suites": 24,
-    "results_path": "build/bezel-verification/results.json",
-    "results_sha256": "8a320fb42398e6441e91a2e93a59e2733bcfc6d6e34562665d075d71c74d4507"
+    "results_path": "build/drawing-controls-verification/results.json",
+    "results_sha256": "fc5b4456acac7ab3c125967fcbb2834df5a3bde2ab2ba3e0b9e3f4e5a34c394c"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac",
-    "startup_log_path": "build/bezel-verification/startup.log",
-    "startup_log_sha256": "4855424c2307d064868b5cda4d22f13e4a6b70a5d2fcb50a1a38ac42d2c7771d"
+    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d",
+    "startup_log_path": "build/drawing-controls-verification/startup.log",
+    "startup_log_sha256": "4a9f26ed86fc403668fbabc3644d4fece39fd2779a015a2a417e20d687a48f9e"
   },
   "current_desktop_checks": [
     {
-      "id": "default_bezel_layout",
+      "id": "compact_layout",
       "result": "passed",
-      "scope": "Live native default-size screenshot reviewed: both control rails top aligned, original frame surrounds canvas without crossing controls, footer controls visible. Read-only layout metrics show owned control fonts >=18 points and positive unclipped frames. Metrics were written at startup before opening the drawing; they do not establish dynamic minimum-size desktop behavior."
+      "scope": "Default1024x772 and native900x640 minimum window screenshots reviewed. Read-only metrics after a drawing-control action confirm owned readable controls >=18 points, positive frames, and no clipping. The immediate minimum-layout file is a stale startup metric snapshot; minimum-after-control-layout is the current minimum measurement."
     },
     {
-      "id": "toolbox_open_drawing",
+      "id": "palette_selection",
       "result": "passed",
-      "scope": "Native Toolbox > File > Open opened the existing Close-Hide proof through the actual Open dialog; editable paths and text visibly rendered."
+      "scope": "Native Color popover exposes ten named original swatches plus Custom color. Blue selected with exact original raw RGB; highlighter selected with0.35 alpha and the active text editor retained. Custom entry applied its retained cyan; native system panel alpha editing was not completed."
     },
     {
-      "id": "undo_temporary_arrow",
+      "id": "resized_pending_text_size",
       "result": "passed",
-      "scope": "A window-size test drag landed on the canvas and created a temporary arrow. The right-rail Undo removed the arrow, verified in the live screenshot. Unsaved status persisted after undo; no clean-state restoration claim."
+      "scope": "Native Resize changed800x600 source output to200x150. Actual Size slider click selected12: recorded logical font256, visible displayed text enlarged, typing ! continued in the same editor, final Undo group closed. Very large text wraps in the existing narrow annotation box; automatic box-width adjustment is not claimed."
     },
     {
-      "id": "drag_format_switch",
+      "id": "continuous_keyboard_size",
       "result": "passed",
-      "scope": "Native footer format menu selected JPEG80%; accessibility value and screenshot changed. Returned to PNG; output details settled from46KB PNG to21KB JPEG and back to46KB PNG. Does not establish delivery to Finder or another app."
+      "scope": "With Size focused, Shift+Down changed6.75 to6.85; Shift+Up restored6.75. Actual native intermediate size recorded. Shift mouse drag remains internal-test evidence only."
     },
     {
-      "id": "separate_native_save_as",
+      "id": "native_save_and_undo_redo",
       "result": "passed",
-      "scope": "Native Save As wrote Bezel-proof-b2e2c8173d.skitch and visibly reported the saved filename. Saved XML retains prior proof text. Earlier proof file hash unchanged."
+      "scope": "Separate native Save As wrote the proof file with Size!, exact blue RGBA and logical font72 at Size6.75/output scale0.25. Right-rail Undo removed the complete text transaction; native Edit > Redo restored it visibly. Save-to-History was clicked afterward; no remote publishing occurred."
     }
   ],
   "historical_validations": [
@@ -736,6 +739,40 @@
         "Cmd-M menu route hides the editor; Finder reopen retains the saved drawing and frame."
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "bezel-b2e2c8173d",
+      "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac",
+      "full_suite_results_path": "build/bezel-verification/results.json",
+      "full_suite_results_sha256": "8a320fb42398e6441e91a2e93a59e2733bcfc6d6e34562665d075d71c74d4507",
+      "desktop_checks": [
+        {
+          "id": "default_bezel_layout",
+          "result": "passed",
+          "scope": "Live native default-size screenshot reviewed: both control rails top aligned, original frame surrounds canvas without crossing controls, footer controls visible. Read-only layout metrics show owned control fonts >=18 points and positive unclipped frames. Metrics were written at startup before opening the drawing; they do not establish dynamic minimum-size desktop behavior."
+        },
+        {
+          "id": "toolbox_open_drawing",
+          "result": "passed",
+          "scope": "Native Toolbox > File > Open opened the existing Close-Hide proof through the actual Open dialog; editable paths and text visibly rendered."
+        },
+        {
+          "id": "undo_temporary_arrow",
+          "result": "passed",
+          "scope": "A window-size test drag landed on the canvas and created a temporary arrow. The right-rail Undo removed the arrow, verified in the live screenshot. Unsaved status persisted after undo; no clean-state restoration claim."
+        },
+        {
+          "id": "drag_format_switch",
+          "result": "passed",
+          "scope": "Native footer format menu selected JPEG80%; accessibility value and screenshot changed. Returned to PNG; output details settled from46KB PNG to21KB JPEG and back to46KB PNG. Does not establish delivery to Finder or another app."
+        },
+        {
+          "id": "separate_native_save_as",
+          "result": "passed",
+          "scope": "Native Save As wrote Bezel-proof-b2e2c8173d.skitch and visibly reported the saved filename. Saved XML retains prior proof text. Earlier proof file hash unchanged."
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -788,9 +825,9 @@
     "Recovered corner curves, editor15/15 and drag25/15-frame sequences and20ms timers are implemented in default/tracking/modal modes. Native Close/Hide/menu-Minimize endpoints and pending-editor continuity were checked on the earlier Close/Hide binary only and have not been repeated on this compact-bezel binary; intermediate animation pixels, original CGS2x2 mesh interpolation, shadow/titlebar texture, restoration origin and original runtime equivalence remain unverified.",
     "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
     "Previous-app focus, menu-icon click, physical yellow Minimize button, Dock-only/menu-only desktop presence, status-only Dock suppression and preference UI remain unverified or incomplete.",
-    "Complete Fonts native workflow, remaining original control clusters/swatches/size slider/tabs and full original runtime parity remain unverified.",
-    "Current compact-bezel desktop minimum-size resizing remains unverified: attempted native gestures did not change the window size; controlled default/minimum AppKit layout tests are separate evidence."
+    "Complete Fonts native workflow, remaining original tool-specific clusters, hover palette and preference tabs and full original runtime parity remain unverified.",
+    "Native minimum900x640 window layout was reached through the Resize workflow on the current binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified."
   ],
-  "current_desktop_proof_path": "build/bezel-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "f2d898041e6bd4dc39cd561f352d4007413f9b8ffc7a8061a881b95849799982"
+  "current_desktop_proof_path": "build/drawing-controls-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "844fd7bc4e6288f3274364203bfef3c8fd3156f842a4f6b98e03b4d98b4aaa18"
 }

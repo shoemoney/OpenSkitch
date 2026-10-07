@@ -194,7 +194,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let nameField = NSTextField(string: "Untitled")
     let status = NSTextField(labelWithString: "")
     let colorWell = NSColorWell()
-    let widthControl = NSPopUpButton(frame: .zero, pullsDown: false)
+    let widthControl = BezelSizeSlider(frame: .zero)
+    let sizeLabel = NSTextField(labelWithString: "Size · 6.75")
+    let paletteButton = NSButton(title: "Color…", target: nil, action: nil)
+    var colorPopover: NSPopover?
+    var presetColorButtons: [BezelColorButton] = []
+    var sizeUndoGrouping = false
+    var customDrawingColor = NSColor(calibratedRed: 0, green: 1, blue: 1, alpha: 1)
     let zoomControl = NSPopUpButton(frame: .zero, pullsDown: false)
     let dragFormatControl = NSPopUpButton(frame: .zero, pullsDown: false)
     let dragOriginalControl = NSButton(checkboxWithTitle: "Export at original size", target: nil, action: nil)
@@ -296,7 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self.updateToolButtons(tool)
             self.updateStatus()
         }
-        canvas.onColorChange = { [weak self] color in self?.colorWell.color = color }
+        canvas.onColorChange = { [weak self] color in self?.colorWell.color = color; self?.syncDrawingControls() }
         try? FileManager.default.createDirectory(at: support.appendingPathComponent("History"), withIntermediateDirectories: true)
         let nativeRecovery = support.appendingPathComponent("Recovery.skitch")
         let recovery = FileManager.default.fileExists(atPath: nativeRecovery.path) ? nativeRecovery : support.appendingPathComponent("Recovery.skitchredux")
@@ -320,6 +326,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationStarted { return shutdownPending.isEmpty ? .terminateNow : .terminateLater }
+        widthControl.endTracking(); colorPopover?.performClose(nil)
         if windowZoom != nil { makeVisible() }
         saveRecovery()
         guard allowDiscard(discardingForTermination: true) else { return .terminateCancel }
@@ -378,6 +385,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleVisible() {
         guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
+        widthControl.endTracking(); colorPopover?.performClose(nil)
         if windowZoom != nil { makeVisible(); return }
         if dragThumbnailWindow != nil {
             let panel = dragThumbnailWindow!, source = panel.frame
@@ -590,16 +598,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let sidebarRail = NSView(); sidebarRail.addSubview(sidebar)
         sidebar.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([sidebar.leadingAnchor.constraint(equalTo: sidebarRail.leadingAnchor), sidebar.topAnchor.constraint(equalTo: sidebarRail.topAnchor), sidebar.widthAnchor.constraint(equalToConstant: 58)])
-        colorWell.color = .systemRed; colorWell.target = self; colorWell.action = #selector(changeColor(_:)); colorWell.heightAnchor.constraint(equalToConstant: 34).isActive = true; colorWell.widthAnchor.constraint(equalToConstant: 64).isActive = true
-        colorWell.setAccessibilityLabel("Drawing color"); colorWell.toolTip = "Drawing color; hold Shift to change the canvas background"
-        widthControl.addItems(withTitles: ["Thin · 2", "Medium · 5", "Bold · 10", "Heavy · 20", "Wide · 40"]); widthControl.selectItem(at: 1); widthControl.font = .systemFont(ofSize: 18); widthControl.target = self; widthControl.action = #selector(changeWidth(_:)); widthControl.setAccessibilityLabel("Stroke size")
+        colorWell.color = OriginalDrawingControls.presets[0].color; colorWell.target = self; colorWell.action = #selector(changeColor(_:))
+        paletteButton.font = .systemFont(ofSize: 18); paletteButton.target = self; paletteButton.action = #selector(showDrawingColors(_:))
+        paletteButton.imagePosition = .imageLeading; paletteButton.setAccessibilityLabel("Drawing colors")
+        paletteButton.toolTip = "Original preset colors and custom color; hold Shift to change the canvas background"
+        sizeLabel.font = .systemFont(ofSize: 18)
+        widthControl.target = self; widthControl.action = #selector(changeWidth(_:))
+        widthControl.widthAnchor.constraint(equalToConstant: 40).isActive = true; widthControl.heightAnchor.constraint(equalToConstant: 82).isActive = true
+        widthControl.onBegin = { [weak self] in
+            guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return false }
+            self.canvas.editingUndoManager.beginUndoGrouping(); self.sizeUndoGrouping = true; return true
+        }
+        widthControl.onEnd = { [weak self] in self?.endDrawingSizeGesture() }
         let actual = button("Actual Size", #selector(toggleActualSize)); actualButton = actual
         let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
         dragOriginalControl.title = "Original size"; dragOriginalControl.font = .systemFont(ofSize: 18)
         dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
         dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
         dragOriginalControl.setAccessibilityLabel("Drag out at original size")
-        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), label("Color"), colorWell, label("Size"), widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), button("Wipe", #selector(wipe))])
+        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), paletteButton, sizeLabel, widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), button("Wipe", #selector(wipe))])
         right.spacing = 4; right.alignment = .centerX
         for control in right.arrangedSubviews where control is NSButton || control is NSPopUpButton {
             control.widthAnchor.constraint(equalToConstant: 132).isActive = true; control.heightAnchor.constraint(equalToConstant: 30).isActive = true
@@ -666,7 +683,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         scroll.contentView.postsBoundsChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(canvasViewportChanged), name: NSView.boundsDidChangeNotification, object: scroll.contentView)
-        canvas.strokeColor = colorWell.color; canvas.strokeWidth = 5
+        canvas.strokeColor = colorWell.color; canvas.strokeWidth = CGFloat(OriginalDrawingControls.initialSize)
+        canvas.fontSize = OriginalDrawingControls.readableFontSize(OriginalDrawingControls.initialSize)
+        syncDrawingControls()
         canvas.strokeSmoothing = StrokeSmoothing(rawValue: UserDefaults.standard.string(forKey: "PencilSmoothing") ?? "medium") ?? .medium
         setTool(.arrow)
     }
@@ -753,10 +772,79 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if modifiers.contains(.shift) {
             canvas.setBackgroundColor(color); colorWell.color = canvas.strokeColor
         } else {
-            canvas.strokeColor = color; canvas.applyStyleToSelection()
+            canvas.strokeColor = color; canvas.applyColorToSelection(color)
         }
+        syncDrawingControls()
+        writeLayoutEvidence()
     }
-    @objc func changeWidth(_ sender: NSPopUpButton) { let widths: [CGFloat] = [2,5,10,20,40]; canvas.strokeWidth = widths[sender.indexOfSelectedItem]; canvas.applyStyleToSelection() }
+    @objc func changeWidth(_ sender: NSControl) {
+        let size = OriginalDrawingControls.size(sender.doubleValue, continuous: true)
+        canvas.strokeWidth = CGFloat(size); canvas.fontSize = OriginalDrawingControls.readableFontSize(size, displayFontScale: canvas.outputSize.height / canvas.canvasSize.height)
+        _ = canvas.convertSelectedTextFonts({ NSFont(name: $0.fontName, size: self.canvas.fontSize) }, name: "Change Text Size")
+        syncDrawingControls(); updateStatus(); writeLayoutEvidence()
+    }
+    func endDrawingSizeGesture() {
+        guard sizeUndoGrouping else { return }
+        sizeUndoGrouping = false; canvas.editingUndoManager.endUndoGrouping(); writeLayoutEvidence()
+    }
+    func syncDrawingControls() {
+        colorWell.color = canvas.strokeColor
+        widthControl.doubleValue = Double(canvas.strokeWidth)
+        sizeLabel.stringValue = "Size · " + String(format: "%.3g", widthControl.doubleValue)
+        let indicatorColor = canvas.strokeColor
+        paletteButton.image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
+            NSColor.white.setFill(); rect.fill()
+            indicatorColor.setFill(); rect.insetBy(dx: 1, dy: 1).fill()
+            NSColor.darkGray.setStroke(); NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5)).stroke(); return true
+        }
+        let chosen = SketchColor(canvas.strokeColor)
+        for button in presetColorButtons {
+            let preset = OriginalDrawingControls.presets.first { $0.tag == button.tag }
+            button.state = preset.map { SketchColor($0.color) == chosen } == true ? .on : .off
+        }
+        paletteButton.setAccessibilityValue(String(format: "Red %.3g, green %.3g, blue %.3g, alpha %.3g", chosen.red, chosen.green, chosen.blue, chosen.alpha))
+    }
+    @objc func showDrawingColors(_ sender: NSButton) {
+        guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
+        if let colorPopover, colorPopover.isShown { colorPopover.performClose(sender); return }
+        let view = NSView(frame: NSRect(x: 0, y: 0, width: 246, height: 140))
+        view.appearance = NSAppearance(named: .aqua)
+        let title = label("Drawing colors"); title.frame = NSRect(x: 12, y: 108, width: 222, height: 25); view.addSubview(title)
+        presetColorButtons.removeAll()
+        for (index, preset) in OriginalDrawingControls.presets.enumerated() {
+            let button = BezelColorButton(frame: NSRect(x: CGFloat(12+(index%5)*44), y: CGFloat(68-(index/5)*34), width: 42, height: 32))
+            button.title = ""; button.isBordered = false; button.font = .systemFont(ofSize: 18)
+            button.drawingColor = preset.swatchColor; button.tag = preset.tag
+            button.target = self; button.action = #selector(choosePresetColor(_:))
+            button.setAccessibilityLabel(preset.name); button.toolTip = preset.name + "; Shift changes the background"
+            presetColorButtons.append(button); view.addSubview(button)
+        }
+        let custom = button("Custom color…", #selector(chooseCustomColor(_:))); custom.font = .systemFont(ofSize: 20)
+        custom.frame = NSRect(x: 12, y: 2, width: 222, height: 30); custom.tag = 110; view.addSubview(custom)
+        let controller = NSViewController(); controller.view = view
+        let popover = NSPopover(); popover.behavior = .transient; popover.contentViewController = controller
+        popover.appearance = NSAppearance(named: .aqua)
+        colorPopover = popover; syncDrawingControls()
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minX)
+    }
+    @objc func choosePresetColor(_ sender: NSButton) {
+        guard !terminationStarted, !frameCaptureInProgress,
+              let preset = OriginalDrawingControls.presets.first(where: { $0.tag == sender.tag }) else { return }
+        applyChosenColor(preset.color, modifiers: NSApp.currentEvent?.modifierFlags ?? [])
+        colorPopover?.performClose(sender)
+    }
+    @objc func chooseCustomColor(_ sender: NSButton) {
+        guard !terminationStarted, !frameCaptureInProgress else { return }
+        colorPopover?.performClose(sender)
+        applyChosenColor(customDrawingColor, modifiers: NSApp.currentEvent?.modifierFlags ?? [])
+        let panel = NSColorPanel.shared; panel.showsAlpha = true; panel.isContinuous = true
+        panel.color = customDrawingColor; panel.setTarget(self); panel.setAction(#selector(changeCustomColor(_:))); panel.orderFront(sender)
+    }
+    @objc func changeCustomColor(_ sender: NSColorPanel) {
+        guard !terminationStarted, !frameCaptureInProgress else { return }
+        customDrawingColor = sender.color
+        applyChosenColor(sender.color, modifiers: NSApp.currentEvent?.modifierFlags ?? [])
+    }
     @objc func toggleFill(_ sender: NSButton) { canvas.filled = sender.state == .on; canvas.applyStyleToSelection() }
     @objc func toggleShadow(_ sender: NSButton) { canvas.shadowed = sender.state == .on; canvas.applyStyleToSelection() }
     @objc func toggleBezelFill(_ sender: NSMenuItem) { canvas.filled.toggle(); canvas.applyStyleToSelection() }
@@ -1545,7 +1633,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             var controls: [[String: Any]] = []
             func inspect(_ view: NSView) {
                 guard view !== canvas else { return }
-                if let control = view as? NSControl, control is NSButton || control is NSTextField {
+                if let control = view as? NSControl, control is NSButton || control is NSTextField || control is BezelSizeSlider {
                     let rect = control.convert(control.bounds, to: content)
                     var clipped = rect.intersection(content.bounds)
                     var ancestor = control.superview
@@ -1561,6 +1649,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
             inspect(content)
             evidence["bezelControls"] = controls
+            let chosen = SketchColor(canvas.strokeColor), custom = SketchColor(customDrawingColor)
+            evidence["drawingControls"] = ["size": widthControl.doubleValue, "fontSize": canvas.fontSize,
+                                           "colorRGBA": [chosen.red,chosen.green,chosen.blue,chosen.alpha],
+                                           "customRGBA": [custom.red,custom.green,custom.blue,custom.alpha],
+                                           "popoverShown": colorPopover?.isShown ?? false, "sizeUndoGrouping": sizeUndoGrouping]
             evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize),
                                        "recoveredArtwork": (content as? FrameChromeView)?.usesRecoveredBezel ?? false]
         }
