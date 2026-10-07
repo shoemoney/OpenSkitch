@@ -1,25 +1,26 @@
 {
-  "verified_at": "2026-10-07T22:49:36.711927+00:00",
-  "checkpoint_id": "preferences-2ce50637b2",
-  "checkpoint_state": "apple_silicon_preferences_build_suites_startup_and_listed_native_checks_verified",
+  "verified_at": "2026-10-07T23:13:20.805988+00:00",
+  "checkpoint_id": "hints-ff3127c3a1",
+  "checkpoint_state": "apple_silicon_hint_build_suites_startup_and_listed_preferences_checks_verified",
   "build": {
     "architectures": [
       "arm64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.oVe3fw",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.YO9KoY",
     "source_sha256": {
-      "App.swift": "5395404df2539697cd6b1960e813bfdb8dd1c20e961c503512eeb073106089ce",
-      "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
+      "App.swift": "682e2415f594814a342453789e2e6ee638a1c1a2e35fa9d8c3a6a3d388c158e8",
+      "AppViewport.swift": "1fb7af398cbbcb09cc2148d5908f3fd61b01a33a7fa2ab2104026cddc8281e25",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
-      "Canvas.swift": "922a8248ed35ec062c926f22c8318864de2e3a5a62a86a599c3bcea1c4f00693",
+      "Canvas.swift": "22f4abaaadd8b028638f214496f795d4e76f25541d17f1d82166a6e19c6c0c3a",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "5a4487eda829771196e8e0797ba31b00387c484d9724f4cb958ed974b15035ea",
       "DocumentModel.swift": "13e5bf7740940301596dbf63437df160f487bcc492b438ed904a27eb911aacd6",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
-      "GeneralPreferencesForm.swift": "724813bf0711936a75d0b9e5b2fbe476983eaf55462cc943646dbcdf6240d4ec",
+      "GeneralPreferencesForm.swift": "2353b24c7e00d6fd5ac5dd68813b1d4cb365c7c4df15853ed7de790ac301989d",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+      "HintTrackingView.swift": "505b3dba2c66db99fb3eb9d1dc0f9e0886ce4fc80084856b26fd358988fb35ce",
       "HistoryBrowser.swift": "ee3c9a2dc48982721403fbf9dfb0440651c09c4b6676c69dd78bf99d31a93b3c",
       "HistoryRemoteDeletion.swift": "de8a69153fd185d5026838ec878d2ccdee7e6d65ae9b4eff4b22fe018e6209e6",
       "HistoryStore.swift": "22b844f988db0232706a26680271ad8e9ecdfcda4ddbc8774b47fe38ec737ff6",
@@ -28,7 +29,9 @@
       "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
       "LegacyHistoryImporter.swift": "2add6149931fa2c418b71604af6622b8006b561c52464d49732a6a502011b08d",
       "LegacySkitch.swift": "02b6a4b57151fde5fe7a981bf0866feb8fb0a5b8537d320d6f7e2d66252067be",
-      "OriginalGeneralPreferences.swift": "dddb8808df8e5a91b70b3c8334d60d9ee1c24d6ba872cc058587126a1d81534b",
+      "OriginalGeneralPreferences.swift": "e230c15e1f32cb441f2eab2112ddabf0759aabed623e6b697cd24f7a2e29e20b",
+      "OriginalHelpBevel.swift": "b6dddcacfb7a1ca7f07cd965904e0e3ca71f5721040989e1f1366970b4beb711",
+      "OriginalHintMessages.swift": "dc31c5504864de91ba40e64f50d857936dacd642fd99da4d3e0c1ae22b2fbe55",
       "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
       "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
@@ -38,7 +41,7 @@
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
       "TextStyleForm.swift": "ee864cfc831d34e8e22f21b04d6e2c71b34b4ffbcc891cee4f4d5ed369f22322",
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
-      "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
+      "WindowSizing.swift": "6da55aafaf22ebc4f307bb4ae3bd15333e90beeab1348e998d90b2f49ec9f3e3",
       "WindowZoom.swift": "564d364871e7655e8094705d7d5ba042530ade98459f1993ea2c612445828ada"
     },
     "resource_sha256": {
@@ -95,71 +98,113 @@
       "wipe_brushlayer.m4a": "337dccca75944897a7040d157acc7d80dd16ed33f9a9985fc8c43856451d8f73",
       "wipe_snap.m4a": "2a2f06ee966b68a2daf3a1386770800a937466b2d50bb8d78c572be97ce408dc"
     },
-    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c"
+    "binary_sha256": "ff3127c3a1de32b421f541eff8f6da3fa91bb1fba55df40606bd2854a87a5806"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "2b6ce501a4f0b69db1800d382fef27103cb3ceec9bbfc0875356352770f064e1",
+  "build_manifest_sha256": "deb64fcaf49e5e5ed6c113c64cbc44b2ae8385de0194965cacac58d606d5c124",
   "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/preferences-verification/build.log",
-  "build_log_sha256": "60c51f3532b12cd732206e53c0e02374b99376f7fea484d008d0602ad47a12b9",
+  "build_log_path": "build/hints-verification/build.log",
+  "build_log_sha256": "24830783f324ffdadaa3cca6e8a6da60ee38e12dabbc0e1a09ff6f58d795e46c",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.u5bbmdp8",
-      "log_path": "build/preferences-verification/arm64.log",
-      "log_sha256": "326bda89beddeabf87aa2c12083502b7f28c3e6a4b69baf54bb066750df65959",
-      "checks": 4057,
-      "suites": 26,
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.6dchpsad",
+      "log_path": "build/hints-verification/arm64.log",
+      "log_sha256": "6176b218c89ad06780f50b9ff4af395490dcced8d588f9d51d4aa5f8176678f4",
+      "checks": 5416,
+      "suites": 28,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/preferences-verification/results.json",
-  "full_suite_results_sha256": "cd0dc5b6e6be9465369cf5cd48b50d6b72f8f25f2e62b15c54f43bd6e5fbf469",
+  "full_suite_results_path": "build/hints-verification/results.json",
+  "full_suite_results_sha256": "6dd040ed5c12e3b6639a75d671f4f6a01f9b1fea9524e49277eaf4cbd416a455",
   "native_startup_smoke": {
-    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c",
-    "verified_at": "2026-10-07T22:48:19.332104+00:00",
+    "binary_sha256": "ff3127c3a1de32b421f541eff8f6da3fa91bb1fba55df40606bd2854a87a5806",
+    "verified_at": "2026-10-07T23:12:16.905384+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 22421,
       "editable_bytes": 29793,
-      "editable_sha256": "95e9c943b1ebea3bb5a2a7310ee02145bdae0640967a72005a070245186189a4"
+      "editable_sha256": "64b22124380a96dbabed04943cd9824da862a7f6bc0254bf05828e65985272e2"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-2ce50637b2/results.json",
-  "native_startup_smoke_results_sha256": "ac633f06e231c7d3c980a028a9068429a148e4c4979bc012c416a5e8ddd07dc1",
+  "native_startup_smoke_results_path": "build/startup-smoke-ff3127c3a1/results.json",
+  "native_startup_smoke_results_sha256": "ed7b669877171341c3388095dda0f19045b27605d7f0a9382a3365ee8f8abfe2",
   "validation_tools_sha256": {
-    "tools/test.py": "9d8d9db3963d4174d3e67c66692c4371488fc37b29bbf8e4879e12041484b488",
+    "tools/test.py": "b6874c4e0bc34537bf59385fd0a2664d9e3211b1c7fbe6035802ee07eb290584",
     "tools/build.sh": "0f0d14ac5e399a977c58322e97a42b2e7f48348cce9f37e0360df6e164ca3f5b",
     "tools/test-native-startup.py": "2e5f8497cf17de5a6f90bb5aa0d984ef56e9453dd78d6e240008be05c445663a",
-    "tools/test-app-safety.sh": "2b92f9a3b327df5f313953a9f2c6eb0208f902e02779cba6f2688e5cc2f35b1c"
+    "tools/test-app-safety.sh": "99a1a457d2239999b46e3856dc66bd2976bbf8e3da1dffd88c6493374a2d141b"
   },
   "current_full_suite_validation": {
     "status": "passed_arm64",
     "architectures": [
       "arm64"
     ],
-    "checks_per_architecture": 4057,
-    "suites": 26,
-    "results_path": "build/preferences-verification/results.json",
-    "results_sha256": "cd0dc5b6e6be9465369cf5cd48b50d6b72f8f25f2e62b15c54f43bd6e5fbf469"
+    "checks_per_architecture": 5416,
+    "suites": 28,
+    "results_path": "build/hints-verification/results.json",
+    "results_sha256": "6dd040ed5c12e3b6639a75d671f4f6a01f9b1fea9524e49277eaf4cbd416a455"
   },
   "current_native_startup_validation": {
     "status": "passed_arm64",
-    "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c",
-    "startup_log_path": "build/preferences-verification/startup.log",
-    "startup_log_sha256": "bbbf15d462cf9fd4715f09bc1bca253a76c2d1e0453808caf06ff24f6c9770c9"
+    "binary_sha256": "ff3127c3a1de32b421f541eff8f6da3fa91bb1fba55df40606bd2854a87a5806",
+    "startup_log_path": "build/hints-verification/startup.log",
+    "startup_log_sha256": "5cc799ccd14222cf78758c3a55adce6d536c1834e39c076081bd2351d6fb1984"
   },
   "current_desktop_checks": [
-    "Current native editor header displays ShoeMoney logo and sharp readable OpenSkitch text, replacing the original heart/Skitch mark.",
-    "Current native About window displays the same company logo as the application icon.",
-    "Command-comma opens native General/Drawing/Snapping tabs with restored enabled/Both, Medium/End and excluded-capture baseline choices.",
-    "Command-W closes Preferences and returns to the saved editor; no drawing edits were made during this final desktop check."
+    {
+      "id": "brand",
+      "passed": true,
+      "observations": [
+        "ShoeMoney logo and OpenSkitch replace the original heart wordmark in the centered native header."
+      ],
+      "files": [
+        "final-brand.txt",
+        "final-brand.png"
+      ]
+    },
+    {
+      "id": "hint_controls",
+      "passed": true,
+      "observations": [
+        "Both original hint controls start unchecked and change to checked through native checkbox actions."
+      ],
+      "files": [
+        "final-general-defaults.txt",
+        "final-general-enabled.txt",
+        "final-general-enabled.png"
+      ]
+    },
+    {
+      "id": "hint_reopen",
+      "passed": true,
+      "observations": [
+        "Done and Command-comma reopen the same Preferences with both values checked."
+      ],
+      "files": [
+        "final-general-retained.txt",
+        "final-general-retained.png"
+      ]
+    },
+    {
+      "id": "baseline_saved",
+      "passed": true,
+      "observations": [
+        "Both checkboxes restored off; Command-W dismisses Preferences and leaves Arrow Saved on the untouched800x600 canvas."
+      ],
+      "files": [
+        "final-general-restored.txt",
+        "final-saved-editor.txt",
+        "final-saved-editor.png"
+      ]
+    }
   ],
   "historical_validations": [
     {
@@ -1090,6 +1135,19 @@
       "desktop_proof_path": "build/preferences-verification/desktop-proof-before-wordmark.json",
       "desktop_proof_sha256": "3b574d8b6010daee703472fa0f778c112233d8951e9647c2b6ef005627cebd34",
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "preferences-2ce50637b2",
+      "binary_sha256": "2ce50637b2ebd1ffe91f9e9b29ff9264f79a2cd7cd2a15152df03a8757c72a4c",
+      "full_suite_results_path": "build/preferences-verification/results.json",
+      "full_suite_results_sha256": "cd0dc5b6e6be9465369cf5cd48b50d6b72f8f25f2e62b15c54f43bd6e5fbf469",
+      "desktop_checks": [
+        "Current native editor header displays ShoeMoney logo and sharp readable OpenSkitch text, replacing the original heart/Skitch mark.",
+        "Current native About window displays the same company logo as the application icon.",
+        "Command-comma opens native General/Drawing/Snapping tabs with restored enabled/Both, Medium/End and excluded-capture baseline choices.",
+        "Command-W closes Preferences and returns to the saved editor; no drawing edits were made during this final desktop check."
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -1144,10 +1202,11 @@
     "Original runtime layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native natural sizing/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
     "Original runtime keyboard/layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts workflows remain unverified. Previous native text completion checks remain pinned to the earlier exact binary.",
     "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified.",
-    "Listed native header/company icon, three Preferences tab layouts and auxiliary Close only. Earlier preference changes, Shortcuts sheet, narrower-window layout and Quit/relaunch proof are pinned to the prior c7d6130601 binary. Pending text/history and capture routing are isolated AppKit checks; actual capture pixels, sound audibility, native exact minimum-width and complete original-runtime parity remain unverified."
+    "Listed native header/company icon, three Preferences tab layouts and auxiliary Close only. Earlier preference changes, Shortcuts sheet, narrower-window layout and Quit/relaunch proof are pinned to the prior c7d6130601 binary. Pending text/history and capture routing are isolated AppKit checks; actual capture pixels, sound audibility, native exact minimum-width and complete original-runtime parity remain unverified.",
+    "Current exact arm64 binary: native branding, original hint checkbox actions and retained values after Preferences reopening, baseline restoration and CmdW leaves Saved editor. Child strip above parent is outside desktop capture; actual native strip display/fades and original runtime equivalence remain unverified. Tests are controlled AppKit evidence only."
   ],
-  "current_desktop_proof_path": "build/preferences-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "fbc21129a12233a1681cd484f002ad7bd0528357f98ce45b3e5df9f29011d00d",
+  "current_desktop_proof_path": "build/hints-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "01fbd80015176a13086ee2214f5a42466060b4215bb36f46a4dc7597619b81b3",
   "architecture_policy": "Apple Silicon arm64 only; prior Intel results remain historical, with no current Intel build/test requirement.",
   "recovered_text_effects": {
     "path": "build/text-effects-verification/original-recovery.json",
@@ -1171,10 +1230,10 @@
     "sha256": "a1249cb9ec5d42076257a26d583fc77b7992a622e66d530b0a3fc436fdd8076b",
     "original_runtime_verified": false
   },
-  "preferences_verification_scope": "Listed native header/company icon, three Preferences tab layouts and auxiliary Close only. Earlier preference changes, Shortcuts sheet, narrower-window layout and Quit/relaunch proof are pinned to the prior c7d6130601 binary. Pending text/history and capture routing are isolated AppKit checks; actual capture pixels, sound audibility, native exact minimum-width and complete original-runtime parity remain unverified.",
+  "preferences_verification_scope": "Current exact arm64 binary: native branding, original hint checkbox actions and retained values after Preferences reopening, baseline restoration and CmdW leaves Saved editor. Child strip above parent is outside desktop capture; actual native strip display/fades and original runtime equivalence remain unverified. Tests are controlled AppKit evidence only.",
   "recovered_preferences_rules": {
-    "path": "build/preferences-verification/original-recovery.json",
-    "sha256": "3cec2a000df406e29603720906bd86f39c0810f211d80a395afdb12f0842f2b9",
+    "path": "build/hints-verification/original-recovery.json",
+    "sha256": "7b6b5bc283dbc3970084e6248e9b6d950360e08df50daaeb6418ab8399977463",
     "original_runtime_verified": false
   },
   "company_branding": {
@@ -1183,5 +1242,10 @@
     "icon_package_path": "build/preferences-verification/icon-package.json",
     "icon_package_sha256": "6e0276b54d91608856ebed04cf8331b067043236fa7d327b71c3f4fcb769896f",
     "header": "Supplied ShoeMoney logo and native20-point OpenSkitch text; explicit user-requested branding override."
+  },
+  "recovered_hint_rules": {
+    "path": "build/hints-verification/original-recovery.json",
+    "sha256": "7b6b5bc283dbc3970084e6248e9b6d950360e08df50daaeb6418ab8399977463",
+    "original_runtime_verified": false
   }
 }

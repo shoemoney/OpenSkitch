@@ -194,6 +194,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var preferencesWindow: NSWindow?
     var preferencesForm: GeneralPreferencesForm?
     var soundEffects = OriginalSoundEffects()
+    var helpBevel: OriginalHelpBevel?
+    private var hintEventMonitor: Any?
     let photoBrowser = PhotoBrowserCoordinator()
     let nameField = NSTextField(string: "Untitled")
     let status = NSTextField(labelWithString: "")
@@ -294,6 +296,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         buildMenus(); buildWindow()
         installMenuPresence()
         applyPresencePolicy()
+        installHintMonitoring()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
         canvas.onSound = { [weak self] name in self?.playOriginalSound(name) }
@@ -394,6 +397,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } else if presence != 2 { installMenuPresence() }
     }
     func playOriginalSound(_ name: String) { soundEffects.play(name, enabled: generalPreferences.state.playSounds) }
+    func trackHint(_ view: NSView, owner: String, message: @escaping () -> String?) {
+        let tracking = HintTrackingView(); tracking.translatesAutoresizingMaskIntoConstraints = false
+        tracking.setAccessibilityElement(false)
+        tracking.onHover = { [weak self] entered in
+            guard let self, !self.terminationStarted else { return }
+            if entered { self.helpBevel?.hover(owner: owner, message: message()) }
+            else { self.helpBevel?.exit(owner: owner) }
+        }
+        view.addSubview(tracking)
+        NSLayoutConstraint.activate([tracking.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            tracking.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            tracking.topAnchor.constraint(equalTo: view.topAnchor), tracking.bottomAnchor.constraint(equalTo: view.bottomAnchor)])
+    }
+    func hintModifiers(_ flags: NSEvent.ModifierFlags) {
+        guard !terminationStarted, window.attachedSheet == nil,
+              !(window.firstResponder is NSTextView) else { return }
+        let message = canvas.isTemporaryHand ? "" : OriginalHintMessages.getHelpForModifiers(tool: canvas.toolForModifiers(flags), modifiers: flags)
+        helpBevel?.modifiers(message: message)
+    }
+    func installHintMonitoring() {
+        hintEventMonitor = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged) { [weak self] event in
+            MainActor.assumeIsolated {
+                if let self, NSApp.keyWindow === self.window { self.hintModifiers(event.modifierFlags) }
+            }
+            return event
+        }
+    }
+    func applicationWillResignActive(_ notification: Notification) { helpBevel?.clear() }
+    func applicationDidHide(_ notification: Notification) { helpBevel?.clear() }
+    func windowDidResignKey(_ notification: Notification) {
+        if (notification.object as? NSWindow) === window { helpBevel?.clear() }
+    }
+    func windowWillMiniaturize(_ notification: Notification) {
+        if (notification.object as? NSWindow) === window { helpBevel?.clear() }
+    }
     @objc func showHide() {
         if NSApp.currentEvent?.modifierFlags.contains(.option) == true { quit(); return }
         guard UserDefaults.standard.integer(forKey: "statusMenu") != 2 else { return }
@@ -405,7 +443,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleVisible() {
         guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
-        widthControl.endTracking(); closeDrawingColors()
+        widthControl.endTracking(); closeDrawingColors(); helpBevel?.clear()
         if windowZoom != nil { makeVisible(); return }
         if dragThumbnailWindow != nil {
             let panel = dragThumbnailWindow!, source = panel.frame
@@ -470,6 +508,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         else { saveRecovery(finalizingTermination: true) }
         timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
         preferencesWindow?.orderOut(nil); soundEffects.stop()
+        helpBevel?.shutdown()
+        if let hintEventMonitor { NSEvent.removeMonitor(hintEventMonitor); self.hintEventMonitor = nil }
         removeDragThumbnail(); activeDragID = nil; visibilityZoomOrigin = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
     }
@@ -622,6 +662,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             b.setAccessibilityLabel(tool.rawValue.capitalized); b.toolTip = tool.rawValue.capitalized + " tool"
             b.widthAnchor.constraint(equalToConstant: 54).isActive = true; b.heightAnchor.constraint(equalToConstant: 34).isActive = true
             sidebarViews.append(b); toolButtons[tool] = b
+            trackHint(b, owner: "tool-" + tool.rawValue) { OriginalHintMessages.hover(tool: tool) }
         }
         sidebarViews.append(button("Font", #selector(chooseFont)))
         let sidebar = stack(sidebarViews); sidebar.spacing = 4; sidebar.alignment = .centerX
@@ -647,7 +688,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
         dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
         dragOriginalControl.setAccessibilityLabel("Drag out at original size")
-        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), paletteButton, sizeLabel, widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), button("Wipe", #selector(wipe))])
+        let wipeButton = button("Wipe", #selector(wipe))
+        trackHint(wipeButton, owner: "wipe") { OriginalHintMessages.hover(actionTag: 50) }
+        trackHint(widthControl, owner: "drawing-size") { OriginalHintMessages.hover(actionTag: 20) }
+        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), paletteButton, sizeLabel, widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), wipeButton])
         right.spacing = 4; right.alignment = .centerX
         for control in right.arrangedSubviews where control is NSButton || control is NSPopUpButton {
             control.widthAnchor.constraint(equalToConstant: 132).isActive = true; control.heightAnchor.constraint(equalToConstant: 30).isActive = true
@@ -681,6 +725,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self.restoreDragThumbnail(id)
         }
         drag.setAccessibilityElement(true); drag.setAccessibilityLabel("Drag Me"); drag.toolTip = "Drag the drawing into Finder or another application"
+        trackHint(drag, owner: "drag-me") { OriginalHintMessages.hover(actionTag: 40) }
         let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Share drawing")
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
@@ -719,6 +764,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         syncDrawingControls()
         canvas.strokeSmoothing = generalPreferences.state.drawingPrecision
         canvas.arrowHeadPreference = UserDefaults.standard.integer(forKey: OriginalArrowGeometry.preferenceKey)
+        helpBevel = OriginalHelpBevel(host: window)
+        helpBevel?.enabled = generalPreferences.state.showKeyboardTips
+        canvas.onHintModifiers = { [weak self] flags in self?.hintModifiers(flags) }
+        canvas.onHintHover = { [weak self] entered in
+            guard let self else { return }
+            if entered { self.helpBevel?.hover(owner: "canvas", message: OriginalHintMessages.hover(tool: self.canvas.tool)) }
+            else { self.helpBevel?.exit(owner: "canvas") }
+        }
         setTool(.arrow)
     }
     func menu(_ title: String, items: [(String, Selector?, String)]) -> NSMenu {
@@ -910,6 +963,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             button.drawingColor = preset.swatchColor; button.tag = preset.tag
             button.target = self; button.action = #selector(choosePresetColor(_:))
             button.setAccessibilityLabel(preset.name); button.toolTip = preset.name + "; Shift changes the background"
+            trackHint(button, owner: "color-" + String(preset.tag)) { OriginalHintMessages.hover(actionTag: preset.tag) }
             presetColorButtons.append(button); view.addSubview(button)
         }
         let custom = button("Custom color…", #selector(chooseCustomColor(_:))); custom.font = .systemFont(ofSize: 20)
@@ -1413,6 +1467,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         preferencesForm?.synchronize(saved)
         if saved.statusMenu != previous.statusMenu { applyPresencePolicy() }
         if !saved.playSounds { soundEffects.stop() }
+        helpBevel?.enabled = saved.showKeyboardTips
     }
     func closePreferences() {
         guard let panel = preferencesWindow, panel.attachedSheet == nil else { return }
@@ -1462,6 +1517,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func startCapture(_ mode: String, delay: Double = 0, manualOption: Bool = false) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
+        helpBevel?.clear()
         leaveFrame()
         let generation = documentGeneration
         let includeApp = generalPreferences.includeApp(mode: mode, manualOption: manualOption)

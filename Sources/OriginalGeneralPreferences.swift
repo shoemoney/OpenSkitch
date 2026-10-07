@@ -9,6 +9,8 @@ struct OriginalGeneralPreferences {
     static let captureKey = "skitchInSnap"
     static let soundsKey = "disableSounds"
     static let presenceKey = "statusMenu"
+    static let overlaysKey = "disableOverlay"
+    static let keyboardTipsKey = "disableModtips"
 
     static func precisionTag(_ mode: StrokeSmoothing) -> Int {
         switch mode { case .precise: return 0; case .medium: return 1; case .loose: return 2 }
@@ -26,7 +28,9 @@ struct OriginalGeneralPreferences {
             arrowHead: defaults.integer(forKey: OriginalArrowGeometry.preferenceKey) == 1 ? 1 : 2,
             includeSkitch: defaults.bool(forKey: Self.captureKey),
             playSounds: !defaults.bool(forKey: Self.soundsKey),
-            statusMenu: (0...2).contains(presence) ? presence : 0)
+            statusMenu: (0...2).contains(presence) ? presence : 0,
+            showToolTips: defaults.object(forKey: Self.overlaysKey) != nil && !defaults.bool(forKey: Self.overlaysKey),
+            showKeyboardTips: defaults.object(forKey: Self.keyboardTipsKey) != nil && !defaults.bool(forKey: Self.keyboardTipsKey))
     }
     func setPrecision(_ mode: StrokeSmoothing) {
         defaults.set(Self.precisionTag(mode), forKey: Self.precisionKey)
@@ -43,6 +47,8 @@ struct OriginalGeneralPreferences {
         if proposed.statusMenu != current.statusMenu, (0...2).contains(proposed.statusMenu) {
             defaults.set(proposed.statusMenu, forKey: Self.presenceKey)
         }
+        if proposed.showToolTips != current.showToolTips { defaults.set(!proposed.showToolTips, forKey: Self.overlaysKey) }
+        if proposed.showKeyboardTips != current.showKeyboardTips { defaults.set(!proposed.showKeyboardTips, forKey: Self.keyboardTipsKey) }
     }
     func includeApp(mode: String, manualOption: Bool) -> Bool {
         guard mode == "crosshair" || mode == "fullscreen" else { return false }

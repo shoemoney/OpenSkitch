@@ -67,7 +67,9 @@ extension AppDelegate {
         let viewport = scroll.frame.size
         let chrome = CGSize(width: max(0, window.frame.width - viewport.width),
                             height: max(0, window.frame.height - viewport.height))
-        return WindowSizingPolicy.availableCanvas(screen: screen.visibleFrame.size, chrome: chrome)
+        let preferences = generalPreferences.state
+        return WindowSizingPolicy.availableCanvas(screen: screen.visibleFrame.size, chrome: chrome,
+            modtip: preferences.showKeyboardTips, overlay: preferences.showToolTips)
     }
 
     var isLargeShot: Bool {
@@ -155,6 +157,7 @@ extension AppDelegate {
             size: CGSize(width: max(1, ceil(document.size.width * scale)),
                          height: max(1, ceil(document.size.height * scale))))
         updateViewportChrome()
+        helpBevel?.reposition()
     }
 
     func scheduleNavigatorImage() {
@@ -192,6 +195,7 @@ extension AppDelegate {
         window.setFrame(frame, display: true)
         window.contentView?.layoutSubtreeIfNeeded()
         adjustingWindowFrame = false
+        helpBevel?.reposition()
     }
 
     /// Used only for newly imported raster images and ordinary captures. Native
@@ -291,10 +295,12 @@ extension AppDelegate {
     func windowDidResize(_ notification: Notification) {
         guard (notification.object as? NSWindow) === window, !adjustingWindowFrame else { return }
         updateViewportChrome()
+        helpBevel?.reposition()
     }
     func windowDidMove(_ notification: Notification) {
         guard (notification.object as? NSWindow) === window else { return }
         positionActualNavigator()
+        helpBevel?.reposition()
     }
     func windowDidBecomeKey(_ notification: Notification) {
         guard (notification.object as? NSWindow) === window else { return }

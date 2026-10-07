@@ -56,6 +56,8 @@ for name, (path, data) in snapshot.items():
         if text.count('        installMenuPresence()\n') != 1:
             raise SystemExit('Missing menu-bar installation safety boundary.')
         text = text.replace('        installMenuPresence()\n', '')
+        text = text.replace('        installHintMonitoring()\n', '')
+        text = text.replace('OriginalHelpBevel(host: window)', 'OriginalHelpBevel(host: window, makePanel: { AppSafetyHelpPanel() })')
         text = text.replace('NSApp.isActive', 'AppSafetyActivation.isActive')
         text = text.replace('NSApp.currentEvent', 'AppSafetyEvents.current')
         text = text.replace('NSApp.setActivationPolicy(', 'AppSafetyPresence.setPolicy(')

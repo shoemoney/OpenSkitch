@@ -35,16 +35,16 @@ public enum WindowSizingPolicy {
     /// `screen` is the caller's visible screen size, not its full frame.
     /// Original maxFrame/maxFrameOnScreenWithoutScrollers: decompiled.c:358-547;
     /// binary constants 0x260448/4c/50 are -30/-40/-170, followed by a 4-point inset.
-    /// This API follows the requested single 40-point vertical reserve for either flag.
-    /// Static-original discrepancy: the decompiled modtip path adds -40 twice (also
-    /// when both flags are set). Original runtime equivalence remains unverified.
+    /// The recovered branch reserves 80 vertically when modifier tips are enabled,
+    /// and 40 for overlays alone. Both flags retain the 80-point vertical reserve.
+    /// Original runtime equivalence remains unverified.
     public static func availableCanvas(screen: CGSize, chrome: CGSize,
                                        modtip: Bool = false, overlay: Bool = false) -> CGSize? {
         guard validCapacity(screen), chrome.width.isFinite, chrome.height.isFinite,
               chrome.width >= 0, chrome.height >= 0 else { return nil }
         let available = CGSize(width: screen.width - chrome.width - 30 - 8 - (overlay ? 170 : 0),
                                height: screen.height - chrome.height - 30 - 8
-                                   - ((modtip || overlay) ? 40 : 0))
+                                   - (modtip ? 80 : (overlay ? 40 : 0)))
         return validCapacity(available) ? available : nil
     }
 

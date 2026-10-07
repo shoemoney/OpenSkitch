@@ -42,11 +42,11 @@ private enum WindowSizingTests {
         try size(WindowSizingPolicy.availableCanvas(screen: screen, chrome: chrome),
                  CGSize(width: 1322, height: 742), "Visible frame minus chrome, 30 and 8")
         try size(WindowSizingPolicy.availableCanvas(screen: screen, chrome: chrome, modtip: true),
-                 CGSize(width: 1322, height: 702), "Requested single modtip allowance")
+                 CGSize(width: 1322, height: 662), "Recovered keyboard hint 80-point allowance")
         try size(WindowSizingPolicy.availableCanvas(screen: screen, chrome: chrome, overlay: true),
                  CGSize(width: 1152, height: 702), "Overlay reserves 170 horizontal and 40 vertical")
         try size(WindowSizingPolicy.availableCanvas(screen: screen, chrome: chrome, modtip: true, overlay: true),
-                 CGSize(width: 1152, height: 702), "Both flags do not double the requested vertical reserve")
+                 CGSize(width: 1152, height: 662), "Both flags use the recovered keyboard hint vertical reserve")
         try size(WindowSizingPolicy.availableCanvas(screen: CGSize(width: 39, height: 39), chrome: .zero),
                  CGSize(width: 1, height: 1), "Smallest valid capacity")
         for small in [CGSize(width: 38, height: 39), CGSize(width: 39, height: 38),

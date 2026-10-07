@@ -21,6 +21,21 @@ enum OriginalGeneralPreferencesTests {
                    "Fresh behavior follows original engine fallback, End/Both defaults, excluded app and enabled sounds")
         store.apply(fresh)
         try expect(defaults.persistentDomain(forName: domain)?.isEmpty != false, "Reading/opening unchanged preferences writes no defaults")
+        try expect(!fresh.showToolTips && !fresh.showKeyboardTips, "Original registered defaults disable both overlay kinds on a fresh launch")
+        for toolTips in [false, true] {
+            for keyboardTips in [false, true] {
+                var proposed = store.state; proposed.showToolTips = toolTips; proposed.showKeyboardTips = keyboardTips
+                store.apply(proposed)
+                let reopened = OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state
+                try expect(reopened.showToolTips == toolTips && reopened.showKeyboardTips == keyboardTips, "Independent inverse overlay choices reload exactly")
+                if defaults.object(forKey: "disableOverlay") != nil {
+                    try expect(defaults.bool(forKey: "disableOverlay") == !toolTips, "disableOverlay stores inverse checkbox polarity")
+                }
+                if defaults.object(forKey: "disableModtips") != nil {
+                    try expect(defaults.bool(forKey: "disableModtips") == !keyboardTips, "disableModtips stores inverse checkbox polarity")
+                }
+            }
+        }
         defaults.set("loose", forKey: "PencilSmoothing")
         try expect(store.state.drawingPrecision == .loose, "Existing reconstruction precision survives until explicit choice")
         for (tag, mode) in [(0, StrokeSmoothing.precise), (1, .medium), (2, .loose)] {

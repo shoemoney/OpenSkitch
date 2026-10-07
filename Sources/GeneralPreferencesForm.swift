@@ -8,6 +8,20 @@ struct GeneralPreferencesState: Equatable {
     var includeSkitch: Bool
     var playSounds: Bool
     var statusMenu: Int
+    var showToolTips: Bool
+    var showKeyboardTips: Bool
+
+    init(drawingPrecision: StrokeSmoothing, arrowHead: Int, includeSkitch: Bool,
+         playSounds: Bool, statusMenu: Int, showToolTips: Bool = false,
+         showKeyboardTips: Bool = false) {
+        self.drawingPrecision = drawingPrecision
+        self.arrowHead = arrowHead
+        self.includeSkitch = includeSkitch
+        self.playSounds = playSounds
+        self.statusMenu = statusMenu
+        self.showToolTips = showToolTips
+        self.showKeyboardTips = showKeyboardTips
+    }
 }
 
 /// A native content view only; its parent owns presentation and storage.
@@ -24,6 +38,8 @@ final class GeneralPreferencesForm: NSView {
     private var visibilityButtons: [NSButton] = []
     private let snap = NSButton(checkboxWithTitle: "Show Skitch window in fullscreen and crosshairs Snap", target: nil, action: nil)
     private let sounds = NSButton(checkboxWithTitle: "Play sounds", target: nil, action: nil)
+    private let toolTips = NSButton(checkboxWithTitle: "Show tool tip overlays", target: nil, action: nil)
+    private let keyboardTips = NSButton(checkboxWithTitle: "Show keyboard tip overlay", target: nil, action: nil)
 
     override var intrinsicContentSize: NSSize { NSSize(width: 780, height: 570) }
 
@@ -55,6 +71,10 @@ final class GeneralPreferencesForm: NSView {
         snap.heightAnchor.constraint(equalToConstant: 60).isActive = true
         configure(sounds, action: #selector(changeSounds(_:)))
         sounds.identifier = NSUserInterfaceItemIdentifier("playSounds")
+        configure(toolTips, action: #selector(changeToolTips(_:)))
+        toolTips.identifier = NSUserInterfaceItemIdentifier("showToolTips")
+        configure(keyboardTips, action: #selector(changeKeyboardTips(_:)))
+        keyboardTips.identifier = NSUserInterfaceItemIdentifier("showKeyboardTips")
 
         let shortcuts = button("Capture Shortcuts…", action: #selector(requestShortcuts))
         let tabs = NSTabView()
@@ -63,7 +83,8 @@ final class GeneralPreferencesForm: NSView {
         tabs.translatesAutoresizingMaskIntoConstraints = false
         // Recovered MainMenu.nib ownership, rather than the older help image.
         let sections: [(String, [NSView])] = [
-            ("General", [sounds, row("Show Skitch in:", choices: horizontal(visibilityButtons))]),
+            ("General", [sounds, toolTips, keyboardTips,
+                         row("Show Skitch in:", choices: horizontal(visibilityButtons))]),
             ("Drawing", [row("Drawing precision:", choices: horizontal(precisionButtons)),
                          row("Arrow head:", choices: arrowChoices)]),
             ("Snapping", [snap, shortcuts])
@@ -123,6 +144,8 @@ final class GeneralPreferencesForm: NSView {
         select(visibilityButtons, tag: normalized.statusMenu)
         snap.state = normalized.includeSkitch ? .on : .off
         sounds.state = normalized.playSounds ? .on : .off
+        toolTips.state = normalized.showToolTips ? .on : .off
+        keyboardTips.state = normalized.showKeyboardTips ? .on : .off
     }
 
     private func select(_ buttons: [NSButton], tag: Int) {
@@ -198,6 +221,8 @@ final class GeneralPreferencesForm: NSView {
     @objc private func changeVisibility(_ sender: NSButton) { state.statusMenu = sender.tag; publish() }
     @objc private func changeSnap(_ sender: NSButton) { state.includeSkitch = sender.state == .on; publish() }
     @objc private func changeSounds(_ sender: NSButton) { state.playSounds = sender.state == .on; publish() }
+    @objc private func changeToolTips(_ sender: NSButton) { state.showToolTips = sender.state == .on; publish() }
+    @objc private func changeKeyboardTips(_ sender: NSButton) { state.showKeyboardTips = sender.state == .on; publish() }
     @objc private func requestDone() { onDone?() }
     @objc private func requestShortcuts() { onShortcuts?() }
     @objc private func requestSharing() { onSharing?() }

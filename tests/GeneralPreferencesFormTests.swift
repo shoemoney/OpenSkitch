@@ -24,6 +24,15 @@ private enum GeneralPreferencesFormTests {
         _ = NSApplication.shared
         let initial = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
                                               includeSkitch: true, playSounds: false, statusMenu: 0)
+        expect(!initial.showToolTips && !initial.showKeyboardTips, "Existing initializer call sites default both tips off")
+        let toolOnly = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
+                       includeSkitch: true, playSounds: false, statusMenu: 0, showToolTips: true)
+        let keyboardOnly = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
+                           includeSkitch: true, playSounds: false, statusMenu: 0, showKeyboardTips: true)
+        expect(toolOnly.showToolTips && !toolOnly.showKeyboardTips, "Keyboard tips default independently")
+        expect(!keyboardOnly.showToolTips && keyboardOnly.showKeyboardTips, "Tool tips default independently")
+        expect(initial != toolOnly && initial != keyboardOnly && toolOnly != keyboardOnly,
+               "Equatable includes each tip preference")
         let form = GeneralPreferencesForm(state: initial)
         if CommandLine.arguments.contains("--render") {
             form.appearance = NSAppearance(named: .aqua)
@@ -48,21 +57,26 @@ private enum GeneralPreferencesFormTests {
         let dock = button("Dock"), menu = button("Menu bar"), both = button("Both")
         let snap = button("Show Skitch window in fullscreen and crosshairs Snap")
         let sounds = button("Play sounds")
+        let toolTips = button("Show tool tip overlays")
+        let keyboardTips = button("Show keyboard tip overlay")
         let done = button("Done"), shortcuts = button("Capture Shortcuts…"), sharing = button("Sharing Settings…")
         let groups = [[precise, medium, loose], [end, start], [dock, menu, both]]
-        let tabButtons = [[sounds, dock, menu, both], [precise, medium, loose, end, start], [snap, shortcuts]]
+        let tabButtons = [[sounds, toolTips, keyboardTips, dock, menu, both],
+                          [precise, medium, loose, end, start], [snap, shortcuts]]
         for (index, controls) in tabButtons.enumerated() {
             expect(controls.allSatisfy { $0.isDescendant(of: tabs.tabViewItems[index].view!) },
                    "Controls belong to recovered tab \(tabs.tabViewItems[index].label)")
         }
         expect(!sharing.isDescendant(of: tabs) && !done.isDescendant(of: tabs), "Sharing and Done stay in footer")
-        expect(buttons.count == 13, "Only the supported controls")
+        expect(buttons.count == 15, "Only the supported controls")
         expect(precise.tag == 0 && medium.tag == 1 && loose.tag == 2, "Original precision tags")
         expect(end.tag == 2 && start.tag == 1, "Original arrow tags")
         expect(dock.tag == 2 && menu.tag == 1 && both.tag == 0, "Original visibility tags")
         expect(medium.state == .on && end.state == .on && both.state == .on,
                "Initial radio choices")
         expect(snap.state == .on && sounds.state == .off, "Initial booleans")
+        expect(toolTips.state == .off && keyboardTips.state == .off, "New native checkboxes initially unchecked")
+        expect(!toolTips.allowsMixedState && !keyboardTips.allowsMixedState, "Tip checkboxes have two states")
         expect(done.keyEquivalent == "\r", "Done is the Return action")
         expect(form.intrinsicContentSize == NSSize(width: 780, height: 570), "Preferred form size")
         expect(form.constraints.contains { $0.firstAttribute == .width && $0.relation == .greaterThanOrEqual && $0.constant == 650 },
@@ -99,17 +113,37 @@ private enum GeneralPreferencesFormTests {
         click(snap) { $0.includeSkitch = true }
         click(sounds) { $0.playSounds = true }
         click(sounds) { $0.playSounds = false }
+        click(toolTips) { $0.showToolTips = true }
+        click(keyboardTips) { $0.showKeyboardTips = true }
+        click(toolTips) { $0.showToolTips = false }
+        click(keyboardTips) { $0.showKeyboardTips = false }
 
         let count = delivered.count
         expected = GeneralPreferencesState(drawingPrecision: .loose, arrowHead: 1,
-                                          includeSkitch: false, playSounds: true, statusMenu: 1)
+                                          includeSkitch: false, playSounds: true, statusMenu: 1,
+                                          showToolTips: true, showKeyboardTips: true)
+        reveal(precise) // Synchronize tips while the General tab is not visible.
         let selectedBeforeSync = tabs.selectedTabViewItem
         form.synchronize(expected)
         expect(tabs.selectedTabViewItem === selectedBeforeSync, "Synchronization preserves the current tab")
         expect(delivered.count == count, "Synchronization suppresses callbacks")
         expect(loose.state == .on && start.state == .on && menu.state == .on
-               && snap.state == .off && sounds.state == .on, "Synchronization updates every field")
+               && snap.state == .off && sounds.state == .on && toolTips.state == .on
+               && keyboardTips.state == .on, "Synchronization updates every field, including hidden tips")
         click(precise) { $0.drawingPrecision = .precise }
+
+        for (tool, keyboard) in [(false, false), (true, false), (false, true), (true, true)] {
+            expected.showToolTips = tool
+            expected.showKeyboardTips = keyboard
+            let count = delivered.count
+            form.synchronize(expected)
+            form.synchronize(expected)
+            expect(delivered.count == count, "Tip refreshes, including unchanged state, never publish writes")
+            expect(toolTips.state == (tool ? .on : .off) && keyboardTips.state == (keyboard ? .on : .off),
+                   "Tip selections synchronize independently")
+            click(keyboardTips) { $0.showKeyboardTips = !keyboard }
+            click(keyboardTips) { $0.showKeyboardTips = keyboard }
+        }
 
         for invalid in [-1, 3, Int.min, Int.max] {
             let count = delivered.count
@@ -135,6 +169,37 @@ private enum GeneralPreferencesFormTests {
         reveal(sounds)
         sounds.performClick(nil)
         expect(reentrant == 1, "Parent synchronization cannot recurse into onChange")
+        for control in [toolTips, keyboardTips] {
+            form.synchronize(initial)
+            var updates: [GeneralPreferencesState] = []
+            form.onChange = { value in
+                updates.append(value)
+                form.synchronize(value)
+            }
+            reveal(control)
+            control.performClick(nil)
+            control.performClick(nil)
+            var enabled = initial
+            if control === toolTips { enabled.showToolTips = true }
+            else { enabled.showKeyboardTips = true }
+            expect(updates == [enabled, initial], "Tip callback can synchronously echo persisted state without duplicate delivery")
+            expect(control.state == .off, "Reentrant tip updates leave the native control current")
+        }
+        form.synchronize(initial)
+        var corrected: [GeneralPreferencesState] = []
+        form.onChange = { value in
+            corrected.append(value)
+            var persisted = value
+            persisted.showToolTips = false
+            form.synchronize(persisted)
+        }
+        reveal(toolTips)
+        toolTips.performClick(nil)
+        expect(corrected.count == 1 && corrected[0].showToolTips && toolTips.state == .off,
+               "Parent correction during a tip action is authoritative and does not recurse")
+        keyboardTips.performClick(nil)
+        expect(corrected.count == 2 && !corrected[1].showToolTips && corrected[1].showKeyboardTips,
+               "Next action carries the corrected state, without stale tip values")
         form.onChange = { delivered.append($0) }
         let routeCount = delivered.count
         var routes: [String] = []
@@ -151,8 +216,10 @@ private enum GeneralPreferencesFormTests {
 
         form.onChange = { delivered.append($0) }
         form.synchronize(initial)
-        for width: CGFloat in [650, 780, 1000] {
-            form.setFrameSize(NSSize(width: width, height: 570))
+        for size in [NSSize(width: 650, height: 500), NSSize(width: 650, height: 570),
+                     NSSize(width: 780, height: 570), NSSize(width: 1000, height: 570)] {
+            let width = size.width
+            form.setFrameSize(size)
             for item in tabs.tabViewItems {
                 let tabCount = delivered.count
                 tabs.selectTabViewItem(item)
@@ -161,7 +228,8 @@ private enum GeneralPreferencesFormTests {
                 expect(tabs.selectedTabViewItem === item && item.view!.isDescendant(of: form), "Native tab switching shows its content")
                 expect(delivered.count == tabCount, "Tab selection does not publish preference edits")
                 expect(medium.state == .on && end.state == .on && both.state == .on
-                       && snap.state == .on && sounds.state == .off, "Tab changes preserve every preference")
+                       && snap.state == .on && sounds.state == .off && toolTips.state == .off
+                       && keyboardTips.state == .off, "Tab changes preserve every preference")
                 let controls = descendants(form).compactMap { $0 as? NSControl }
                 for control in controls {
                     let frame = control.convert(control.bounds, to: form)
@@ -179,13 +247,19 @@ private enum GeneralPreferencesFormTests {
                                "Title fits without clipping at \(width): \(button.title), needed \(needed), available \(available)")
                     }
                 }
-                for all in groups + [[sharing, done]] {
+                for all in groups + [[sharing, done], [sounds, toolTips, keyboardTips]] {
                     let group = all.filter { $0.isDescendant(of: form) }
                     for index in group.indices {
                         for other in group.indices where index < other {
                             expect(!group[index].convert(group[index].bounds, to: form).intersects(
                                    group[other].convert(group[other].bounds, to: form)), "Choices/actions do not overlap at \(width)")
                         }
+                    }
+                }
+                if item.label == "General" {
+                    for control in [toolTips, keyboardTips] {
+                        let frame = control.convert(control.bounds, to: item.view!)
+                        expect(item.view!.bounds.contains(frame), "Tip checkbox fits inside General at \(size)")
                     }
                 }
                 for field in controls.compactMap({ $0 as? NSTextField }) {

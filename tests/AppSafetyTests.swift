@@ -68,6 +68,14 @@ final class AppSafetyDragPanel: NSPanel {
     override func close() {}
 }
 
+final class AppSafetyHelpPanel: NSPanel {
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+    override func orderFront(_ sender: Any?) {}
+    override func orderOut(_ sender: Any?) {}
+    override func close() {}
+}
+
 enum AppSafetyActivation {
     static var isActive = true
     static func suppress() {}
@@ -322,6 +330,7 @@ enum AppSafetyTests {
                 app.historyFollowTimer?.invalidate()
                 app.dragPreviewTimer?.invalidate()
                 app.navigatorTimer?.invalidate()
+                app.helpBevel?.shutdown()
                 app.closeFontPanel()
                 app.preferencesWindow?.delegate = nil
                 app.preferencesWindow?.close()
@@ -1856,7 +1865,7 @@ enum AppSafetyTests {
     }
     static func generalPreferencesIntegration() throws {
         let defaults = UserDefaults.standard
-        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "disableSounds", "statusMenu"]
+        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "disableSounds", "statusMenu", "disableOverlay", "disableModtips"]
         let previous = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, previous) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
         for key in keys { defaults.removeObject(forKey: key) }
@@ -1873,10 +1882,13 @@ enum AppSafetyTests {
         try expect(editor.superview != nil && editor.string == "Keep pending typing" && history.undoActionName == undo && history.redoActionName == redo,
                    "Opening Preferences does not finish or lose pending text or its Undo branch")
         var choices = app.generalPreferences.state
+        choices.showToolTips = true; choices.showKeyboardTips = true
         choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeSkitch = true; choices.playSounds = false; choices.statusMenu = 1
         form.onChange?(choices)
         try expect(app.generalPreferences.state == choices && app.canvas.strokeSmoothing == .loose && app.canvas.arrowHeadPreference == 1,
                    "Form routes immediate original preference writes and future drawing defaults")
+        try expect(app.helpBevel?.enabled == true && !defaults.bool(forKey: "disableOverlay") && !defaults.bool(forKey: "disableModtips"),
+                   "Both original inverse hint settings apply independently to the live shell")
         try expect(AppSafetyPresence.policies.last == .accessory && defaults.bool(forKey: "disableSounds"), "Menu-only policy and inverted sound flag apply without relaunch")
         try expect(try app.canvas.snapshotDocumentData() == data && app.dirty == dirty && editor.string == "Keep pending typing" && history.undoActionName == undo && history.redoActionName == redo,
                    "Preferences never mutates the pending drawing or its history")
@@ -1897,6 +1909,65 @@ enum AppSafetyTests {
         app.terminationStarted = true
         choices.arrowHead = 1; form.onChange?(choices)
         try expect(app.canvas.arrowHeadPreference == 2 && !app.validateMenuItem(command), "Termination blocks preference writes and reopening")
+    }
+    static func hintShellRouting() throws {
+        let defaults = UserDefaults.standard, keys = ["disableOverlay", "disableModtips"]
+        let prior = keys.map { defaults.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, prior) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        for key in keys { defaults.removeObject(forKey: key) }
+        let fixture = try Fixture(), app = fixture.app, host = fixture.app.window as! AppSafetyWindow
+        host.simulatesVisibility = true; host.shown = true; host.simulatedKey = true
+        app.window.makeFirstResponder(app.canvas)
+        let data = try app.canvas.snapshotDocumentData(), undo = app.canvas.editingUndoManager.undoActionName
+        let dirty = app.dirty, base = app.maximumNormalCanvas!
+        try expect(app.helpBevel?.enabled == false, "Fresh original keyboard hints remain disabled")
+        var settings = app.generalPreferences.state
+        settings.showKeyboardTips = true; app.applyGeneralPreferences(settings)
+        let tips = app.maximumNormalCanvas!
+        try expect(tips.width == base.width && tips.height == base.height - 80, "Keyboard preference routes recovered 80-point screen-fit reserve")
+        settings.showToolTips = true; app.applyGeneralPreferences(settings)
+        let both = app.maximumNormalCanvas!
+        try expect(both.width == base.width - 170 && both.height == tips.height, "Combined original preferences retain width reserve and 80-point height reserve")
+        app.setTool(.arrow); app.hintModifiers([.shift])
+        try expect(app.helpBevel?.displayedMessage == "option = Arrow in reverse direction. shift = 45º arrows" && app.helpBevel?.panel is AppSafetyHelpPanel,
+                   "Native shell routes recovered immediate text through a nonordering test panel")
+        app.setTool(.fill); app.hintModifiers([.control])
+        try expect(app.helpBevel?.displayedMessage == "shift = less smoothing", "Local monitor resolves the arriving Control flags before Canvas receives the event")
+        app.setTool(.text); app.hintModifiers([.control])
+        try expect(app.helpBevel?.displayedMessage == "just type at any time, when using any tool!", "Text retains original Control exception in live hints")
+        app.setTool(.arrow); app.hintModifiers([.shift])
+        let oldFrame = host.frame
+        app.setWindowFrame(NSRect(x: oldFrame.minX, y: oldFrame.minY, width: oldFrame.width + 60, height: oldFrame.height))
+        try expect(app.helpBevel!.panel!.frame.width == host.frame.width - 80, "Programmatic resize repositions attachment after notifications are suppressed")
+        app.setWindowFrame(oldFrame)
+        let spaceDown = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.shift], timestamp: 0, windowNumber: 0,
+                                        context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!
+        app.canvas.keyDown(with: spaceDown)
+        try expect(app.canvas.isTemporaryHand && app.helpBevel?.displayedMessage == nil, "Space panning clears drawing hints using the original empty Hand help")
+        let spaceUp = NSEvent.keyEvent(with: .keyUp, location: .zero, modifierFlags: [], timestamp: 0, windowNumber: 0,
+                                      context: nil, characters: " ", charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49)!
+        app.canvas.keyUp(with: spaceUp)
+        app.hintModifiers([])
+        try expect(app.helpBevel?.displayedMessage == nil && app.helpBevel?.panel?.parent == nil, "Modifier release clears and detaches the attached strip")
+        let event = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [.option], timestamp: 0, windowNumber: 0,
+                                    context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!
+        app.canvas.flagsChanged(with: event)
+        try expect(app.helpBevel?.displayedMessage == "option = Arrow in reverse direction. shift = 45º arrows", "Real Canvas flagsChanged callback reaches shell hint routing")
+        try expect(try app.canvas.snapshotDocumentData() == data && app.dirty == dirty && app.canvas.editingUndoManager.undoActionName == undo,
+                   "Hint events and fit preferences preserve the saved document and Undo state")
+        let pending = try editor(app, text: "Keep typing during hints")
+        app.helpBevel?.clear(); app.hintModifiers([.shift])
+        try expect(app.helpBevel?.displayedMessage == nil && pending.string == "Keep typing during hints", "Field editing suppresses keyboard hints without consuming typing")
+        app.canvas.cancelOperation(nil)
+        app.window.makeFirstResponder(app.canvas)
+        app.hintModifiers([.shift]); app.windowDidResignKey(Notification(name: NSWindow.didResignKeyNotification, object: host))
+        try expect(app.helpBevel?.displayedMessage == nil, "Main window focus loss clears hints")
+        app.hintModifiers([.shift]); app.startCapture("crosshair")
+        try expect(app.helpBevel?.displayedMessage == nil, "Capture start clears the child strip even when the editor remains visible")
+        settings.showKeyboardTips = false; app.applyGeneralPreferences(settings)
+        try expect(app.helpBevel?.enabled == false && app.maximumNormalCanvas!.height == base.height - 40, "Overlay-only reserve returns to the recovered 40-point branch")
+        try expect(try app.canvas.snapshotDocumentData() == data && app.canvas.editingUndoManager.undoActionName == undo,
+                   "Cancelling pending typing and clearing hints retain the original document and Undo branch")
     }
     static func capturePreferenceRouting() throws {
         let defaults = UserDefaults.standard, key = "skitchInSnap", previous = UserDefaults.standard.object(forKey: "skitchInSnap")
@@ -2671,6 +2742,7 @@ enum AppSafetyTests {
         }
         let tests: [(String, () throws -> Void)] = [
             ("Native Preferences routes original defaults without disturbing pending text or history", generalPreferencesIntegration),
+            ("Original hint shell routes modifiers, suppression, lifecycle and screen-fit reserves", hintShellRouting),
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
             ("Original sound toggle controls Wipe and accepted Snap feedback", originalSoundRouting),
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),

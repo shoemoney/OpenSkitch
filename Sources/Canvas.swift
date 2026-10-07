@@ -298,6 +298,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
     var onColorChange: ((NSColor) -> Void)?
     /// Original resource stems: wipe_brushlayer, wipe_snap, wipe_already_blank.
     var onSound: ((String) -> Void)?
+    var onHintModifiers: ((NSEvent.ModifierFlags) -> Void)?
+    var onHintHover: ((Bool) -> Void)?
     /// See-through framing is a view state; rendering/export/recovery keep the full document.
     var framePreview = false { didSet { needsDisplay = true } }
     /// The shell owns open/replace decisions, including unsaved-work prompts and file identity.
@@ -1373,14 +1375,19 @@ final class CanvasView: NSView, NSTextViewDelegate {
         addCursorRect(bounds, cursor: cursor)
     }
     /// Modifier precedence follows recovered setModifiers: Command overrides Control;
-    /// Fill keeps its own Control handling instead of selecting the temporary eraser.
-    var effectiveTool: SketchTool {
-        if currentModifiers.contains(.command) { return .select }
-        if (currentModifiers.contains(.control) || tabletEraser) && tool != .fill { return .eraser }
+    /// Original setModifiers exempts Text from Control, not Fill.
+    /// Tablet proximity retains its existing independent path.
+    var effectiveTool: SketchTool { toolForModifiers(currentModifiers) }
+    func toolForModifiers(_ flags: NSEvent.ModifierFlags) -> SketchTool {
+        if flags.contains(.command) { return .select }
+        if flags.contains(.control) && tool != .text { return .eraser }
+        if tabletEraser && tool != .fill { return .eraser }
         return tool
     }
+    var isTemporaryHand: Bool { spaceHeld || dragMode == .pan }
     override func flagsChanged(with event: NSEvent) {
         currentModifiers = event.modifierFlags
+        if textEditor == nil { onHintModifiers?(event.modifierFlags) }
         if drawingArrow, let style = preview {
             preview = arrowPreview(style: style, modifiers: event.modifierFlags)
             needsDisplay = true
@@ -1395,14 +1402,17 @@ final class CanvasView: NSView, NSTextViewDelegate {
         super.updateTrackingAreas()
         if let area = pointerTrackingArea { removeTrackingArea(area) }
         let area = NSTrackingArea(rect: .zero,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect, .enabledDuringMouseDrag],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect, .enabledDuringMouseDrag],
             owner: self, userInfo: nil)
         addTrackingArea(area); pointerTrackingArea = area
     }
     override func mouseMoved(with event: NSEvent) { lastMousePoint = documentPoint(event) }
+    override func mouseEntered(with event: NSEvent) { onHintHover?(true) }
+    override func mouseExited(with event: NSEvent) { onHintHover?(false) }
     override func resignFirstResponder() -> Bool {
         if dragMode != .none { cancelOperation(nil) }
         spaceHeld = false; currentModifiers = []
+        onHintModifiers?([])
         return super.resignFirstResponder()
     }
     private func resetGesture() {
@@ -1920,7 +1930,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     override func keyDown(with event: NSEvent) {
         if !event.modifierFlags.contains(.command) && event.keyCode == 49 {
-            spaceHeld = true; window?.invalidateCursorRects(for: self); return
+            spaceHeld = true; onHintModifiers?(event.modifierFlags); window?.invalidateCursorRects(for: self); return
         }
         if event.keyCode == 48 && !event.isARepeat && !event.modifierFlags.contains(.command) && dragMode == .none {
             togglingPencil = true
@@ -1960,7 +1970,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
     }
     override func keyUp(with event: NSEvent) {
-        if event.keyCode == 49 { spaceHeld = false; window?.invalidateCursorRects(for: self); return }
+        if event.keyCode == 49 { spaceHeld = false; onHintModifiers?(event.modifierFlags); window?.invalidateCursorRects(for: self); return }
         super.keyUp(with: event)
     }
     override func cancelOperation(_ sender: Any?) {

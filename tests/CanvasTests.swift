@@ -1081,7 +1081,7 @@ struct CanvasTests {
         c.flagsChanged(with: try key(c, 55, type: .flagsChanged, flags: [.command]))
         try expect(c.effectiveTool == .select, "Command cursor takes precedence over tablet eraser")
         c.flagsChanged(with: try key(c, 55, type: .flagsChanged)); c.tool = .fill
-        try expect(c.effectiveTool == .fill, "Fill retains recovered temporary eraser exception")
+        try expect(c.effectiveTool == .fill, "Existing tablet Fill handling is preserved independently of Control routing")
         c.tool = .arrow; proximity.entering = false; c.tabletProximity(with: proximity)
         try expect(c.effectiveTool == .arrow, "Leaving tablet proximity restores the selected tool")
     }
@@ -2140,7 +2140,16 @@ struct CanvasTests {
         try expect(c.effectiveTool == .select, "Original Command cursor takes precedence over Control")
         c.tool = .fill
         c.flagsChanged(with: try key(c, 59, type: .flagsChanged, flags: [.control]))
-        try expect(c.effectiveTool == .fill, "Recovered Fill tool exception to Control eraser")
+        try expect(c.effectiveTool == .eraser, "Recovered setModifiers index 4 exempts Text, so Control Fill uses Eraser")
+        c.rightMouseDown(with: try mouse(c, .rightMouseDown, CGPoint(x: 50, y: 30), flags: [.control]))
+        c.rightMouseDragged(with: try mouse(c, .rightMouseDragged, CGPoint(x: 50, y: 50), flags: [.control]))
+        c.rightMouseUp(with: try mouse(c, .rightMouseUp, CGPoint(x: 50, y: 50), flags: [.control]))
+        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .path }, "Control Fill erases the vector instead of flood-filling its background")
+        c.undo(); try expect(c.document == original, "Control Fill erasure remains one exact Undo")
+        c.tool = .text
+        try expect(c.effectiveTool == .text, "Recovered Text exception retains typing under Control")
+        c.flagsChanged(with: try key(c, 55, type: .flagsChanged, flags: [.control, .command]))
+        try expect(c.effectiveTool == .select, "Command still overrides the Text exception")
     }
     static func spacePan() throws {
         let c = canvas(); let window = host(c); defer { window.close() }
