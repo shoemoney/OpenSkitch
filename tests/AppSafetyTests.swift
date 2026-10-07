@@ -343,6 +343,126 @@ enum AppSafetyTests {
         app.selectAll()
         try expect(field.selectedRange().length == "Filename".utf16.count, "Select All menu must act on filename text")
     }
+    static func failedOpenAfterDiscard() throws {
+        let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!)
+        let corrupt = support.appendingPathComponent("invalid-image.png")
+        try Data("This is not an image".utf8).write(to: corrupt)
+        let invalid = support.appendingPathComponent("invalid-version.skitchredux")
+        var invalidDocument = SketchDocument(size: CGSize(width: 123, height: 99))
+        invalidDocument.version = 99
+        // Bypass validated serialization deliberately to create a rejected file.
+        try JSONEncoder().encode(invalidDocument).write(to: invalid)
+
+        // A high-DPI TIFF can have legal point dimensions but excessive pixels.
+        // Grayscale keeps the fixture small without mocking AppKit's decoder.
+        let oversized = support.appendingPathComponent("oversized-high-dpi.tiff")
+        try autoreleasepool {
+            guard let bitmap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 8000, pixelsHigh: 4001,
+                bitsPerSample: 8, samplesPerPixel: 1, hasAlpha: false, isPlanar: false,
+                colorSpaceName: .deviceWhite, bytesPerRow: 0, bitsPerPixel: 0), let pixels = bitmap.bitmapData else {
+                throw Failure(description: "Oversized TIFF fixture allocation")
+            }
+            pixels.initialize(repeating: 0, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+            bitmap.size = NSSize(width: 800, height: 400.1)
+            guard let data = bitmap.representation(using: .tiff, properties: [:]) else {
+                throw Failure(description: "Oversized TIFF fixture encoding")
+            }
+            try data.write(to: oversized)
+            guard let decoded = NSImage(contentsOf: oversized) else { throw Failure(description: "Real TIFF decoding") }
+            var proposed = CGRect(origin: .zero, size: decoded.size)
+            guard let image = decoded.cgImage(forProposedRect: &proposed, context: nil, hints: nil) else {
+                throw Failure(description: "Real TIFF pixel decoding")
+            }
+            try expect(SketchDocument.validSize(decoded.size), "TIFF point dimensions must be accepted by the old dimension check")
+            try expect(!SketchDocument.validSize(NSSize(width: image.width, height: image.height)),
+                       "TIFF actual pixels must exceed the document limit")
+        }
+        let cases = [
+            (corrupt, "The file could not be read as an image."),
+            (invalid, SketchDocumentError.unsupportedVersion.localizedDescription),
+            (oversized, "This image is too large or cannot be decoded safely.")
+        ]
+        for (url, errorTitle) in cases {
+            let fixture = try Fixture(), app = fixture.app
+            let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
+            app.canvas.setBackgroundColor(.yellow); app.canvas.setBackgroundColor(.blue); app.canvas.undo()
+            let text = try editor(app, text: "Keep draft after rejected " + url.lastPathComponent)
+            let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
+            let history = app.canvas.editingUndoManager, typing = text.undoManager, caret = text.selectedRange()
+            let undoName = history.undoActionName, redoName = history.redoActionName
+            let name = app.nameField.stringValue, zoom = app.canvas.zoom
+            try expect(history.canUndo && history.canRedo && typing?.canUndo == true, "Rejected-open fixture must have both canvas and typing history")
+            app.saveRecovery()
+            let recovery = app.support.appendingPathComponent("Recovery.skitchredux"), recovered = try Data(contentsOf: recovery)
+            answer(.alertThirdButtonReturn)
+            AppSafetyAlert.answers.append(.init(title: errorTitle, response: .alertFirstButtonReturn))
+            app.openURL(url)
+            try expect(app.currentURL == a && app.canvas.document == before && app.dirty && app.window.isDocumentEdited,
+                       "Rejected open after Discard must preserve drawing, save destination and dirty indicator: " + url.lastPathComponent)
+            try expect(text.superview === app.canvas && app.window.firstResponder === text && text.selectedRange() == caret,
+                       "Rejected open must preserve pending editor, focus and caret")
+            try expect(app.canvas.editingUndoManager === history && history.canUndo && history.canRedo &&
+                       history.undoActionName == undoName && history.redoActionName == redoName &&
+                       text.undoManager === typing && typing?.canUndo == true, "Rejected open must preserve canvas and typing history")
+            try expect(try app.canvas.snapshotDocumentData() == pending && app.nameField.stringValue == name && app.canvas.zoom == zoom,
+                       "Rejected open must preserve name, zoom and pending content")
+            try expect(try Data(contentsOf: a) == savedA && Data(contentsOf: recovery) == recovered,
+                       "Rejected open must leave saved A and existing recovery byte-for-byte intact")
+            app.saveRecovery()
+            try expect(try Data(contentsOf: recovery) == recovered, "The next recovery tick must retain the rejected-open draft")
+            try expect(AppSafetyAlert.answers.isEmpty && AppSafetyAlert.unexpected.isEmpty, "Rejected open must consume only Discard and its decoding error")
+        }
+    }
+    static func terminationDiscard(windowClose: Bool) throws {
+        let fixture = try Fixture(), app = fixture.app
+        let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
+        let text = try editor(app, text: "Explicitly discard pending text at termination")
+        let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
+        let recovery = app.support.appendingPathComponent("Recovery.skitchredux")
+        app.saveRecovery()
+        try expect(FileManager.default.fileExists(atPath: recovery.path) && app.canvas.hasPendingTextChanges,
+                   "Termination fixture must contain both recovery and uncommitted text")
+        let prompts = AppSafetyAlert.seen.count
+        answer(.alertThirdButtonReturn)
+        if windowClose {
+            // Invoke the delegate only; do not send Close or Terminate to NSApp.
+            try expect(app.windowShouldClose(app.window), "Window-close Discard must approve closing")
+        } else {
+            try expect(app.applicationShouldTerminate(NSApp) == .terminateNow, "Quit Discard must approve termination")
+        }
+        try expect(app.applicationShouldTerminate(NSApp) == .terminateNow, "Follow-on termination must not ask to discard the same text again")
+        try expect(AppSafetyAlert.seen.count == prompts + 1 && AppSafetyAlert.unexpected.isEmpty,
+                   "Termination Discard must show exactly one prompt")
+        try expect(!app.dirty && app.canvas.hasPendingTextChanges && app.canvas.document == before && text.superview === app.canvas,
+                   "Discard approval must leave the pending editor intact until the simulated termination callback")
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        try expect(!FileManager.default.fileExists(atPath: recovery.path), "Termination must remove recovery instead of resurrecting discarded pending text")
+        try expect(try app.canvas.snapshotDocumentData() == pending && Data(contentsOf: a) == savedA,
+                   "Termination Discard must not commit pending text or alter the saved document")
+        try expect(text.superview === app.canvas && app.canvas.hasPendingTextChanges, "Recovery removal must be explicit even while pending text still exists")
+    }
+    static func quitSave() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
+        app.canvas.setBackgroundColor(.yellow)
+        _ = try editor(app, text: "Persist pending text before Quit")
+        let expected = try SketchDocument.decode(app.canvas.snapshotDocumentData())
+        let recovery = app.support.appendingPathComponent("Recovery.skitchredux")
+        app.saveRecovery()
+        try expect(FileManager.default.fileExists(atPath: recovery.path), "Quit Save fixture must start with recovery")
+        answer(.alertFirstButtonReturn)
+        try expect(app.applicationShouldTerminate(NSApp) == .terminateNow, "Quit Save must approve termination after a successful editable save")
+        let persisted = try Data(contentsOf: a), decoded = try SketchDocument.decode(persisted)
+        try expect(persisted != savedA && decoded == expected && decoded.elements.first?.text == "Persist pending text before Quit",
+                   "Quit Save must persist a valid complete document with pending text at the existing destination")
+        try expect(app.currentURL == a && !app.dirty && !app.canvas.hasPendingTextChanges && !app.window.isDocumentEdited,
+                   "Successful Quit Save must leave a clean committed document")
+        try expect(app.applicationShouldTerminate(NSApp) == .terminateNow && AppSafetyAlert.seen == ["Save your drawing?"],
+                   "Successful Quit Save must not show a second prompt")
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        try expect(!FileManager.default.fileExists(atPath: recovery.path), "Quit Save termination must clear obsolete recovery")
+        try expect(try SketchDocument.decode(Data(contentsOf: a)) == expected, "Recovery cleanup must preserve the valid saved document")
+    }
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -359,7 +479,11 @@ enum AppSafetyTests {
             ("capture start cancellation and completion Cancel preserve edits", captureCancellation),
             ("capture completion Discard replaces explicitly", captureDiscard),
             ("capture completion Save persists pending text first", captureSave),
-            ("filename focus retains command-menu behavior", filenameCommands)
+            ("filename focus retains command-menu behavior", filenameCommands),
+            ("failed open after Discard preserves edits, history, destination and recovery", failedOpenAfterDiscard),
+            ("Quit Discard removes pending recovery without a second prompt", { try terminationDiscard(windowClose: false) }),
+            ("Window Close Discard removes pending recovery without a second prompt", { try terminationDiscard(windowClose: true) }),
+            ("Quit Save persists pending text and clears recovery", quitSave)
         ]
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {

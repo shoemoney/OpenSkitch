@@ -4,5 +4,24 @@
   "contentType": "image/png",
   "bytes": 1234,
   "sha256": "eb5e19f566952e84f0a0ab8d3e2753f7f7ef6112c8283d0e4146b46aff43416b",
-  "verification": "Corrected native app Publish workflow verifies SFTP roundtrip and unauthenticated HTTP exact bytes before returning success. Independent HTTPS fetch successful."
+  "verification": "Corrected native app Publish workflow verifies SFTP roundtrip and unauthenticated HTTP exact bytes before returning success. Independent HTTPS fetch successful.",
+  "unique_filename_desktop_check": {
+    "url": "https://shoemoney.com/imgs/skitch-redux-final-proof-c8724dc0-431f-4d41-989d-6fe3de0b6e1f.png",
+    "httpStatus": 200,
+    "contentType": "image/png",
+    "bytes": 1234,
+    "sha256": "eb5e19f566952e84f0a0ab8d3e2753f7f7ef6112c8283d0e4146b46aff43416b",
+    "verified_at": "2026-10-07T05:48:02.369062+00:00",
+    "verification": "Native Publish sheet succeeded. Independent unauthenticated HTTPS fetch matched the previously verified synthetic PNG exactly."
+  },
+  "web_capture_desktop_check": {
+    "url": "https://shoemoney.com/imgs/skitch-redux-final-proof-c8724dc0-431f-4d41-989d-6fe3de0b6e1f.png",
+    "captured_pixels": [
+      2560,
+      1800
+    ],
+    "display_fit_percent": 38,
+    "result": "Native Web Snap completed; independent desktop screenshot showed the full captured page fitted inside the editor. Original firstlaunch.skitch reopened afterwards.",
+    "verified_at": "2026-10-07T05:49:44.813367+00:00"
+  }
 }

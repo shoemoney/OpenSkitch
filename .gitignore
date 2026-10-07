@@ -1,6 +1,7 @@
 original/
 analysis/*
 !analysis/reconstruction-progress.json
+!analysis/build-validation.json
 !analysis/desktop-publish-verification.json
 !analysis/sftp-verification.json
 build/

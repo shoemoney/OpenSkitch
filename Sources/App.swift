@@ -42,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var currentURL: URL?
     var dirty = false
     var restoring = false
+    var discardedForTermination = false
     var timer: Timer?
     var historyWindow: NSWindow?
     let support: URL = {
@@ -72,9 +73,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
-    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { allowDiscard() ? .terminateNow : .terminateCancel }
-    func windowShouldClose(_ sender: NSWindow) -> Bool { sender === window ? allowDiscard() : true }
-    func applicationWillTerminate(_ notification: Notification) { saveRecovery(); timer?.invalidate(); try? hotkeys.unregister() }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply { allowDiscard(discardingForTermination: true) ? .terminateNow : .terminateCancel }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { sender === window ? allowDiscard(discardingForTermination: true) : true }
+    func applicationWillTerminate(_ notification: Notification) {
+        if discardedForTermination { try? FileManager.default.removeItem(at: support.appendingPathComponent("Recovery.skitchredux")) }
+        else { saveRecovery() }
+        timer?.invalidate(); try? hotkeys.unregister()
+    }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
         sender.reply(toOpenOrPrint: .success)
@@ -171,12 +176,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func updateStatus() { let s = canvas.canvasSize; status.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
     func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
     func error(_ error: Error) { let a = NSAlert(error: error); a.runModal() }
-    func allowDiscard() -> Bool {
+    func allowDiscard(discardingForTermination: Bool = false) -> Bool {
+        if discardedForTermination { return true }
         guard dirty || canvas.hasPendingTextChanges else { return true }
         let a = NSAlert(); a.messageText = "Save your drawing?"; a.informativeText = "This document has changes that have not been saved."; a.addButton(withTitle: "Save"); a.addButton(withTitle: "Cancel"); a.addButton(withTitle: "Discard")
         let result = a.runModal()
         if result == .alertFirstButtonReturn { return save() }
-        if result == .alertThirdButtonReturn { dirty = false; saveRecovery(); return true }
+        if result == .alertThirdButtonReturn {
+            if discardingForTermination { discardedForTermination = true; dirty = false }
+            return true
+        }
         return false
     }
     @objc func newFile() { guard allowDiscard() else { return }; canvas.newBlank(size: NSSize(width: 1000,height: 700)); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
@@ -186,7 +195,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         do {
             if url.pathExtension.lowercased() == "skitchredux" { try canvas.loadDocument(data: Data(contentsOf: url)); currentURL = url }
             else if url.pathExtension.lowercased() == "skitch" { let legacy = try LegacySkitch.read(url); let converted = try LegacyBridge.convert(legacy); try canvas.loadDocument(data: converted.encoded()); currentURL = nil }
-            else { guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "SkitchRedux", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; canvas.newBlank(size: image.size); canvas.setBackground(image); currentURL = nil }
+            else { guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "SkitchRedux", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; var proposed = CGRect(origin: .zero, size: image.size)
+                guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
+                    throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
+                }
+                canvas.newBlank(size: image.size); canvas.setBackground(image); currentURL = nil }
             canvas.editingUndoManager.removeAllActions(); fitCanvasToWindow(); nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
         } catch { self.error(error) }
     }
@@ -230,7 +243,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func publishImage() {
         guard let data = canvas.imageData(format: "png") else { return }
         status.stringValue = "Publishing image…"
-        publishing.publish(data: data, fileName: safeName()+".png", presenting: window) { [weak self] result in
+        publishing.publish(data: data, fileName: safeName()+"-"+UUID().uuidString.lowercased()+".png", presenting: window) { [weak self] result in
             Task { @MainActor in
                 guard let self else { return }
                 switch result {

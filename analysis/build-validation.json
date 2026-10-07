@@ -1,0 +1,120 @@
+{
+  "verified_at": "2026-10-07T05:48:02.369062+00:00",
+  "architectures": {
+    "arm64": {
+      "passed": true,
+      "source_sha256": {
+        "Sources/App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
+        "Sources/Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
+        "Sources/Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+        "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+        "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+        "Sources/LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
+        "Sources/LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
+        "Sources/Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
+        "Sources/SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e",
+        "tests/AppSafetyTests.swift": "68e1d66ec14bc988e00abbb91c1583b30d75f818505b78f23df067f8e6a4d055",
+        "tests/CanvasTests.swift": "2c6b16a6c274e2a66b31055e4a1ec50599d0d394ce0ee0975e60ff9f64feb3e7",
+        "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
+        "tests/PublishingTests.swift": "434bce62b7dc7fc531a65f18ec1c48e182718597ed9e1ecc03afe9609760c753",
+        "tests/SVGExportTests.swift": "adaf1a57a9a96233593d4e94d9cedbe957bdf1715987a45176ffce2221fc9e90"
+      },
+      "suite_results": {
+        "canvas": 22,
+        "publishing": 160,
+        "svg": 28,
+        "app_safety": 14,
+        "global_hotkeys": 117
+      },
+      "source_drift": [],
+      "snapshot": "build/test-snapshot.4eh_agze",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.WTLsPf"
+    },
+    "x86_64": {
+      "passed": true,
+      "source_sha256": {
+        "Sources/App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
+        "Sources/Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
+        "Sources/Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+        "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+        "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+        "Sources/LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
+        "Sources/LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
+        "Sources/Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
+        "Sources/SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e",
+        "tests/AppSafetyTests.swift": "68e1d66ec14bc988e00abbb91c1583b30d75f818505b78f23df067f8e6a4d055",
+        "tests/CanvasTests.swift": "2c6b16a6c274e2a66b31055e4a1ec50599d0d394ce0ee0975e60ff9f64feb3e7",
+        "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
+        "tests/PublishingTests.swift": "434bce62b7dc7fc531a65f18ec1c48e182718597ed9e1ecc03afe9609760c753",
+        "tests/SVGExportTests.swift": "adaf1a57a9a96233593d4e94d9cedbe957bdf1715987a45176ffce2221fc9e90"
+      },
+      "suite_results": {
+        "canvas": 22,
+        "publishing": 160,
+        "svg": 28,
+        "app_safety": 14,
+        "global_hotkeys": 117
+      },
+      "source_drift": [],
+      "snapshot": "build/test-snapshot.tyrugtde",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.LrSeUB"
+    }
+  },
+  "full_original_parity": false,
+  "desktop_checks": [
+    "Original firstlaunch.skitch import with editable paths/text",
+    "Native rectangle drag",
+    "Pending annotation New/Cancel protection",
+    "Active-editor Undo and Redo",
+    "Recovery preserves pending annotation without closing editor",
+    "Native SFTP Publish verifies public HTTP image",
+    "Global shortcut preferences sheet visible with all bindings None",
+    "Web Snap captures the public synthetic image"
+  ],
+  "not_verified": [
+    "Original i386 runtime equivalence",
+    "Screen and camera capture permissions/hardware",
+    "Actual app-unfocused global hotkey capture",
+    "Every original feature and legacy service"
+  ],
+  "build": {
+    "architectures": [
+      "arm64",
+      "x86_64"
+    ],
+    "minimum_macos": "13.0",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.UIFsbJ",
+    "source_sha256": {
+      "App.swift": "f349fba26c27de94551f57ed14e02283b94f102e78687731c517e7e8ca392836",
+      "Canvas.swift": "baacd64aa2ef1cda6b3febdc04fbd7a0dfcb82ddb06b05630959daa05144a5eb",
+      "Capture.swift": "25aeb1d3b67ba0a04d6f60dffbaf83cd9d047eb97d1898d59e5cc2385ce8a08a",
+      "DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+      "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+      "Info.plist": "810e74a20e5b43b6575787a0cff0af9301cbfffe36efa0ccb9d4577da7db9bcc",
+      "LegacyBridge.swift": "746a58eef02a4e0867ea6af4ef7800a72d93907591d25e5207b45dae520b8bfe",
+      "LegacySkitch.swift": "56e78b50e40145aa4bb4cc47838ff3d8dfb6e21a119c82cbbb0fbc4d28e8b357",
+      "Publishing.swift": "67761284f94463c9bd51ce56b010f705769456bfae49e2d9d6bd28273aa2ac9a",
+      "SVGExport.swift": "4433f970346eb81f1facffe5afb515701e28004bc7c906c061c8edb5c88f7b8e"
+    },
+    "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d"
+  },
+  "native_startup_smoke": {
+    "arm64": {
+      "passed": true,
+      "result": "native startup, editable save/load, PNG export succeeded",
+      "exit_code": 0,
+      "png_bytes": 24898,
+      "editable_bytes": 4507
+    },
+    "x86_64": {
+      "passed": true,
+      "result": "native startup, editable save/load, PNG export succeeded",
+      "exit_code": 0,
+      "png_bytes": 24641,
+      "editable_bytes": 4507
+    },
+    "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d",
+    "verified_at": "2026-10-07T05:48:41.820451+00:00"
+  },
+  "native_startup_smoke_evidence": "build/startup-smoke-8ef9738f17"
+}
