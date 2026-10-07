@@ -18,6 +18,8 @@ final class AppSafetyWindow: NSWindow {
     var minimized = false
     override var isVisible: Bool { simulatesVisibility && shown }
     override var isMiniaturized: Bool { minimized }
+    var simulatedKey = true
+    override var isKeyWindow: Bool { simulatesVisibility && shown && simulatedKey }
     override var attachedSheet: NSWindow? { simulatedSheet ?? super.attachedSheet }
     override func makeKeyAndOrderFront(_ sender: Any?) { if simulatesVisibility { shown = true } }
     override func orderFront(_ sender: Any?) { if simulatesVisibility { shown = true } }
@@ -25,6 +27,21 @@ final class AppSafetyWindow: NSWindow {
     override func miniaturize(_ sender: Any?) { minimized = true; shown = false }
     override func deminiaturize(_ sender: Any?) { minimized = false; shown = true }
     override func orderBack(_ sender: Any?) {}
+}
+
+final class AppSafetyPopover: NSObject {
+    var behavior: NSPopover.Behavior = .transient
+    var contentViewController: NSViewController?
+    var appearance: NSAppearance?
+    var isShown = false
+    func show(relativeTo rect: NSRect, of view: NSView, preferredEdge: NSRectEdge) { isShown = true }
+    func performClose(_ sender: Any?) { isShown = false }
+}
+
+final class AppSafetyColorPanel: NSColorPanel {
+    var sampleColor: NSColor = .red
+    override var color: NSColor { get { sampleColor } set { sampleColor = newValue } }
+    override func orderFront(_ sender: Any?) {}
 }
 
 final class AppSafetyFontPanel: NSFontPanel {
@@ -284,6 +301,7 @@ enum AppSafetyTests {
                 app.dragPreviewTimer?.invalidate()
                 app.navigatorTimer?.invalidate()
                 app.closeFontPanel()
+                app.closeDrawingColors()
                 app.removeDragThumbnail()
                 app.navigatorWindow?.orderOut(nil)
                 app.navigatorWindow?.close()
@@ -2931,6 +2949,89 @@ enum AppSafetyTests {
                            OriginalDrawingControls.readableFontSize(12, displayFontScale: 0.00001) == 4096 &&
                            OriginalDrawingControls.readableFontSize(1.5, displayFontScale: 10) == 18,
                            "Invalid and extreme scales retain valid document font bounds")
+            }),
+            ("Hover palette retains pending focus across cluster transitions and closes stale work", {
+                let fixture = try Fixture(), app = fixture.app
+                guard let window = app.window as? AppSafetyWindow else { throw Failure(description: "Isolated hover window") }
+                window.simulatesVisibility = true; window.shown = true
+                let pending = try editor(app, text: "Hover pending")
+                app.drawingColorHover(true, palette: false)
+                try expect(app.colorPopover?.isShown == true && app.colorOpenedByHover && app.window.firstResponder === pending,
+                           "Original hover opens without taking annotation typing focus")
+                app.drawingColorHover(false, palette: false); app.drawingColorHover(true, palette: true)
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.15))
+                try expect(app.colorPopover?.isShown == true && app.colorPaletteHovered,
+                           "Crossing the modern popover arrow gap must cancel dismissal")
+                app.drawingColorHover(false, palette: true)
+                try waitForMain("Leaving both original hover regions dismisses the palette", until: { app.colorPopover?.isShown == false })
+                app.drawingColorHover(true, palette: false); app.drawingColorHover(false, palette: false)
+                app.closeDrawingColors(); app.showDrawingColors(app.paletteButton)
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.15))
+                try expect(app.colorPopover?.isShown == true && !app.colorOpenedByHover,
+                           "Cancelled hover dismissal cannot close a later keyboard/click palette")
+                app.closeDrawingColors(); window.simulatedKey = false
+                app.showDrawingColors(app.paletteButton)
+                try expect(app.colorPopover?.isShown == true, "Explicit Color activation must work before the window becomes key")
+                app.closeDrawingColors(); window.simulatedKey = true
+                app.drawingColorHover(true, palette: false)
+                let retired = app.colorPopover?.contentViewController?.view as? BezelHoverPaletteView
+                app.showDrawingColors(app.paletteButton); app.drawingColorHover(false, palette: false)
+                RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.15))
+                try expect(app.colorPopover?.isShown == true && !app.colorOpenedByHover,
+                           "Explicit activation pins an already-hovered palette across pointer departure")
+                app.closeDrawingColors(); app.showDrawingColors(app.paletteButton)
+                retired?.onHover?(true)
+                try expect(!app.colorPaletteHovered, "Retired palette tracking cannot alter a replacement palette")
+                app.closeDrawingColors(); app.frameCaptureInProgress = true
+                app.drawingColorHover(true, palette: false)
+                try expect(app.colorPopover?.isShown != true, "Capture blocks hover opening")
+                app.frameCaptureInProgress = false; app.closeDrawingColors()
+                let sheet = NSWindow(); window.simulatedSheet = sheet
+                app.drawingColorHover(true, palette: false)
+                try expect(app.colorPopover?.isShown != true, "Attached sheets block hover opening")
+                window.simulatedSheet = nil; app.closeDrawingColors()
+                window.shown = false; app.drawingColorHover(true, palette: false)
+                try expect(app.colorPopover?.isShown != true, "Hidden windows cannot reopen hover palettes")
+            }),
+            ("Drawing defaults round trip exact calibrated custom RGBA and restore native controls", {
+                let fixture = try Fixture(), app = fixture.app
+                let original = OriginalDrawingControls.presets[2].color
+                app.canvas.newBlank(size: NSSize(width: 800, height: 600))
+                app.canvas.document.renderSize = NSSize(width: 200, height: 150)
+                app.applyChosenColor(original, modifiers: [])
+                let panel = AppSafetyColorPanel(contentRect: .zero, styleMask: [.titled], backing: .buffered, defer: false)
+                panel.sampleColor = NSColor(calibratedRed: 0.17, green: 0.43, blue: 0.91, alpha: 0.23)
+                app.changeColor(panel)
+                try expect(SketchColor(app.canvas.strokeColor) == SketchColor(OriginalDrawingControls.drawingColor(from: panel.sampleColor)!),
+                           "Standard macOS changeColor: routing must preserve calibrated panel RGB instead of interpreting the panel as a device-color well")
+                app.applyChosenColor(original, modifiers: [])
+                app.widthControl.performValueChange(9.375, continuous: false)
+                let expectedCustom = OriginalDrawingControls.drawingColor(from: app.customDrawingColor)!
+                let expected = SketchColor(expectedCustom)
+                try expect(expected.red == CGFloat(Float(0.17)) && expected.green == CGFloat(Float(0.43)) && expected.alpha == CGFloat(Float(0.23)),
+                           "Native panel calibrated components become original raw float storage without device conversion")
+                let raw = try app.canvas.snapshotDocumentData()
+                let file = SkitchFile(document: try CanvasView.validatedDocumentData(raw), metadata: app.legacyMetadata, canvasData: raw)
+                let native = try file.encoded(), decoded = try SkitchFile.decode(native)
+                let visible = try LegacySkitch.decode(native)
+                try expect(visible.attributes["skitchBrushSize"] == "9.375" &&
+                           SketchColor(OriginalDrawingControls.legacyColor(visible.attributes["skitchBrushColor"], alpha: visible.attributes["skitchBrushColorAlpha"])!) == SketchColor(original),
+                           "Visible original SVG defaults match the actual brush instead of stale export constants")
+                let url = fixture.file("Drawing-defaults").deletingPathExtension().appendingPathExtension("skitch")
+                try native.write(to: url)
+                let clean = try Fixture(), restored = clean.app
+                restored.openURL(url)
+                try expect(restored.legacyMetadata == decoded.metadata && restored.canvas.strokeWidth == 9.375 &&
+                           restored.widthControl.doubleValue == 9.375 && SketchColor(restored.canvas.strokeColor) == SketchColor(original),
+                           "Native Open restores future brush size/color and the visible controls")
+                try expect(SketchColor(OriginalDrawingControls.drawingColor(from: restored.customDrawingColor)!) == expected &&
+                           restored.canvas.fontSize == OriginalDrawingControls.readableFontSize(9.375, displayFontScale: 0.25),
+                           "Custom alpha and recovered document font scale restore with native drawing defaults")
+                for malformed in ["rgb(nan,0,0)","rgb(256,0,0)","rgb(1,2)","rgb(1,2,3,4)"] {
+                    try expect(OriginalDrawingControls.legacyColor(malformed, alpha: "1") == nil, "Invalid optional color defaults are ignored safely")
+                }
+                try expect(OriginalDrawingControls.legacyColor("rgb(1,2,3)", alpha: "nan") == nil,
+                           "Invalid optional alpha cannot poison future drawing colors")
             }),
             ("Recovered bezel keeps readable reachable controls and existing menu actions at default and minimum sizes", {
                 let fixture = try Fixture(), app = fixture.app

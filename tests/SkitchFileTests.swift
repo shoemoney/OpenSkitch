@@ -214,7 +214,7 @@ enum SkitchFileTests {
             }),
             ("Visible SVG edits cannot be silently overridden by hidden state", {
                 let bytes = try SkitchFile(document: try complex()).encoded()
-                let changed = String(decoding: bytes, as: UTF8.self).replacingOccurrences(of: "skitchBrushSize=\"5\"", with: "skitchBrushSize=\"6\"")
+                let changed = String(decoding: bytes, as: UTF8.self).replacingOccurrences(of: "skitchBrushSize=\"6.75\"", with: "skitchBrushSize=\"6\"")
                 try expect(changed != String(decoding: bytes, as: UTF8.self), "Mutation did not alter SVG")
                 try rejects(Data(changed.utf8), "conflicting visible SVG")
             }),

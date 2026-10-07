@@ -100,8 +100,8 @@ enum SVGExport {
         let defaults = ["xmlns:ev": "http://www.w3.org/2001/xml-events", "baseProfile": "full", "overflow": "hidden",
             "skitchDocumentType": document.backgroundPNG != nil || document.elements.contains(where: { $0.kind == .raster }) ? "2" : "3",
             "skitchVisibleWidth": number(document.size.width), "skitchVisibleHeight": number(document.size.height),
-            "skitchCustomColor": "rgb(0,0,0)", "skitchCustomColorAlpha": "1", "skitchBrushColor": "rgb(252,12,89)",
-            "skitchBrushColorAlpha": "1", "skitchBrushSize": "5", "skitchTool": "1", "skitchSourceURL": "", "skitchExternalAppDocumentPath": ""]
+            "skitchCustomColor": "rgb(0,255,255)", "skitchCustomColorAlpha": "1", "skitchBrushColor": "rgb(255,0,0)",
+            "skitchBrushColorAlpha": "1", "skitchBrushSize": "6.75", "skitchTool": "1", "skitchSourceURL": "", "skitchExternalAppDocumentPath": ""]
         for (key, value) in defaults where root[key] == nil { root[key] = value }
         if metadata.originalSize != document.size { root["skitchVisibleWidth"] = number(document.size.width); root["skitchVisibleHeight"] = number(document.size.height) }
         var xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<!-- Skitch 1.0 -->",

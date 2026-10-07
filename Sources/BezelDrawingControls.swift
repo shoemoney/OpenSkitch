@@ -29,6 +29,26 @@ enum OriginalDrawingControls {
         Preset(tag: 108, name: "Black", bits: [0,0,0,0x3f800000]),
         Preset(tag: 109, name: "Highlighter", bits: [0x3f800000,0x3f800000,0,0x3eb33333])
     ]
+    /// The original panel reads calibrated components into float RGBA storage.
+    static func drawingColor(from panelColor: NSColor) -> NSColor? {
+        guard let rgb = panelColor.usingColorSpace(.genericRGB) else { return nil }
+        let values = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent, rgb.alphaComponent].map { CGFloat(Float($0)) }
+        guard values.allSatisfy({ $0.isFinite && (0...1).contains($0) }) else { return nil }
+        return NSColor(deviceRed: values[0], green: values[1], blue: values[2], alpha: values[3])
+    }
+    static func legacyRGB(_ color: NSColor) -> String {
+        let raw = SketchColor(color)
+        return "rgb(\(Double(raw.red)*255),\(Double(raw.green)*255),\(Double(raw.blue)*255))"
+    }
+    static func legacyColor(_ value: String?, alpha: String?) -> NSColor? {
+        guard let value, value.hasPrefix("rgb("), value.hasSuffix(")") else { return nil }
+        let parts = value.dropFirst(4).dropLast().split(separator: ",", omittingEmptySubsequences: false)
+        let values = parts.compactMap { Double($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+        guard values.count == 3, values.allSatisfy({ $0.isFinite && (0...255).contains($0) }),
+              let opacity = Double(alpha ?? "1"), opacity.isFinite, (0...1).contains(opacity) else { return nil }
+        return NSColor(deviceRed: CGFloat(Float(values[0]/255)), green: CGFloat(Float(values[1]/255)),
+                       blue: CGFloat(Float(values[2]/255)), alpha: CGFloat(Float(opacity)))
+    }
     static let minimum = 1.5, maximum = 12.0, initialSize = 6.75
     static let sizeSteps = (0..<5).map { minimum + Double($0) * (maximum - minimum) / 4 }
     static func size(_ raw: Double, continuous: Bool) -> Double {
@@ -168,4 +188,28 @@ final class BezelSizeSlider: NSControl {
         if newWindow == nil { endTracking() }
         super.viewWillMove(toWindow: newWindow)
     }
+}
+
+/// Original color-container/palette tracking is active without taking text focus.
+final class BezelHoverButton: NSButton {
+    var onHover: ((Bool) -> Void)?
+    private var hoverTracking: NSTrackingArea?
+    override func updateTrackingAreas() {
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect, .enabledDuringMouseDrag], owner: self)
+        addTrackingArea(area); hoverTracking = area; super.updateTrackingAreas()
+    }
+    override func mouseEntered(with event: NSEvent) { onHover?(true) }
+    override func mouseExited(with event: NSEvent) { onHover?(false) }
+}
+final class BezelHoverPaletteView: NSView {
+    var onHover: ((Bool) -> Void)?
+    private var hoverTracking: NSTrackingArea?
+    override func updateTrackingAreas() {
+        if let hoverTracking { removeTrackingArea(hoverTracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeInActiveApp, .inVisibleRect, .enabledDuringMouseDrag], owner: self)
+        addTrackingArea(area); hoverTracking = area; super.updateTrackingAreas()
+    }
+    override func mouseEntered(with event: NSEvent) { onHover?(true) }
+    override func mouseExited(with event: NSEvent) { onHover?(false) }
 }

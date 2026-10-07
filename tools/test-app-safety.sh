@@ -76,6 +76,8 @@ for name, (path, data) in snapshot.items():
         # manager: even an apparently safe default can come from saved settings.
         text = text.replace('GlobalHotkeyManager()', 'AppSafetyHotkeyManager()')
         text = text.replace('NSPageLayout()', 'AppSafetyPageLayout()')
+        text = text.replace('NSPopover()', 'AppSafetyPopover()')
+        text = text.replace('colorPopover: NSPopover?', 'colorPopover: AppSafetyPopover?')
         text = text.replace('NSPanel(contentRect: rect, styleMask: [.borderless]', 'AppSafetyDragPanel(contentRect: rect, styleMask: [.borderless]')
         if 'NSPageLayout(' in text:
             raise SystemExit('Unrecognized live Page Setup construction; refusing to run.')

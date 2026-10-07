@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-10-07T19:59:46.361542+00:00",
-  "checkpoint_id": "drawing-controls-26ce14c994",
+  "verified_at": "2026-10-07T20:36:40.758509+00:00",
+  "checkpoint_id": "hover-defaults-c783e0f6a2",
   "checkpoint_state": "current_build_suites_startup_and_listed_desktop_checks_verified",
   "build": {
     "architectures": [
@@ -8,11 +8,11 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.u0R6KU",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.4OOAxe",
     "source_sha256": {
-      "App.swift": "fe51d61e5c6cb9911aaa2783843b8be91c3d960f730e626ae726abc95e58fe65",
+      "App.swift": "6cb538d539fd753c2fd5fe0b2fd99a1df64a93a20864c52a96fac739dcfd03d5",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
-      "BezelDrawingControls.swift": "3cfc5efd7660a566b5488f082a57bc18c7848d43b771e37a2a4e5200630dfa17",
+      "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
       "Canvas.swift": "135e1d62588b43f47531f06dd8a180493c26010a07aa9938dcc4a69890813420",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
@@ -32,7 +32,7 @@
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
       "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
       "ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
-      "SVGExport.swift": "4a061e7d170cfee030809da25c18b160baa9982f79f6b64aef9ec4f84e460ccf",
+      "SVGExport.swift": "901a037ef806c6dab6479ee701dc08b6b7b4b73c69b1fd84e0237c1bd02f11ac",
       "SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
       "TextStyleForm.swift": "ee864cfc831d34e8e22f21b04d6e2c71b34b4ffbcc891cee4f4d5ed369f22322",
@@ -83,23 +83,23 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d"
+    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "477e04e851b103c50535cf282ed88563f1ab9e019baa34f312c9d33919590daf",
+  "build_manifest_sha256": "63252e3b7a293b84d4ce21df2bdc4f48b6cc65fd1bc84a80d64303222096918f",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/drawing-controls-verification/build.log",
-  "build_log_sha256": "9d002ac355cdb2d59d4adf93ab2f621b58d003967b68c4efbdf73b4e52e942c0",
+  "build_log_path": "build/hover-defaults-verification/build.log",
+  "build_log_sha256": "df3e05cf4be3d0e562c7e86a57c15933dd078f7970a4863342d0a40c4de14804",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.b9oc7sx5",
-      "log_path": "build/drawing-controls-verification/arm64.log",
-      "log_sha256": "1a9ac6b83b5875018324446afad4ce6b5d094ba31947ab26485a41163a4cdf6d",
-      "checks": 2537,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.v6qdaffp",
+      "log_path": "build/hover-defaults-verification/arm64.log",
+      "log_sha256": "069a8c8e07ad60eeaf7b340ab3d2b4e48f2f4fd5b2166385924921ff40042010",
+      "checks": 2539,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -107,27 +107,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.yobcoxw9",
-      "log_path": "build/drawing-controls-verification/x86_64.log",
-      "log_sha256": "8bf4deea76829921fcad73c0b22c71f7249e315f3b475851ec9d95c5af2cd68a",
-      "checks": 2537,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.hb6v16kl",
+      "log_path": "build/hover-defaults-verification/x86_64.log",
+      "log_sha256": "c317dd7c34029d8f59da2d55ccf01d7c38ef3f5d27dea3270b974341b0f7113d",
+      "checks": 2539,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/drawing-controls-verification/results.json",
-  "full_suite_results_sha256": "fc5b4456acac7ab3c125967fcbb2834df5a3bde2ab2ba3e0b9e3f4e5a34c394c",
+  "full_suite_results_path": "build/hover-defaults-verification/results.json",
+  "full_suite_results_sha256": "903539af0b30ce32cd8f0c1da5031cd6067966b653556cf0fcb66f1af8d90702",
   "native_startup_smoke": {
-    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d",
-    "verified_at": "2026-10-07T19:51:57.804636+00:00",
+    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363",
+    "verified_at": "2026-10-07T20:33:08.002344+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "1fdeacc7783ca39b07354d3639456ddb773fd3377825d95a9d61b625953858c2"
+      "editable_sha256": "b1f82416bd1a605c180103f1f4168bc7347d71003fefb2791b98f3f92e8497e0"
     },
     "x86_64": {
       "passed": true,
@@ -135,55 +135,60 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "ab01392a17df99bce3e2fa4912fca8ba91a48b82e3409f387e02178a2633adff"
+      "editable_sha256": "7674d4653a873f285af799a13afaf4110047a1fbf2a966ed8df3d335b3365248"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-26ce14c994/results.json",
-  "native_startup_smoke_results_sha256": "e1b10c856491ab3f92e8c2f8d9bda1569156d9eb529379e5edbaa3c7578f4c21",
+  "native_startup_smoke_results_path": "build/startup-smoke-c783e0f6a2/results.json",
+  "native_startup_smoke_results_sha256": "559e8ea27ab02fc10719af3bc420753a4bfae7aa3d158995977d887f9b29419b",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
     "tools/build.sh": "6d0136cd6131d3fe0c742b44abcb1e1a4a483a8efec98aafd290ba7fabfff7ae",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "cc42833b8183e663ebcbeb970874ea70482a4e46538efefd5bc7703885ca2b17"
+    "tools/test-app-safety.sh": "54aad030bac6c10a38a3d230e0d6b23241f95fea0497d86460a5a39642c04bc7"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2537,
+    "checks_per_architecture": 2539,
     "suites": 24,
-    "results_path": "build/drawing-controls-verification/results.json",
-    "results_sha256": "fc5b4456acac7ab3c125967fcbb2834df5a3bde2ab2ba3e0b9e3f4e5a34c394c"
+    "results_path": "build/hover-defaults-verification/results.json",
+    "results_sha256": "903539af0b30ce32cd8f0c1da5031cd6067966b653556cf0fcb66f1af8d90702"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d",
-    "startup_log_path": "build/drawing-controls-verification/startup.log",
-    "startup_log_sha256": "4a9f26ed86fc403668fbabc3644d4fece39fd2779a015a2a417e20d687a48f9e"
+    "binary_sha256": "c783e0f6a2c6a9a6b6dd686e23b5aa3f7842ad2e055ce5909731ad58be783363",
+    "startup_log_path": "build/hover-defaults-verification/startup.log",
+    "startup_log_sha256": "7e7c829a5d76702df6ac4354b92fd569cb262a6191fbbbdd2180e7905503a37b"
   },
   "current_desktop_checks": [
     {
-      "id": "compact_layout",
+      "name": "Original color palette opens through native Color button",
       "result": "passed",
-      "scope": "Default1024x772 and native900x640 minimum window screenshots reviewed. Read-only metrics after a drawing-control action confirm owned readable controls >=18 points, positive frames, and no clipping. The immediate minimum-layout file is a stale startup metric snapshot; minimum-after-control-layout is the current minimum measurement."
+      "evidence": "palette-current.png",
+      "scope": "Ten preset swatches and Custom color; readable desktop layout; canvas remained first responder. Idle pointer hover not verified."
     },
     {
-      "id": "palette_selection",
+      "name": "Native Open restores legacy SVG brush defaults",
       "result": "passed",
-      "scope": "Native Color popover exposes ten named original swatches plus Custom color. Blue selected with exact original raw RGB; highlighter selected with0.35 alpha and the active text editor retained. Custom entry applied its retained cyan; native system panel alpha editing was not completed."
+      "evidence": "restored-current-ax.txt",
+      "scope": "Synthetic legacy SVG fixture: size9.375, raw Blue RGB and alpha0.35; no original runtime claim."
     },
     {
-      "id": "resized_pending_text_size",
+      "name": "Retained custom choice preserves exact calibrated raw RGBA",
       "result": "passed",
-      "scope": "Native Resize changed800x600 source output to200x150. Actual Size slider click selected12: recorded logical font256, visible displayed text enlarged, typing ! continued in the same editor, final Undo group closed. Very large text wraps in the existing narrow annotation box; automatic box-width adjustment is not claimed."
+      "evidence": "custom-current-ax.txt",
+      "scope": "Native Custom choice restored RGBA0.17/0.43/0.91/0.23; fresh model evidence matches retained custom color. No native panel alpha-entry claim."
     },
     {
-      "id": "continuous_keyboard_size",
+      "name": "Separate Save As and native Open retain brush size and custom RGBA",
       "result": "passed",
-      "scope": "With Size focused, Shift+Down changed6.75 to6.85; Shift+Up restored6.75. Actual native intermediate size recorded. Shift mouse drag remains internal-test evidence only."
+      "evidence": "reopened-current-ax.txt",
+      "scope": "Saved independent proof reopens with size9.375 and RGBA0.17/0.43/0.91/0.23; saved SVG root attributes also checked."
     },
     {
-      "id": "native_save_and_undo_redo",
+      "name": "Current owned bezel readability",
       "result": "passed",
-      "scope": "Separate native Save As wrote the proof file with Size!, exact blue RGBA and logical font72 at Size6.75/output scale0.25. Right-rail Undo removed the complete text transaction; native Edit > Redo restored it visibly. Save-to-History was clicked afterward; no remote publishing occurred."
+      "evidence": "reopened-palette-current-layout.json",
+      "scope": "Current default1024x772 window and palette reviewed; all measured owned readable control fonts >=18. Minimum geometry has controlled tests and earlier exact-binary native proof, not repeated this checkpoint."
     }
   ],
   "historical_validations": [
@@ -773,6 +778,40 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "drawing-controls-26ce14c994",
+      "binary_sha256": "26ce14c994b403633a4c104790e2913dab07a820b859e41523deabadd6eaea4d",
+      "full_suite_results_path": "build/drawing-controls-verification/results.json",
+      "full_suite_results_sha256": "fc5b4456acac7ab3c125967fcbb2834df5a3bde2ab2ba3e0b9e3f4e5a34c394c",
+      "desktop_checks": [
+        {
+          "id": "compact_layout",
+          "result": "passed",
+          "scope": "Default1024x772 and native900x640 minimum window screenshots reviewed. Read-only metrics after a drawing-control action confirm owned readable controls >=18 points, positive frames, and no clipping. The immediate minimum-layout file is a stale startup metric snapshot; minimum-after-control-layout is the current minimum measurement."
+        },
+        {
+          "id": "palette_selection",
+          "result": "passed",
+          "scope": "Native Color popover exposes ten named original swatches plus Custom color. Blue selected with exact original raw RGB; highlighter selected with0.35 alpha and the active text editor retained. Custom entry applied its retained cyan; native system panel alpha editing was not completed."
+        },
+        {
+          "id": "resized_pending_text_size",
+          "result": "passed",
+          "scope": "Native Resize changed800x600 source output to200x150. Actual Size slider click selected12: recorded logical font256, visible displayed text enlarged, typing ! continued in the same editor, final Undo group closed. Very large text wraps in the existing narrow annotation box; automatic box-width adjustment is not claimed."
+        },
+        {
+          "id": "continuous_keyboard_size",
+          "result": "passed",
+          "scope": "With Size focused, Shift+Down changed6.75 to6.85; Shift+Up restored6.75. Actual native intermediate size recorded. Shift mouse drag remains internal-test evidence only."
+        },
+        {
+          "id": "native_save_and_undo_redo",
+          "result": "passed",
+          "scope": "Separate native Save As wrote the proof file with Size!, exact blue RGBA and logical font72 at Size6.75/output scale0.25. Right-rail Undo removed the complete text transaction; native Edit > Redo restored it visibly. Save-to-History was clicked afterward; no remote publishing occurred."
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -821,13 +860,14 @@
     "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
     "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta.",
     "Original floating snapshot includes native/window effects that are not established by cached owned-view rendering.",
+    "Native minimum900x640 window layout was reached through the Resize workflow on the current binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified.",
     "Current drag-thumbnail desktop interaction remains unverified: no actual Finder/application delivery, hover/cancel/animated-restore proof was obtained.",
     "Recovered corner curves, editor15/15 and drag25/15-frame sequences and20ms timers are implemented in default/tracking/modal modes. Native Close/Hide/menu-Minimize endpoints and pending-editor continuity were checked on the earlier Close/Hide binary only and have not been repeated on this compact-bezel binary; intermediate animation pixels, original CGS2x2 mesh interpolation, shadow/titlebar texture, restoration origin and original runtime equivalence remain unverified.",
     "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
     "Previous-app focus, menu-icon click, physical yellow Minimize button, Dock-only/menu-only desktop presence, status-only Dock suppression and preference UI remain unverified or incomplete.",
-    "Complete Fonts native workflow, remaining original tool-specific clusters, hover palette and preference tabs and full original runtime parity remain unverified.",
-    "Native minimum900x640 window layout was reached through the Resize workflow on the current binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified."
+    "Complete Fonts native workflow, remaining original tool-specific clusters, real idle-pointer hover and preference tabs and full original runtime parity remain unverified.",
+    "Native minimum900x640 window layout was reached through the Resize workflow on the prior palette/Size binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified."
   ],
-  "current_desktop_proof_path": "build/drawing-controls-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "844fd7bc4e6288f3274364203bfef3c8fd3156f842a4f6b98e03b4d98b4aaa18"
+  "current_desktop_proof_path": "build/hover-defaults-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "6ec500059d1b8a5a3eba1e16d7d2058facaaed1d443f41087886ad19cf69de1b"
 }
