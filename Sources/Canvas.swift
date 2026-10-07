@@ -256,6 +256,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     var strokeColor: NSColor = .systemRed
     var strokeWidth: CGFloat = 5
     var strokeSmoothing: StrokeSmoothing = .medium
+    var arrowHeadPreference = 0
     var filled = false
     var shadowed = true
     var fontName = "Helvetica-Bold"
@@ -368,6 +369,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var strokePoints: [CGPoint] = []
     private var strokeSamples: [StrokeSample] = []
     private var drawingPencil = false
+    private var drawingArrow = false
+    private var arrowEnd: CGPoint = .zero
     private var tabletEraser = false
     private var textEditor: SketchTextEditor?
     private var textEditorGrip: SketchTextGrip?
@@ -1378,6 +1381,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     override func flagsChanged(with event: NSEvent) {
         currentModifiers = event.modifierFlags
+        if drawingArrow, let style = preview {
+            preview = arrowPreview(style: style, modifiers: event.modifierFlags)
+            needsDisplay = true
+        }
         window?.invalidateCursorRects(for: self)
     }
     override func viewDidMoveToWindow() {
@@ -1402,6 +1409,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         preview = nil; marquee = nil; gestureState = nil; gestureDocument = nil
         gestureColor = nil; dragMode = .none; strokePoints = []; strokeSamples = []; drawingPencil = false; resizingHandle = nil
         copyOnDrag = false; copiesCreated = false
+        drawingArrow = false; arrowEnd = .zero
     }
     private func sampleColor(at point: CGPoint) {
         guard document.canvasRect.contains(point) else { return }
@@ -1581,6 +1589,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
             if kind == .brush {
                 drawingPencil = true
                 element = pencilPreview(style: element, modifiers: event.modifierFlags)
+            } else if kind == .arrow {
+                drawingArrow = true; arrowEnd = point
+                element = arrowPreview(style: element, modifiers: event.modifierFlags)
             } else { element.rect = CGRect(origin: point, size: .zero) }
             preview = element; selection.removeAll(); dragMode = .create
         }
@@ -1592,6 +1603,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if dragMode != .pan { autoscroll(with: event) }
         var point = documentPoint(event)
         lastMousePoint = point
+        currentModifiers = event.modifierFlags
         let dx = point.x - gestureStart.x, dy = point.y - gestureStart.y
         switch dragMode {
         case .create:
@@ -1599,6 +1611,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
             if drawingPencil {
                 if strokeSamples.count < StrokeFitter.maximumSamples { strokeSamples.append(strokeSample(event, at: point)) }
                 element = pencilPreview(style: element, modifiers: event.modifierFlags)
+            } else if drawingArrow {
+                arrowEnd = event.modifierFlags.contains(.shift) ? OriginalArrowGeometry.constrained(point, from: gestureStart) : point
+                element = arrowPreview(style: element, modifiers: event.modifierFlags)
             } else {
                 if event.modifierFlags.contains(.shift) {
                     if [.rectangle, .ellipse].contains(element.kind) {
@@ -1648,13 +1663,17 @@ final class CanvasView: NSView, NSTextViewDelegate {
         documentMutationDepth += 1
         defer { documentMutationDepth -= 1 }
         // ToolBrush and ToolEraser do not add the zero-pressure release event.
-        if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
+        if drawingArrow, let style = preview {
+            // Original mouseUp uses the last dragged endpoint, while reading the
+            // current Option flag again. Release coordinates do not add a segment.
+            preview = arrowPreview(style: style, modifiers: event.modifierFlags)
+        } else if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
         switch dragMode {
         case .create:
             if let element = preview,
                !element.pathCommands.isEmpty || element.kind == .brush || element.bounds.width > 0.5 || element.bounds.height > 0.5 {
                 document.elements.append(element); selection = [element.id]
-                if let before = gestureState { recordUndo(before, name: "Draw \(element.kind.rawValue.capitalized)") }
+                if let before = gestureState { recordUndo(before, name: drawingArrow ? "Draw Arrow" : "Draw \(element.kind.rawValue.capitalized)") }
             }
         case .move, .resize, .pan:
             if let before = gestureState {
@@ -1683,6 +1702,15 @@ final class CanvasView: NSView, NSTextViewDelegate {
         result.kind = .path; result.points = []; result.filled = true; result.strokeWidth = 0
         result.pathCommands = StrokeFitter.outline(samples: strokeSamples, size: effectiveStrokeWidth,
             smoothing: strokeSmoothing, shiftPrecision: modifiers.contains(.shift), nib: .pencil)
+        result.rect = (try? SVGPathParser.makeCGPath(result.pathCommands).boundingBoxOfPath) ?? .zero
+        return result
+    }
+    private func arrowPreview(style: SketchElement, modifiers: NSEvent.ModifierFlags) -> SketchElement {
+        var result = style
+        result.kind = .path; result.points = []; result.filled = true; result.strokeWidth = 0
+        result.pathCommands = OriginalArrowGeometry.commands(from: gestureStart, to: arrowEnd,
+            width: effectiveStrokeWidth,
+            reversed: OriginalArrowGeometry.reversed(preference: arrowHeadPreference, option: modifiers.contains(.option)))
         result.rect = (try? SVGPathParser.makeCGPath(result.pathCommands).boundingBoxOfPath) ?? .zero
         return result
     }

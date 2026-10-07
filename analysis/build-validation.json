@@ -1,22 +1,22 @@
 {
-  "verified_at": "2026-10-07T22:00:57.208250+00:00",
-  "checkpoint_id": "text-keys-1b065ff2ff",
-  "checkpoint_state": "apple_silicon_text_keys_build_suites_startup_and_listed_native_checks_verified",
+  "verified_at": "2026-10-07T22:15:25.854648+00:00",
+  "checkpoint_id": "arrow-fac1640392",
+  "checkpoint_state": "apple_silicon_arrow_build_suites_startup_and_listed_native_checks_verified",
   "build": {
     "architectures": [
       "arm64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.IHilvb",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.Rx1S3C",
     "source_sha256": {
-      "App.swift": "55a249976fcaabdbe5c2f3aa65ff2a6d47d10aad689ee3b11327193da6efd6df",
+      "App.swift": "86d30adebedc35d69047e3598eee51f72af03c001b53357f06c53136652124e9",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
-      "Canvas.swift": "c3aacbc83e304fdf7984fac778ea268a0ce0a02059e937b00801edeeac17c552",
+      "Canvas.swift": "922a8248ed35ec062c926f22c8318864de2e3a5a62a86a599c3bcea1c4f00693",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-      "DocumentModel.swift": "212391ccf6c312db963bce91f94283a7327bdd11f197ba81f318df13128e1526",
+      "DocumentModel.swift": "13e5bf7740940301596dbf63437df160f487bcc492b438ed904a27eb911aacd6",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
       "HistoryBrowser.swift": "ee3c9a2dc48982721403fbf9dfb0440651c09c4b6676c69dd78bf99d31a93b3c",
@@ -82,44 +82,44 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a"
+    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "bc6a8f816ecadaf30bd855110a3a72a749ffe177777ce2ef008edaa188dc82ac",
+  "build_manifest_sha256": "0b1e34409a780631d6cc791caa3644e358b46364a99b88e841ff77502d8b9ccd",
   "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/text-keys-verification/build.log",
-  "build_log_sha256": "fb0a2ff0799297cbc174e9508886cc9ad2186a8b3de81c6253b3118ec8b2d9bb",
+  "build_log_path": "build/arrow-verification/build.log",
+  "build_log_sha256": "ede8a9ace723f86a9573c10a42647d3b0f415b2a81f1ae4acd7e77eab266701b",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.aswjhxya",
-      "log_path": "build/text-keys-verification/arm64.log",
-      "log_sha256": "04a24633480c23ea6dddac25c6e02644491af4efc3c10a63b796e4920419f59b",
-      "checks": 2545,
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.9p0kokos",
+      "log_path": "build/arrow-verification/arm64.log",
+      "log_sha256": "deaea09785b49e6be374aadf614ec75882f5b8408b4f04e5570e0c9ce1aa0930",
+      "checks": 2548,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/text-keys-verification/results.json",
-  "full_suite_results_sha256": "224ef5baf46da11ee99bce6211bbb09b61e99f10ac5016768b86423ca1491b63",
+  "full_suite_results_path": "build/arrow-verification/results.json",
+  "full_suite_results_sha256": "8fabfa9b8764102d0fd831737fb3094f6320023e9fdc04c692e64571190ac4b1",
   "native_startup_smoke": {
-    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a",
-    "verified_at": "2026-10-07T21:57:11.554121+00:00",
+    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89",
+    "verified_at": "2026-10-07T22:11:03.813747+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 22421,
       "editable_bytes": 29793,
-      "editable_sha256": "def6d5f003cb9e4ccba0e4e0d2030794740ae0309dc40748c27a12fbc5c68bc9"
+      "editable_sha256": "d03bb5b02e4df460690bd9022dc31ef165ad230110e02d820274950e087c21c5"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-1b065ff2ff/results.json",
-  "native_startup_smoke_results_sha256": "812a2f2e80eb5f2d606b42e13551f64a255df1c5d083a69d6e5d619fca2bfa23",
+  "native_startup_smoke_results_path": "build/startup-smoke-fac1640392/results.json",
+  "native_startup_smoke_results_sha256": "113a86248cb1bd0ac012ff5965c6fcb39a7a847177ca7629a1f39481e0fb6279",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
     "tools/build.sh": "5674d47adcee941cd07546dacc8c9e66cd5d1c962283fec1417c00d19abd2488",
@@ -131,57 +131,57 @@
     "architectures": [
       "arm64"
     ],
-    "checks_per_architecture": 2545,
+    "checks_per_architecture": 2548,
     "suites": 24,
-    "results_path": "build/text-keys-verification/results.json",
-    "results_sha256": "224ef5baf46da11ee99bce6211bbb09b61e99f10ac5016768b86423ca1491b63"
+    "results_path": "build/arrow-verification/results.json",
+    "results_sha256": "8fabfa9b8764102d0fd831737fb3094f6320023e9fdc04c692e64571190ac4b1"
   },
   "current_native_startup_validation": {
     "status": "passed_arm64",
-    "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a",
-    "startup_log_path": "build/text-keys-verification/startup.log",
-    "startup_log_sha256": "48a8b452ed7cd89002240c50522e1cddb45bb3bcf4b96bb2a4dc443ef741e25a"
+    "binary_sha256": "fac164039295846efd760c5a13c41038a98c7d7496721697908d85e6ebbabc89",
+    "startup_log_path": "build/arrow-verification/startup.log",
+    "startup_log_sha256": "667deb4c4dc2988498b05935d3820f07e964b9a440bebe9dcc9958042d03731a"
   },
   "current_desktop_checks": [
     {
-      "name": "Prior drawing opens with preserved words, fonts/effects and alpha and remains unchanged on disk",
+      "name": "Original words/fonts/effects/alpha open and the prior file is preserved",
       "passed": true,
-      "evidence": "build/text-keys-verification/opened.png"
+      "evidence": "build/arrow-verification/opened.png"
     },
     {
-      "name": "Ordinary Return creates a new line and keeps native annotation focus",
+      "name": "Native Drawing > Arrow Head > At End draws a tapered arrow toward release",
       "passed": true,
-      "evidence": "build/text-keys-verification/return-newline.png"
+      "evidence": "build/arrow-verification/end-arrow.png"
     },
     {
-      "name": "Command Return stays in native text editing without committing",
+      "name": "One Undo removes the first arrow; Redo restores it",
       "passed": true,
-      "evidence": "build/text-keys-verification/command-return.png"
+      "evidence": "build/arrow-verification/end-undo.png"
     },
     {
-      "name": "Option Return commits the annotation and returns focus to canvas",
+      "name": "Native At Start draws the opposite direction while retaining the first arrow",
       "passed": true,
-      "evidence": "build/text-keys-verification/option-return.png"
+      "evidence": "build/arrow-verification/start-arrow.png"
     },
     {
-      "name": "One drawing Undo restores the pre-editor words and bounds; Redo restores the completed edit",
+      "name": "One Undo removes the second arrow only; Redo restores it",
       "passed": true,
-      "evidence": "build/text-keys-verification/option-undo.png"
+      "evidence": "build/arrow-verification/start-undo.png"
     },
     {
-      "name": "Keypad Enter commits the second annotation and returns focus to canvas",
+      "name": "Separate native Save As and Open preserve both editable arrow paths and prior text",
       "passed": true,
-      "evidence": "build/text-keys-verification/keypad-enter.png"
+      "evidence": "build/arrow-verification/reopened.png"
     },
     {
-      "name": "One drawing Undo restores the second annotation while preserving the first completed edit; Redo restores both",
+      "name": "After actual Quit/relaunch the saved Start preference draws another start-headed arrow",
       "passed": true,
-      "evidence": "build/text-keys-verification/keypad-undo.png"
+      "evidence": "build/arrow-verification/persisted-start.png"
     },
     {
-      "name": "Separate native Save As and Open preserve both completed annotations, fitted bounds, styles and alpha",
+      "name": "Undo removes the temporary persistence arrow; final save retains the two-arrow proof and normal End preference",
       "passed": true,
-      "evidence": "build/text-keys-verification/reopened.png"
+      "evidence": "build/arrow-verification/final.png"
     }
   ],
   "historical_validations": [
@@ -1008,10 +1008,58 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "text-keys-1b065ff2ff",
+      "binary_sha256": "1b065ff2ff3761f7dcc55783d618a67b297b98de03da9fa77dd9792b5ad13a0a",
+      "full_suite_results_path": "build/text-keys-verification/results.json",
+      "full_suite_results_sha256": "224ef5baf46da11ee99bce6211bbb09b61e99f10ac5016768b86423ca1491b63",
+      "desktop_checks": [
+        {
+          "name": "Prior drawing opens with preserved words, fonts/effects and alpha and remains unchanged on disk",
+          "passed": true,
+          "evidence": "build/text-keys-verification/opened.png"
+        },
+        {
+          "name": "Ordinary Return creates a new line and keeps native annotation focus",
+          "passed": true,
+          "evidence": "build/text-keys-verification/return-newline.png"
+        },
+        {
+          "name": "Command Return stays in native text editing without committing",
+          "passed": true,
+          "evidence": "build/text-keys-verification/command-return.png"
+        },
+        {
+          "name": "Option Return commits the annotation and returns focus to canvas",
+          "passed": true,
+          "evidence": "build/text-keys-verification/option-return.png"
+        },
+        {
+          "name": "One drawing Undo restores the pre-editor words and bounds; Redo restores the completed edit",
+          "passed": true,
+          "evidence": "build/text-keys-verification/option-undo.png"
+        },
+        {
+          "name": "Keypad Enter commits the second annotation and returns focus to canvas",
+          "passed": true,
+          "evidence": "build/text-keys-verification/keypad-enter.png"
+        },
+        {
+          "name": "One drawing Undo restores the second annotation while preserving the first completed edit; Redo restores both",
+          "passed": true,
+          "evidence": "build/text-keys-verification/keypad-undo.png"
+        },
+        {
+          "name": "Separate native Save As and Open preserve both completed annotations, fitted bounds, styles and alpha",
+          "passed": true,
+          "evidence": "build/text-keys-verification/reopened.png"
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
-  "text_verification_scope": "Exact Apple Silicon build: listed native Return/Command Return continuation, Option Return/keypad Enter completion, separate annotation drawing Undo/Redo, native Save As/reopen and preserved prior drawing. Full Fonts layout/direct choices, transformed live editor presentation and original i386 runtime comparison remain unverified.",
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
@@ -1061,10 +1109,11 @@
     "Rename desktop checks cover app identity, commands and existing drawing Open; earlier detailed workflow proofs have not all been repeated on the renamed binary.",
     "Original runtime text-effect equivalence and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native effects/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
     "Original runtime layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Previous native natural sizing/edit/Undo/save/reopen checks remain pinned to the earlier exact binary.",
-    "Original runtime keyboard/layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts workflows remain unverified. Listed native Return/Command Return continuation, Option Return/keypad Enter completion, drawing Undo/Redo and Save As/reopen checks passed on arm64 only."
+    "Original runtime keyboard/layout/effect equivalence, affine-transformed editor presentation and complete auxiliary Fonts workflows remain unverified. Previous native text completion checks remain pinned to the earlier exact binary.",
+    "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified."
   ],
-  "current_desktop_proof_path": "build/text-keys-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "82a8f3433acff4a91e4096152ecea9eae05d60f8f0a4b7e4694efc291916b01b",
+  "current_desktop_proof_path": "build/arrow-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "9f42aa706f458ad281ad068e2bf11b589608b1ea96de8a076e41ef8bf5be229f",
   "architecture_policy": "Apple Silicon arm64 only; prior Intel results remain historical, with no current Intel build/test requirement.",
   "recovered_text_effects": {
     "path": "build/text-effects-verification/original-recovery.json",
@@ -1079,6 +1128,13 @@
   "recovered_text_keys": {
     "path": "build/text-keys-verification/original-recovery.json",
     "sha256": "8cdd1c6aa7a7bbf2099f5634c902f614297c441d85c08d6ed674534accc7b871",
+    "original_runtime_verified": false
+  },
+  "historical_text_verification_scope": "Exact Apple Silicon build: listed native Return/Command Return continuation, Option Return/keypad Enter completion, separate annotation drawing Undo/Redo, native Save As/reopen and preserved prior drawing. Full Fonts layout/direct choices, transformed live editor presentation and original i386 runtime comparison remain unverified.",
+  "arrow_verification_scope": "Exact Apple Silicon build: native Start/End menu choices, tapered path drawing, per-arrow Undo/Redo, separate native Save As/reopen, preference persistence after actual Quit/relaunch and preserved prior drawing. Option/Shift modifier rules passed isolated AppKit event tests; sustained modifier-plus-drag desktop input is unavailable in the current desktop tool and is not claimed. Original-runtime geometry/display-scale/shadow equivalence and original Preferences window remain unverified.",
+  "recovered_arrow_rules": {
+    "path": "build/arrow-verification/original-recovery.json",
+    "sha256": "a1249cb9ec5d42076257a26d583fc77b7992a622e66d530b0a3fc436fdd8076b",
     "original_runtime_verified": false
   }
 }

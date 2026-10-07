@@ -198,6 +198,8 @@ struct CanvasTests {
             ("text context routes Font without disrupting Control eraser", textContextStyle),
             ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
             ("recovered native text completion keys preserve pending edits and history", textCompletionKeys),
+            ("recovered tapered arrow outline and Shift thresholds", originalArrowGeometry),
+            ("arrow defaults temporary reversal release cancellation and one Undo", originalArrowGestures),
             ("natural text layout grows shrinks and preserves source geometry through Undo", naturalTextLayout),
             ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
             ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
@@ -1640,6 +1642,86 @@ struct CanvasTests {
         try expect(c.document == snapshot, "Completion preserves pending snapshot exactly")
         c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One Undo restores text and placement together")
         c.redo(); try expect(c.document == snapshot, "Redo restores text and placement")
+    }
+    static func originalArrowGeometry() throws {
+        let commands = OriginalArrowGeometry.commands(from: CGPoint(x: 10, y: 50), to: CGPoint(x: 210, y: 50), width: 6.75, reversed: false)
+        // Independent coordinates calculated from the original Float32 constants:
+        // _createArrow receives 3.375, giving neck 3.65625 and head 14.625.
+        let expected: [SVGPathCommand] = [.move(to: CGPoint(x: 10, y: 49)),
+            .cubic(control1: CGPoint(x: 102.6875, y: 48.3359375), control2: CGPoint(x: 152.6875, y: 47.671875), to: CGPoint(x: 195.375, y: 46.34375)),
+            .line(to: CGPoint(x: 193.9125, y: 41.95625)), .line(to: CGPoint(x: 210, y: 50)),
+            .line(to: CGPoint(x: 193.9125, y: 58.04375)), .line(to: CGPoint(x: 195.375, y: 53.65625)),
+            .cubic(control1: CGPoint(x: 152.6875, y: 52.328125), control2: CGPoint(x: 102.6875, y: 51.6640625), to: CGPoint(x: 10, y: 51)),
+            .cubic(control1: CGPoint(x: 8.500154, y: 50.978508), control2: CGPoint(x: 8.500154, y: 49.021492), to: CGPoint(x: 10, y: 49)), .close]
+        let actualPath = try SVGPathParser.makeCGPath(commands), expectedPath = try SVGPathParser.makeCGPath(expected)
+        var actualPoints: [CGPoint] = [], expectedPoints: [CGPoint] = []
+        func points(_ path: CGPath, into values: inout [CGPoint]) {
+            path.applyWithBlock { entry in
+                let n = entry.pointee.type == .addCurveToPoint ? 3 : (entry.pointee.type == .closeSubpath ? 0 : 1)
+                for i in 0..<n { values.append(entry.pointee.points[i]) }
+            }
+        }
+        points(actualPath, into: &actualPoints); points(expectedPath, into: &expectedPoints)
+        try expect(commands.count == 9 && actualPoints.count == expectedPoints.count, "Original closed outline retains three cubic segments and four straight edges")
+        for (a, e) in zip(actualPoints, expectedPoints) {
+            try expect(hypot(a.x - e.x, a.y - e.y) < 0.0001, "Recovered coordinate \(a) matches independent original fixture \(e)")
+        }
+        let start = CGPoint(x: 30, y: 40)
+        for (dx, dy, ex, ey) in [(100.0, 49.0, 130.0, 40.0), (100, 50, 130, 140), (49, 100, 30, 140),
+                                 (50, 100, 130, 140), (-60, 80, -50, 120), (60, -80, 110, -40)] {
+            try expect(OriginalArrowGeometry.constrained(CGPoint(x: start.x + dx, y: start.y + dy), from: start) == CGPoint(x: ex, y: ey), "Shift uses strict 2:1 axis thresholds and max-axis diagonal length")
+        }
+        for (from, to) in [(CGPoint(x: 20, y: 20), CGPoint(x: 20, y: 20)), (CGPoint(x: 20, y: 20), CGPoint(x: 21, y: 20))] {
+            let tiny = try SVGPathParser.makeCGPath(OriginalArrowGeometry.commands(from: from, to: to, width: 0.5, reversed: false))
+            try expect(!tiny.isEmpty && tiny.boundingBoxOfPath.width > 1 && tiny.boundingBoxOfPath.height > 0, "Zero/short original arrows remain finite with five-pixel minimum length")
+        }
+        for pref in [0, 1, 2, 9] {
+            try expect(OriginalArrowGeometry.reversed(preference: pref, option: false) == (pref == 1) &&
+                       OriginalArrowGeometry.reversed(preference: pref, option: true) == (pref != 1), "Option XORs the original preference == 1 predicate, including End tag 2")
+        }
+    }
+    static func originalArrowGestures() throws {
+        let start = CGPoint(x: 40, y: 90), end = CGPoint(x: 260, y: 90)
+        for pref in [0, 1, 2] {
+            for option in [false, true] {
+                let c = canvas(NSSize(width: 320, height: 180)), window = host(c); defer { window.close() }
+                c.tool = .arrow; c.arrowHeadPreference = pref; c.strokeWidth = 6.75
+                c.strokeColor = NSColor(deviceRed: 0.1, green: 0.3, blue: 0.8, alpha: 0.4); c.shadowed = true
+                var legacy = SketchElement(kind: .arrow); legacy.points = [CGPoint(x: 20, y: 20), CGPoint(x: 80, y: 30)]
+                c.document.elements = [legacy]; let before = c.document
+                var changes = 0; c.onChange = { changes += 1 }
+                c.mouseDown(with: try mouse(c, .leftMouseDown, start))
+                c.mouseDragged(with: try mouse(c, .leftMouseDragged, end))
+                c.flagsChanged(with: try key(c, 58, type: .flagsChanged, flags: option ? [.option] : []))
+                try expect(c.document == before && changes == 0 && !c.editingUndoManager.canUndo, "Temporary preview does not dirty source artwork")
+                // Release elsewhere: original ToolArrow retains the dragged endpoint.
+                c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 300, y: 140), flags: option ? [.option] : []))
+                let after = c.document, arrow = after.elements.last!
+                let reversed = (pref == 1) != option
+                try expect(after.elements.first == legacy && arrow.kind == .path && arrow.filled && arrow.strokeWidth == 0 &&
+                           arrow.color == SketchColor(c.strokeColor) && arrow.shadowed && arrow.pathCommands.count == 9,
+                           "New arrows store editable original-style filled paths; old arrow representation and alpha survive")
+                try expect(arrow.pathCommands[3] == .line(to: reversed ? start : end) && c.arrowHeadPreference == pref,
+                           "Current Option release flag reverses the head without changing the saved default")
+                try expect(changes == 1 && c.editingUndoManager.undoActionName == "Draw Arrow", "Drawing is one named transaction")
+                let restored = canvas(); try restored.loadDocument(data: c.documentData())
+                try expect(restored.document == after, "Arrow curves, style, legacy objects and IDs survive editable serialization")
+                c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One Undo removes exactly the arrow")
+                c.redo(); try expect(c.document == after, "Redo restores exact controls and identity")
+                c.editingUndoManager.removeAllActions(); let count = changes
+                c.mouseDown(with: try mouse(c, .leftMouseDown, start, flags: [.option]))
+                c.mouseDragged(with: try mouse(c, .leftMouseDragged, end, flags: [.option]))
+                c.cancelOperation(nil); c.mouseUp(with: try mouse(c, .leftMouseUp, end))
+                try expect(c.document == after && changes == count && !c.editingUndoManager.canUndo, "Cancel discards arrow preview and delayed release")
+            }
+        }
+        let c = canvas(NSSize(width: 320, height: 180)), window = host(c); defer { window.close() }
+        c.tool = .arrow; c.arrowHeadPreference = 2
+        c.mouseDown(with: try mouse(c, .leftMouseDown, start, flags: [.option]))
+        c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 240, y: 170), flags: [.option, .shift]))
+        c.flagsChanged(with: try key(c, 58, type: .flagsChanged))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, end))
+        try expect(c.document.elements.last!.pathCommands[3] == .line(to: CGPoint(x: 240, y: 90)), "Releasing Option restores End while retaining the last Shift-constrained endpoint")
     }
     static func textCompletionKeys() throws {
         // Independent original machine-code masks: 0x80000 Option, 0x200000

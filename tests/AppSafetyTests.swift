@@ -1830,6 +1830,32 @@ enum AppSafetyTests {
         app.redo()
         try expect(app.canvas.document == document && history.canRedo, "Roundtrip preserves the existing Redo chain")
     }
+    static func arrowHeadDefaults() throws {
+        let key = OriginalArrowGeometry.preferenceKey, defaults = UserDefaults.standard
+        let previous = defaults.object(forKey: key)
+        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
+        for initial in [0, 1, 2] {
+            defaults.set(initial, forKey: key)
+            let fixture = try Fixture(), app = fixture.app
+            let document = app.canvas.document, dirty = app.dirty
+            let drawing = NSApp.mainMenu!.items.compactMap(\.submenu).first { $0.title == "Drawing" }!
+            let head = drawing.items.first { $0.title == "Arrow Head" }!.submenu!
+            try expect(app.canvas.arrowHeadPreference == initial && head.font!.pointSize >= 18, "Launch restores the original preference into readable native controls")
+            let start = head.items.first { $0.tag == 1 }!, end = head.items.first { $0.tag == 2 }!
+            for item in [start, end] {
+                try expect(app.validateMenuItem(item) && item.state == (((initial == 1) == (item.tag == 1)) ? .on : .off), "Menu displays the current original head/end choice")
+            }
+            app.changeArrowHead(start)
+            try expect(app.canvas.arrowHeadPreference == 1 && defaults.integer(forKey: key) == 1, "Start persists the original radio tag 1")
+            app.changeArrowHead(end)
+            try expect(app.canvas.arrowHeadPreference == 2 && defaults.integer(forKey: key) == 2, "End persists the original radio tag 2")
+            let invalid = NSMenuItem(); invalid.tag = 7; app.changeArrowHead(invalid)
+            try expect(defaults.integer(forKey: key) == 2 && app.canvas.document == document && app.dirty == dirty && !app.canvas.editingUndoManager.canUndo,
+                       "Defaults change affects future arrows only, without document mutation or an Undo action")
+            app.terminationStarted = true
+            try expect(!app.validateMenuItem(start), "Arrow settings are disabled during termination")
+        }
+    }
     static func textStyleCommands() throws {
         let fixture = try Fixture(), app = fixture.app
         var text = SketchElement(kind: .text); text.text = "Blue text"; text.color = SketchColor(.blue)
@@ -2520,6 +2546,7 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
             ("Modeless Fonts follows mixed selections scale pending editors and document replacement", fontPanelContextAndPending),
             ("Resize Apply previews from one baseline; Cancel restores all state; OK commits one crop Undo", resizeSheetPreviewLifecycle),

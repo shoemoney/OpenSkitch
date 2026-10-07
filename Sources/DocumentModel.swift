@@ -5,6 +5,62 @@ enum SketchTool: String, CaseIterable, Codable {
     case select, arrow, line, rectangle, ellipse, brush, text, fill, eraser, crop
 }
 
+/// Recovered _createArrow (0x1e02be) and ToolArrow::mouseDragged (0x1e0100).
+/// Use the original Float32 geometry; saved pre-reconstruction arrow elements
+/// keep their existing representation instead of being silently reshaped.
+enum OriginalArrowGeometry {
+    static let preferenceKey = "arrowHead"
+    static func reversed(preference: Int, option: Bool) -> Bool { (preference == 1) != option }
+
+    static func constrained(_ end: CGPoint, from start: CGPoint) -> CGPoint {
+        let dx = Float(end.x - start.x), dy = Float(end.y - start.y)
+        if abs(dx) > 2 * abs(dy) { return CGPoint(x: end.x, y: start.y) }
+        if abs(dy) > 2 * abs(dx) { return CGPoint(x: start.x, y: end.y) }
+        let side = CGFloat(max(abs(dx), abs(dy)))
+        return CGPoint(x: start.x + (dx < 0 ? -side : side), y: start.y + (dy < 0 ? -side : side))
+    }
+
+    static func commands(from start: CGPoint, to end: CGPoint, width: CGFloat, reversed: Bool) -> [SVGPathCommand] {
+        typealias Point = SIMD2<Float>
+        func point(_ p: CGPoint) -> Point { Point(Float(p.x), Float(p.y)) }
+        func cg(_ p: Point) -> CGPoint { CGPoint(x: CGFloat(p.x), y: CGFloat(p.y)) }
+        func length(_ p: Point) -> Float { sqrt(p.x * p.x + p.y * p.y) }
+        func unit(_ p: Point) -> Point { let n = length(p); return n > 0 ? p / n : .zero }
+        let tail = point(reversed ? end : start)
+        var tip = point(reversed ? start : end)
+        guard tail.x.isFinite, tail.y.isFinite, tip.x.isFinite, tip.y.isFinite, width.isFinite else { return [] }
+        if abs(tip.x - tail.x) < 0.000001 && abs(tip.y - tail.y) < 0.000001 { tip += Point(repeating: 1) }
+        if length(tip - tail) < 5 { tip = tail + unit(tip - tail) * 5 }
+        let distance = length(tip - tail), axis = unit(tip - tail)
+        let normal = Point(axis.y, -axis.x)
+        let size = (Float(width) * 0.5 - 1.5) * 0.7 + 6
+        let head = min(0.4 * distance, max(6, size * 2))
+        let neckWidth = min(0.25 * head, size * 0.5)
+        let tailWidth = min(neckWidth, 1)
+        let neck = (tip * (distance - head) + tail * head) / distance
+        let shoulderDistance = head * 1.1
+        let shoulder = (tip * (distance - shoulderDistance) + tail * shoulderDistance) / distance
+        let rightTail = tail + normal * tailWidth, leftTail = tail - normal * tailWidth
+        let rightNeck = neck + normal * neckWidth, leftNeck = neck - normal * neckWidth
+        let rightShoulder = shoulder + normal * (shoulderDistance * 0.5)
+        let leftShoulder = shoulder - normal * (shoulderDistance * 0.5)
+        let averageWidth = (neckWidth + tailWidth) * 0.5
+        let rightControl1 = rightTail * 0.5 + (neck + normal * averageWidth) * 0.5
+        let leftControl2 = leftTail * 0.5 + (neck - normal * averageWidth) * 0.5
+        let middle = tail + axis * distance * 0.5
+        let rightControl2 = (middle + normal * tailWidth) * 0.5 + rightNeck * 0.5
+        let leftControl1 = (middle - normal * tailWidth) * 0.5 + leftNeck * 0.5
+        let capLeft = leftTail + unit(leftTail - leftNeck) * tailWidth * 1.5
+        let capRight = rightTail + unit(rightTail - rightNeck) * tailWidth * 1.5
+        return [.move(to: cg(rightTail)),
+                .cubic(control1: cg(rightControl1), control2: cg(rightControl2), to: cg(rightNeck)),
+                .line(to: cg(rightShoulder)), .line(to: cg(tip)),
+                .line(to: cg(leftShoulder)), .line(to: cg(leftNeck)),
+                .cubic(control1: cg(leftControl1), control2: cg(leftControl2), to: cg(leftTail)),
+                .cubic(control1: cg(capLeft), control2: cg(capRight), to: cg(rightTail)), .close]
+    }
+}
+
 struct SketchColor: Codable, Equatable {
     var red: CGFloat
     var green: CGFloat

@@ -691,6 +691,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.fontSize = OriginalDrawingControls.readableFontSize(OriginalDrawingControls.initialSize)
         syncDrawingControls()
         canvas.strokeSmoothing = StrokeSmoothing(rawValue: UserDefaults.standard.string(forKey: "PencilSmoothing") ?? "medium") ?? .medium
+        canvas.arrowHeadPreference = UserDefaults.standard.integer(forKey: OriginalArrowGeometry.preferenceKey)
         setTool(.arrow)
     }
     func menu(_ title: String, items: [(String, Selector?, String)]) -> NSMenu {
@@ -733,6 +734,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let smoothingItem = NSMenuItem(title: "Pencil Smoothing", action: nil, keyEquivalent: "")
         smoothingItem.submenu = smoothing; drawing.addItem(smoothingItem)
+        let arrowHead = menu("Arrow Head", items: [])
+        for (title, tag) in [("At Start", 1), ("At End", 2)] {
+            let item = NSMenuItem(title: title, action: #selector(changeArrowHead(_:)), keyEquivalent: "")
+            item.tag = tag; item.target = self; arrowHead.addItem(item)
+        }
+        let arrowHeadItem = NSMenuItem(title: "Arrow Head", action: nil, keyEquivalent: "")
+        arrowHeadItem.submenu = arrowHead; drawing.addItem(arrowHeadItem)
         let windows = menu("Window", items: [("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), "")])
         for item in windows.items { item.target = nil }
         let minimize = NSMenuItem(title: "Minimize", action: #selector(vanish), keyEquivalent: "m")
@@ -744,7 +752,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let raw = sender.representedObject as? String, let mode = StrokeSmoothing(rawValue: raw) else { return }
         canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
     }
+    @objc func changeArrowHead(_ sender: NSMenuItem) {
+        guard sender.tag == 1 || sender.tag == 2 else { return }
+        canvas.arrowHeadPreference = sender.tag
+        UserDefaults.standard.set(sender.tag, forKey: OriginalArrowGeometry.preferenceKey)
+    }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(changeArrowHead(_:)) {
+            menuItem.state = ((canvas.arrowHeadPreference == 1) == (menuItem.tag == 1)) ? .on : .off
+            return !terminationStarted && !frameCaptureInProgress
+        }
         if menuItem.action == #selector(toggleBezelFill(_:)) { menuItem.state = canvas.filled ? .on : .off; return !terminationStarted && !frameCaptureInProgress }
         if menuItem.action == #selector(toggleBezelShadow(_:)) { menuItem.state = canvas.shadowed ? .on : .off; return !terminationStarted && !frameCaptureInProgress }
         if menuItem.action == #selector(chooseFont) {
@@ -766,6 +783,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             button.state = selected ? .on : .off
             button.bezelColor = selected ? .controlAccentColor : nil
             button.toolTip = choice.rawValue.capitalized + (selected ? " tool (selected)" : " tool")
+            if choice == .arrow { button.toolTip! += "; Option reverses direction, Shift constrains the angle" }
             button.needsDisplay = true
         }
     }
