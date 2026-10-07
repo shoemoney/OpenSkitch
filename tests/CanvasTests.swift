@@ -15,15 +15,32 @@
 // dispatch establish Command cursor/Shift selection, rather than that color shortcut.
 // Justype forwards printable canvas keys to native text input; original editor Escape
 // commits/leaves editing. Explicit programmatic cancel still abandons pending text.
-// Remaining original-engine gaps: vector Boolean fills and filled-shape splitting,
-// exact ellipse arcs after splitting (sampled outlines), pressure-sensitive tablet
-// strokes, Option-polygon creation, original adaptive text outline/font panel, original
-// generic SVG arcs, and original smoothing/arrow/shadow metrics. These tests do
+// Remaining original-engine gaps: exact Boolean tolerance/growth/inflection behavior,
+// real tablet pressure and proximity hardware, Option-polygon creation, original
+// adaptive text outline/font panel, generic SVG arcs, and original arrow/shadow
+// metrics. Curve-fitting fixtures do not replace original-runtime comparisons. These tests do
 // not assert full visual/behavioral equivalence to the original 32-bit drawing engine.
 
 #if CANVAS_TESTS
 import AppKit
 import CoreGraphics
+
+private final class CanvasTabletEvent: NSEvent {
+    var inputType: NSEvent.EventType = .leftMouseDown
+    var inputLocation: CGPoint = .zero
+    var inputPressure: Float = 1
+    var inputModifiers: NSEvent.ModifierFlags = []
+    var entering = true
+    var eraser = true
+    override var type: NSEvent.EventType { inputType }
+    override var locationInWindow: NSPoint { inputLocation }
+    override var pressure: Float { inputPressure }
+    override var subtype: NSEvent.EventSubtype { .tabletPoint }
+    override var modifierFlags: NSEvent.ModifierFlags { inputModifiers }
+    override var clickCount: Int { 1 }
+    override var isEnteringProximity: Bool { entering }
+    override var pointingDeviceType: NSEvent.PointingDeviceType { eraser ? .eraser : .pen }
+}
 
 private final class CanvasTestDrag: NSObject, NSDraggingInfo {
     var draggingDestinationWindow: NSWindow?
@@ -123,8 +140,19 @@ struct CanvasTests {
             ("rotate, flip and resize preserve vectors/pixels", transforms),
             ("PNG JPEG TIFF BMP PDF export", exports),
             ("flood fill stays inside an enclosure", fill),
+            ("vector fill ignores photo colors and preserves relative layers", vectorFillBackground),
+            ("shadow fill recolors without replacing geometry or selection", shadowFill),
+            ("translucent path fill blends alpha and Shift preserves groups", alphaFill),
+            ("same-color fill merges editable paths without selecting them", matchingFill),
+            ("Shift fill is visible above same-color overlapping paths", layeredShiftFill),
+            ("mixed-style path fill preserves contacted annotations", mixedPathFill),
+            ("vector eraser protects pasted photographs and text", protectedErase),
+            ("Pencil commits fitted geometry without a release-only tail", fittedPencil),
+            ("native tablet pressure and pen eraser precedence", tabletInput),
+            ("Undo and Redo cancel active drawing gestures", gestureHistory),
+            ("later matching-color fill retains alpha and Shift behavior", separatedColorFill),
             ("eraser splits vectors and protects text/photos", eraser),
-            ("eraser clears actual fill pixels", pixelEraser),
+            ("eraser preserves editable filled paths and holes", pixelEraser),
             ("native mouse create/move/resize and modifiers", mouseInteraction),
             ("native brush dot, freehand and keyboard delete", brushAndKeyboard),
             ("native text edit, doubleclick and text undo", textEditing),
@@ -293,13 +321,156 @@ struct CanvasTests {
         let c = canvas()
         c.document.elements = [rectangle(CGRect(x: 15, y: 15, width: 40, height: 30), color: .black, filled: false)]
         c.strokeColor = .green; c.floodFill(at: CGPoint(x: 30, y: 30))
-        try expect(c.document.elements.count == 2, "Fill adds independent pixels while preserving shape")
+        try expect(c.document.elements.count == 2, "Fill adds editable geometry while preserving the boundary")
         let inside = try pixel(c, 30, 30), outside = try pixel(c, 80, 60)
         try expect(inside.greenComponent > 0.9 && inside.redComponent < 0.1, "Fill chosen region")
         try expect(outside.redComponent > 0.9, "Fill cannot leak outside the closed shape")
         try expect(c.document.elements[0].groupID != nil && c.document.elements[0].groupID == c.document.elements[1].groupID,
                    "Paint fill glues contacting shape to fill")
         c.undo(); try expect(c.document.elements.count == 1, "Fill undo")
+    }
+    static func vectorFillBackground() throws {
+        let c = canvas(); c.setBackground(backdrop())
+        let boundary = rectangle(CGRect(x: 15, y: 15, width: 40, height: 30), color: .black, filled: false)
+        var text = SketchElement(kind: .text); text.text = "Label"; text.rect = CGRect(x: 25, y: 5, width: 50, height: 25)
+        c.document.elements = [boundary, text]; let background = c.document.backgroundPNG
+        c.strokeColor = .red; c.floodFill(at: CGPoint(x: 30, y: 30))
+        let fill = c.document.elements.first { $0.id != boundary.id && $0.id != text.id }!
+        let path = try SVGPathParser.makeCGPath(fill.pathCommands)
+        try expect(fill.kind == .path && fill.imagePNG == nil && path.contains(CGPoint(x: 45, y: 35)), "Photo color transitions never stop geometric fill")
+        try expect(!path.contains(CGPoint(x: 80, y: 60)) && c.document.backgroundPNG == background, "Enclosure bounds and photo retained")
+        try expect(c.document.elements.map(\.id) == [fill.id, boundary.id, text.id], "Fill inserted below its boundary and text")
+        try expect(c.selection.isEmpty, "Fill does not add a selection")
+    }
+    static func shadowFill() throws {
+        let c = canvas(); var shape = rectangle(CGRect(x: 15, y: 15, width: 50, height: 40))
+        shape.shadowed = true; shape.groupID = UUID(); c.document.elements = [shape]; c.selection = [shape.id]
+        c.strokeColor = .green; c.floodFill(at: CGPoint(x: 30, y: 30))
+        var expected = shape; expected.color = SketchColor(.green)
+        try expect(c.document.elements == [expected] && c.selection == [shape.id], "Shadow branch only changes the contacted object's RGBA")
+        c.undo(); try expect(c.document.elements == [shape], "Recolor undo retains exact original")
+        c.editingUndoManager.removeAllActions(); c.strokeColor = .red; c.floodFill(at: CGPoint(x: 30, y: 30))
+        try expect(!c.editingUndoManager.canUndo && c.document.elements == [shape], "Repeated identical opaque fill is a no-op")
+    }
+    static func alphaFill() throws {
+        let c = canvas(); var shape = rectangle(CGRect(x: 15, y: 15, width: 50, height: 40))
+        shape.color = SketchColor(NSColor.red.withAlphaComponent(0.5)); c.document.elements = [shape]
+        c.strokeColor = NSColor.red.withAlphaComponent(0.5); c.floodFill(at: CGPoint(x: 30, y: 30))
+        try expect(c.document.elements.count == 1 && abs(c.document.elements[0].color.alpha - 0.75) < 0.000001,
+            "Repeated half-alpha fill composites to three-quarter alpha")
+        try expect(c.document.elements[0].id != shape.id && c.selection.isEmpty, "Merged region gets a fresh unselected ID")
+        c.undo(); shape.groupID = UUID(); c.document.elements = [shape]; c.selection = [shape.id]
+        c.strokeColor = .green; c.floodFill(at: CGPoint(x: 30, y: 30), grouping: false)
+        try expect(c.document.elements.count == 2 && c.document.elements.contains(shape), "Shift leaves original style and group untouched")
+        try expect(c.document.elements.last?.groupID == nil && c.selection == [shape.id], "Shift result is ungrouped and preserves selection")
+    }
+    static func matchingFill() throws {
+        let c = canvas(); let boundary = rectangle(CGRect(x: 15, y: 15, width: 40, height: 30), color: .black, filled: false)
+        c.document.elements = [boundary]; c.selection = [boundary.id]; c.strokeColor = .black
+        c.floodFill(at: CGPoint(x: 30, y: 30))
+        try expect(c.document.elements.count == 1 && c.document.elements[0].kind == .path && c.document.elements[0].imagePNG == nil,
+            "Same-style boundary and region merge into editable geometry")
+        try expect(c.document.elements[0].id != boundary.id && c.selection.isEmpty, "Replacement is fresh and unselected")
+        c.undo(); try expect(c.document.elements == [boundary] && c.selection == [boundary.id], "Merged fill undo restores old selection")
+    }
+    static func layeredShiftFill() throws {
+        let c = canvas(); var first = rectangle(CGRect(x: 10, y: 10, width: 45, height: 45), color: .blue)
+        var second = rectangle(CGRect(x: 35, y: 15, width: 45, height: 45), color: .blue)
+        first.groupID = UUID(); second.groupID = first.groupID
+        c.document.elements = [first, second]; c.strokeColor = .green
+        c.floodFill(at: CGPoint(x: 45, y: 30), grouping: false)
+        try expect(Array(c.document.elements.prefix(2)) == [first, second] && c.document.elements.last?.groupID == nil,
+            "Shift leaves existing overlapping groups and appends the region above them")
+        try expect(try pixel(c, 45, 30).greenComponent > 0.9, "New color is actually visible in the overlap")
+    }
+    static func mixedPathFill() throws {
+        let c = canvas(); let blue = rectangle(CGRect(x: 10, y: 10, width: 70, height: 50), color: .blue)
+        let green = rectangle(CGRect(x: 65, y: 20, width: 25, height: 25), color: .green)
+        c.document.elements = [blue, green]; c.strokeColor = .green
+        c.floodFill(at: CGPoint(x: 30, y: 30))
+        try expect(c.document.elements.contains { $0.id == blue.id && $0.color == blue.color } &&
+            c.document.elements.contains { $0.id == green.id && $0.color == green.color }, "Mixed hit groups without deleting matching-color contacts")
+        try expect(c.document.elements.count == 3 && c.document.elements.allSatisfy { $0.groupID != nil }, "Contact and new region form a group")
+        try expect(try pixel(c, 30, 30).greenComponent > 0.9, "Mixed hit region is inserted above clicked paint")
+    }
+    static func protectedErase() throws {
+        let c = canvas(); var photo = SketchElement(kind: .raster)
+        photo.imagePNG = SketchRenderer.png(image: backdrop(NSSize(width: 20, height: 20)))!; photo.rect = CGRect(x: 20, y: 20, width: 40, height: 40)
+        var text = SketchElement(kind: .text); text.text = "Safe"; text.rect = photo.rect; text.groupID = UUID(); photo.groupID = text.groupID
+        let drawing = rectangle(photo.rect); c.document.elements = [photo, drawing, text]
+        c.eraseStroke(points: [CGPoint(x: 40, y: 10), CGPoint(x: 40, y: 70)], width: 10)
+        try expect(c.document.elements.first == photo && c.document.elements.last == text, "Positioned photo and text retain exact bytes, groups, transforms and order")
+        try expect(c.document.elements.dropFirst().dropLast().count == 2 && c.document.elements.dropFirst().dropLast().allSatisfy { $0.kind == .path && $0.id != drawing.id }, "Only pen geometry splits with fresh IDs")
+    }
+    static func fittedPencil() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }; c.tool = .brush; c.strokeWidth = 5
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 10, y: 20)))
+        c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 30, y: 20)))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 90, y: 70)))
+        let stroke = c.document.elements[0]
+        try expect(stroke.kind == .path && stroke.filled && stroke.strokeWidth == 0 && stroke.imagePNG == nil, "Fitted Pencil stays one editable filled path")
+        try expect(stroke.bounds.maxX < 40 && stroke.bounds.maxY < 30, "Release-only location and zero pressure cannot add a false tail")
+        try expect(stroke.pathCommands.contains { if case .cubic = $0 { return true }; return false }, "Pencil stores cubic curves")
+        c.undo(); try expect(c.document.elements.isEmpty, "Entire fitted stroke is one undo")
+        c.redo(); try expect(c.document.elements == [stroke], "Redo preserves exact curve geometry")
+    }
+    static func tabletInput() throws {
+        let c = canvas(); let window = host(c); defer { window.close() }; c.tool = .brush; c.strokeWidth = 12
+        var widths: [CGFloat] = []
+        for pressure: Float in [0, 0.5, 1] {
+            let input = CanvasTabletEvent(); input.inputPressure = pressure
+            input.inputLocation = c.convert(CGPoint(x: 40, y: 40), to: nil)
+            c.mouseDown(with: input)
+            input.inputType = .leftMouseUp; input.inputPressure = 0
+            c.mouseUp(with: input)
+            widths.append(c.document.elements.last!.bounds.width)
+            c.undo()
+        }
+        try expect(abs(widths[0] / widths[2] - 0.25) < 0.00001 && abs(widths[1] / widths[2] - 0.625) < 0.00001,
+            "Canvas reads actual tablet pressure, including genuine zero input")
+        let proximity = CanvasTabletEvent(); proximity.inputType = .tabletProximity
+        c.tool = .arrow; c.tabletProximity(with: proximity)
+        try expect(c.effectiveTool == .eraser && c.tool == .arrow, "Pen eraser proximity temporarily changes the effective tool")
+        c.flagsChanged(with: try key(c, 55, type: .flagsChanged, flags: [.command]))
+        try expect(c.effectiveTool == .select, "Command cursor takes precedence over tablet eraser")
+        c.flagsChanged(with: try key(c, 55, type: .flagsChanged)); c.tool = .fill
+        try expect(c.effectiveTool == .fill, "Fill retains recovered temporary eraser exception")
+        c.tool = .arrow; proximity.entering = false; c.tabletProximity(with: proximity)
+        try expect(c.effectiveTool == .arrow, "Leaving tablet proximity restores the selected tool")
+    }
+    static func separatedColorFill() throws {
+        let c = canvas(); var first = rectangle(CGRect(x: 5, y: 5, width: 15, height: 15))
+        first.color = SketchColor(NSColor.red.withAlphaComponent(0.5))
+        let middle = rectangle(CGRect(x: 30, y: 5, width: 15, height: 15), color: .blue)
+        var last = first; last.id = UUID(); last.rect.origin.x = 60; last.groupID = UUID()
+        let originals = [first, middle, last]; c.document.elements = originals
+        c.strokeColor = NSColor.red.withAlphaComponent(0.5); c.floodFill(at: CGPoint(x: 65, y: 10))
+        try expect(c.document.elements.prefix(2).elementsEqual(originals.prefix(2)) && abs(c.document.elements.last!.color.alpha - 0.75) < 0.000001,
+            "Later matching run blends independently without changing earlier layers")
+        c.undo(); try expect(c.document.elements == originals, "Later alpha fill undo is exact")
+        c.strokeColor = .green; c.floodFill(at: CGPoint(x: 65, y: 10), grouping: false)
+        try expect(c.document.elements.prefix(3).elementsEqual(originals) && c.document.elements.last?.groupID == nil,
+            "Shift appends a fresh region and retains the later original group")
+        c.undo(); try expect(c.document.elements == originals, "Later Shift undo is exact")
+    }
+    static func gestureHistory() throws {
+        for tool in [SketchTool.brush, .select, .eraser] {
+            let c = canvas(); let window = host(c); defer { window.close() }
+            c.tool = .rectangle; try drag(c, from: CGPoint(x: 15, y: 15), to: CGPoint(x: 45, y: 45))
+            let drawn = c.document; c.tool = tool
+            c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 20, y: 20)))
+            c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 30, y: 25)))
+            c.undo(); try expect(c.document.elements.isEmpty && c.editingUndoManager.canRedo, "Undo cancels active \(tool) before changing history")
+            c.cancelOperation(nil); c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 50, y: 50)))
+            try expect(c.document.elements.isEmpty && !c.editingUndoManager.canUndo, "Escape/delayed release cannot resurrect old geometry")
+            c.redo(); try expect(c.document == drawn, "Redo restores original rectangle exactly")
+            c.undo()
+            c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 20, y: 20)))
+            c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 30, y: 25)))
+            c.redo(); c.cancelOperation(nil); c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 50, y: 50)))
+            try expect(c.document == drawn && c.editingUndoManager.canUndo && !c.editingUndoManager.canRedo,
+                "Redo cancels active gesture, preserving both history branches")
+        }
     }
     static func eraser() throws {
         let c = canvas()
@@ -311,7 +482,7 @@ struct CanvasTests {
         c.document.elements = [line, text]
         let before = c.document
         c.eraseStroke(points: [CGPoint(x: 50, y: 20), CGPoint(x: 50, y: 70)], width: 10)
-        let fragments = c.document.elements.filter { $0.kind == .line }
+        let fragments = c.document.elements.filter { $0.kind == .path }
         try expect(fragments.count == 2 && fragments[0].id != fragments[1].id, "Cut line into two editable independent paths")
         try expect(fragments.allSatisfy { $0.groupID == nil && $0.imagePNG == nil }, "Fragments stay vectors")
         try expect(c.document.elements.first { $0.id == text.id } == text, "Eraser leaves text intact")
@@ -321,13 +492,13 @@ struct CanvasTests {
         brush.points = [CGPoint(x: 5, y: 30), CGPoint(x: 40, y: 30), CGPoint(x: 80, y: 30)]
         c.document.elements = [brush]
         c.eraseStroke(points: [CGPoint(x: 50, y: 30)], width: 12)
-        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .brush }, "Freehand splits independently")
+        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .path && $0.imagePNG == nil }, "Freehand splits into independent editable outlines")
     }
     static func pixelEraser() throws {
         let c = canvas()
         c.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 70, height: 50))]
         c.eraseStroke(points: [CGPoint(x: 40, y: 15), CGPoint(x: 40, y: 55)], width: 12)
-        try expect(c.document.elements.count == 1 && c.document.elements[0].kind == .raster, "Only touched filled area rasterizes")
+        try expect(c.document.elements.count == 1 && c.document.elements[0].kind == .path && c.document.elements[0].imagePNG == nil, "Filled area retains an editable vector with a hole")
         let cleared = try pixel(c, 40, 30), retained = try pixel(c, 20, 30)
         try expect(cleared.greenComponent > 0.9, "Cleared actual pixels")
         try expect(retained.redComponent > 0.9 && retained.greenComponent < 0.1, "Un-erased portion remains")
@@ -358,7 +529,7 @@ struct CanvasTests {
         try drag(c, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 20, y: 20))
         try expect(try pixel(c, 20, 20).greenComponent < 0.1, "Click-only brush creates actual dot")
         try drag(c, from: CGPoint(x: 30, y: 30), to: CGPoint(x: 70, y: 30))
-        try expect(c.document.elements.last?.kind == .brush, "Native freehand drawing")
+        try expect(c.document.elements.last?.kind == .path && c.document.elements.last?.imagePNG == nil, "Native freehand produces editable fitted geometry")
         c.tool = .brush
         c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 40, y: 30), flags: [.option]))
         try expect(c.strokeColor.usingColorSpace(.deviceRGB)!.redComponent > 0.9, "Option brush eyedropper")
@@ -737,7 +908,7 @@ struct CanvasTests {
         c.rightMouseDown(with: try mouse(c, .rightMouseDown, CGPoint(x: 50, y: 30), flags: [.control]))
         c.rightMouseDragged(with: try mouse(c, .rightMouseDragged, CGPoint(x: 50, y: 50), flags: [.control]))
         c.rightMouseUp(with: try mouse(c, .rightMouseUp, CGPoint(x: 50, y: 50), flags: [.control]))
-        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .line },
+        try expect(c.document.elements.count == 2 && c.document.elements.allSatisfy { $0.kind == .path },
                    "Control secondary-button erasing creates independent vector pieces")
         try expect(try pixel(c, 50, 40).blueComponent > 0.9 && pixel(c, 20, 40).redComponent > 0.9,
                    "Eraser exposes protected photo, retaining line pixels elsewhere")

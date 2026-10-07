@@ -1,13 +1,14 @@
 {
-  "verified_at": "2026-10-07T06:58:33.830717+00:00",
+  "verified_at": "2026-10-07T07:35:54.821059+00:00",
+  "checkpoint_state": "final_supplied_evidence_verified_original_parity_unverified",
   "architectures": {
     "arm64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
-        "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+        "Sources/App.swift": "64277e73721cbe47784851dae29743f34746320473c841562e1e193efe963803",
+        "Sources/Canvas.swift": "a6abc57e30e653ed8fa22b254f2a506599093435975c2a4de9233fedcc2b41e3",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-        "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+        "Sources/DocumentModel.swift": "beb4769f7ea962a7c057e9c68ba93851478c4d452b861ecff4530e09b75a0e69",
         "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
         "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
         "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
@@ -15,18 +16,24 @@
         "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
         "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
         "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+        "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
+        "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
         "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
-        "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+        "tests/CanvasTests.swift": "5544401704ab32e01832ca700012ff18361a7dc2a1dbadec7511b3370cb887ab",
         "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
         "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
         "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
         "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
         "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
-        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
+        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
+        "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
+        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2"
       },
       "suite_results": {
-        "canvas": 31,
+        "canvas": 42,
+        "vector_geometry": 15,
+        "stroke_fitting": 20,
         "publishing": 160,
         "publishing_shutdown": 50,
         "global_hotkeys": 117,
@@ -37,22 +44,23 @@
         "app_safety": 34
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.egng20pz",
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.N4WKhP",
+      "snapshot": "build/test-snapshot.w62oxa3z",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.Q59i54",
       "native_appkit_idle_termination": {
         "actualIdleCaptureShutdowns": 1,
         "passed": true,
         "pendingShutdown": []
       },
-      "raw_log": "build/final-verification-20261007-015338/arm64.log"
+      "raw_log": "build/final-verification-20261007-022533/arm64.log",
+      "raw_log_sha256": "3d234ed4a705aa768260c8dc546e66bf1a46ab858d599535098c5a5132247078"
     },
     "x86_64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
-        "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+        "Sources/App.swift": "64277e73721cbe47784851dae29743f34746320473c841562e1e193efe963803",
+        "Sources/Canvas.swift": "a6abc57e30e653ed8fa22b254f2a506599093435975c2a4de9233fedcc2b41e3",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-        "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+        "Sources/DocumentModel.swift": "beb4769f7ea962a7c057e9c68ba93851478c4d452b861ecff4530e09b75a0e69",
         "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
         "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
         "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
@@ -60,18 +68,24 @@
         "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
         "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
         "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+        "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
+        "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
         "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
-        "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+        "tests/CanvasTests.swift": "5544401704ab32e01832ca700012ff18361a7dc2a1dbadec7511b3370cb887ab",
         "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
         "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
         "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
         "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
         "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
         "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
-        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
+        "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
+        "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
+        "tests/VectorGeometryTests.swift": "6fe6b09b63cefd262a1ca3779f0a38110844981a7c48d41d6703e1d893135ae2"
       },
       "suite_results": {
-        "canvas": 31,
+        "canvas": 42,
+        "vector_geometry": 15,
+        "stroke_fitting": 20,
         "publishing": 160,
         "publishing_shutdown": 50,
         "global_hotkeys": 117,
@@ -82,14 +96,15 @@
         "app_safety": 34
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.cllkgdn8",
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.h3WA98",
+      "snapshot": "build/test-snapshot.aibyhvkn",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.zNPmjP",
       "native_appkit_idle_termination": {
         "actualIdleCaptureShutdowns": 1,
         "passed": true,
         "pendingShutdown": []
       },
-      "raw_log": "build/final-verification-20261007-015338/x86_64.log"
+      "raw_log": "build/final-verification-20261007-022533/x86_64.log",
+      "raw_log_sha256": "bb1a443222795e1029c212b3292fc7410bbe8fc8b7d78ee3ed220eb1c550dc6b"
     }
   },
   "build": {
@@ -98,12 +113,12 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.hTPs6V",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.nSW7W5",
     "source_sha256": {
-      "App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
-      "Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+      "App.swift": "64277e73721cbe47784851dae29743f34746320473c841562e1e193efe963803",
+      "Canvas.swift": "a6abc57e30e653ed8fa22b254f2a506599093435975c2a4de9233fedcc2b41e3",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-      "DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+      "DocumentModel.swift": "beb4769f7ea962a7c057e9c68ba93851478c4d452b861ecff4530e09b75a0e69",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
       "Info.plist": "2cfa9422ebc8c2dd26d53109d8c4bd4e804de5b9a8e304f58378ac3f1edfe0ab",
       "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
@@ -111,20 +126,26 @@
       "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
       "SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
-      "SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437"
+      "SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+      "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
+      "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521"
     },
-    "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
+    "binary_sha256": "770d057dbd4d97c4105e75bd887424036d3e2133afd6f611cc4a85326b6a14f6"
   },
+  "build_manifest_path": "build/build-manifest.json",
+  "build_manifest_sha256": "33f8b743f0d4cc90ef3051b05e982fb926c29ef23ddd4e02ae9311cb4cc34972",
+  "full_suite_results_path": "build/final-verification-20261007-022533/results.json",
+  "full_suite_results_sha256": "797e6a0abe754485b4888c0ae97b8dd36e599e36169a7217d6c360ebe0c5e247",
   "native_startup_smoke": {
-    "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f",
-    "verified_at": "2026-10-07T06:53:48.239781+00:00",
+    "binary_sha256": "770d057dbd4d97c4105e75bd887424036d3e2133afd6f611cc4a85326b6a14f6",
+    "verified_at": "2026-10-07T07:27:02.136261+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "d9ba6550146b367ef8319dc3631400b8c27bdcdcbfe9e8db99272138f04ae66a"
+      "editable_sha256": "79b2c21430bffe70301fa43e5d0f1de24c9f0a72216929f4baa9d293c32f0e7b"
     },
     "x86_64": {
       "passed": true,
@@ -132,14 +153,16 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "8bda72dd3e5edbd69b60abc26f7edf15393ce18086dd5e11a4cdf77298301916"
+      "editable_sha256": "597fc09f98480bceadb587f9439829cd9473185b892769808aebad785d4d20f3"
     }
   },
-  "native_startup_smoke_evidence": "build/startup-smoke-c946fdd260",
+  "native_startup_smoke_evidence": "build/startup-smoke-770d057dbd",
+  "native_startup_smoke_results_path": "build/startup-smoke-770d057dbd/results.json",
+  "native_startup_smoke_results_sha256": "233e28e4848d3025d41f46fc52bed5e8c779e91e6d74052b4172e9019b5ccff2",
   "validation_tools_sha256": {
     "tools/test-app-safety.sh": "f234327da750247c5bfedd4bb5dc8b22de03002e4b5fd2aa4f213cd7e37b7c16",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test.py": "a5f99aa8c83a5e6308da7dc0f39f4d7eeb36c973dac70dda115da463ac0ea85b"
+    "tools/test.py": "35a45de7f1b6ce60bd77c4bb0d53173b08a26a1430e53397eb53b91e6bf8e908"
   },
   "full_original_parity": false,
   "desktop_checks": [
@@ -166,7 +189,8 @@
         "native_app_status": "Published image",
         "test_content": "Synthetic gradient only",
         "build_binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
-      }
+      },
+      "checkpoint_scope": "historical_exact_tested_binary"
     },
     {
       "build_binary_sha256": "43bec0aee570b4e25aa2b5cffbb69432f9a3a5fccc458948bf604cf5ed320af6",
@@ -176,16 +200,365 @@
         "Editable native .skitch Save/reopen preserving typed annotation",
         "Chosen-folder Photos thumbnails, natural sort and full-resolution double-click open"
       ],
-      "evidence": "CUA desktop checks earlier in this milestone; subsequent changes concern shutdown and Frame chrome"
+      "evidence": "CUA desktop checks earlier in this milestone; subsequent changes concern shutdown and Frame chrome",
+      "checkpoint_scope": "historical_exact_tested_binary"
+    },
+    {
+      "build_binary_sha256": "770d057dbd4d97c4105e75bd887424036d3e2133afd6f611cc4a85326b6a14f6",
+      "verified_at": "2026-10-07T07:32:03.820444+00:00",
+      "architecture": "arm64",
+      "passed": true,
+      "checks": [
+        "Native Fill produced visible red geometry inside the black outline",
+        "Native Eraser split a filled blue rectangle",
+        "One blue fragment moved independently while the other stayed fixed",
+        "Native Pencil drew a fitted editable red stroke",
+        "Drawing menu Loose selection persisted, restored to Medium before Quit",
+        "Native Save reported Saved, Quit exited and fresh startup/open showed the same artwork"
+      ],
+      "evidence_path": "build/vector-tools-desktop-proof.json",
+      "evidence_sha256": "92c8783375c5a8e9b0a33e7468c70f99a39df994084478aee41275f697f8c4e4",
+      "mechanism": "Actual rebuilt native app, operated through cua_repl; screenshot visually reviewed in conversation",
+      "saved_file": {
+        "path": "build/vector-tools-desktop.skitch",
+        "sha256": "134fd67982c9538d59e04c7124e754d438b91921b73123f1d5a46200c26e46bd",
+        "bytes": 35516
+      },
+      "saved_file_inspection": {
+        "editable_paths": 5,
+        "elements": 7,
+        "independently_moved_blue_fragments": true,
+        "passed": true,
+        "path_cubic_counts": [
+          4,
+          4,
+          5,
+          13,
+          12
+        ],
+        "rasters": 0,
+        "text_unchanged": true
+      },
+      "independent_saved_file_structure": {
+        "verified": true,
+        "native_element_kind_counts": {
+          "path": 5,
+          "rectangle": 1,
+          "text": 1
+        },
+        "elements": 7,
+        "native_path_cubic_counts": [
+          4,
+          4,
+          5,
+          13,
+          12
+        ],
+        "rasters": 0,
+        "text_unchanged": true,
+        "blue_fragments_have_distinct_ids_and_no_shared_group": true
+      },
+      "render_from_saved_file": {
+        "path": "build/vector-tools-desktop-saved.png",
+        "sha256": "ac4dd77c827af11545c615ecfbdb007ae388410a46d87e5a87203b4e6f9efb6e",
+        "type": "Offscreen rendering of the actual desktop-saved file, not a desktop screenshot"
+      },
+      "not_verified": [
+        "Real tablet hardware pressure/proximity",
+        "Original i386 visual equivalence",
+        "Exact Boolean tolerance/growth/inflection and separated-color-run runtime behavior"
+      ],
+      "original_parity": "unverified",
+      "new_sftp_upload_claimed": false
     }
   ],
+  "current_desktop_checks": [
+    {
+      "build_binary_sha256": "770d057dbd4d97c4105e75bd887424036d3e2133afd6f611cc4a85326b6a14f6",
+      "verified_at": "2026-10-07T07:32:03.820444+00:00",
+      "architecture": "arm64",
+      "passed": true,
+      "checks": [
+        "Native Fill produced visible red geometry inside the black outline",
+        "Native Eraser split a filled blue rectangle",
+        "One blue fragment moved independently while the other stayed fixed",
+        "Native Pencil drew a fitted editable red stroke",
+        "Drawing menu Loose selection persisted, restored to Medium before Quit",
+        "Native Save reported Saved, Quit exited and fresh startup/open showed the same artwork"
+      ],
+      "evidence_path": "build/vector-tools-desktop-proof.json",
+      "evidence_sha256": "92c8783375c5a8e9b0a33e7468c70f99a39df994084478aee41275f697f8c4e4",
+      "mechanism": "Actual rebuilt native app, operated through cua_repl; screenshot visually reviewed in conversation",
+      "saved_file": {
+        "path": "build/vector-tools-desktop.skitch",
+        "sha256": "134fd67982c9538d59e04c7124e754d438b91921b73123f1d5a46200c26e46bd",
+        "bytes": 35516
+      },
+      "saved_file_inspection": {
+        "editable_paths": 5,
+        "elements": 7,
+        "independently_moved_blue_fragments": true,
+        "passed": true,
+        "path_cubic_counts": [
+          4,
+          4,
+          5,
+          13,
+          12
+        ],
+        "rasters": 0,
+        "text_unchanged": true
+      },
+      "independent_saved_file_structure": {
+        "verified": true,
+        "native_element_kind_counts": {
+          "path": 5,
+          "rectangle": 1,
+          "text": 1
+        },
+        "elements": 7,
+        "native_path_cubic_counts": [
+          4,
+          4,
+          5,
+          13,
+          12
+        ],
+        "rasters": 0,
+        "text_unchanged": true,
+        "blue_fragments_have_distinct_ids_and_no_shared_group": true
+      },
+      "render_from_saved_file": {
+        "path": "build/vector-tools-desktop-saved.png",
+        "sha256": "ac4dd77c827af11545c615ecfbdb007ae388410a46d87e5a87203b4e6f9efb6e",
+        "type": "Offscreen rendering of the actual desktop-saved file, not a desktop screenshot"
+      },
+      "not_verified": [
+        "Real tablet hardware pressure/proximity",
+        "Original i386 visual equivalence",
+        "Exact Boolean tolerance/growth/inflection and separated-color-run runtime behavior"
+      ],
+      "original_parity": "unverified",
+      "new_sftp_upload_claimed": false
+    }
+  ],
+  "desktop_checkpoint": {
+    "status": "verified_for_listed_scope",
+    "build_binary_sha256": "770d057dbd4d97c4105e75bd887424036d3e2133afd6f611cc4a85326b6a14f6",
+    "evidence_path": "build/vector-tools-desktop-proof.json",
+    "evidence_sha256": "92c8783375c5a8e9b0a33e7468c70f99a39df994084478aee41275f697f8c4e4",
+    "note": "Actual native Fill/Erase/fragment movement/Pencil/Save/Quit/restart/reopen and smoothing-menu checks are scoped to arm64 and this exact binary. Earlier desktop/publication proofs retain their original binary hashes."
+  },
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
     "System Photos-library picker",
     "Actual app-unfocused global shortcuts",
-    "Complete original vector Boolean fill/erase and pressure/smoothing",
+    "Original vector Boolean topology, separated matching-run fill semantics and stroke/nib numerical fidelity",
+    "Physical tablet pressure/proximity/pen eraser and real-device stroke fidelity",
+    "Original smoothing preference migration/defaults and live Shift-key drawing behavior",
     "Original window/crop/output sizing, full History, presets, preferences and legacy services"
+  ],
+  "historical_validations": [
+    {
+      "status": "historical",
+      "superseded_at": "2026-10-07T07:35:54.821059+00:00",
+      "sha256_when_current": "1612be4d912a775de7adfa538930fd6149ad1edfaa665d376c5ca89423d4f4b5",
+      "validation": {
+        "verified_at": "2026-10-07T06:58:33.830717+00:00",
+        "architectures": {
+          "arm64": {
+            "passed": true,
+            "source_sha256": {
+              "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+              "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+              "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
+              "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+              "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+              "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+              "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+              "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+              "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+              "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+              "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+              "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
+              "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+              "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
+              "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
+              "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
+              "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
+              "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
+              "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
+              "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
+            },
+            "suite_results": {
+              "canvas": 31,
+              "publishing": 160,
+              "publishing_shutdown": 50,
+              "global_hotkeys": 117,
+              "svg": 29,
+              "skitch_file": 20,
+              "capture": 154,
+              "photo_browser": 19,
+              "app_safety": 34
+            },
+            "source_drift": [],
+            "snapshot": "build/test-snapshot.egng20pz",
+            "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.N4WKhP",
+            "native_appkit_idle_termination": {
+              "actualIdleCaptureShutdowns": 1,
+              "passed": true,
+              "pendingShutdown": []
+            },
+            "raw_log": "build/final-verification-20261007-015338/arm64.log"
+          },
+          "x86_64": {
+            "passed": true,
+            "source_sha256": {
+              "Sources/App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+              "Sources/Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+              "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
+              "Sources/DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+              "Sources/GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+              "Sources/LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+              "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+              "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+              "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+              "Sources/SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+              "Sources/SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437",
+              "tests/AppSafetyTests.swift": "2a0a20a199db90165f016e3a70f54bcfa67076620d8ab3321c029d0d13d59215",
+              "tests/CanvasTests.swift": "a8f644f239d4c710f49a856a963ab6f8fede33d0c35f1962138cd0c1fb6032f7",
+              "tests/CaptureTests.swift": "57cd64bdaf56894bd34d9990bb4896bec57a8457ccc1f0091f9d2ecb751de202",
+              "tests/GlobalHotkeysTests.swift": "47e795cc37ec4ad46ca4946e67154974907195e75c84225010af2fbc58d4583f",
+              "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
+              "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
+              "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
+              "tests/SVGExportTests.swift": "e79e4f93ac9384bb098cf7b1596de4c22e2f25e363d783ce58b8f5a8b407f8a1",
+              "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94"
+            },
+            "suite_results": {
+              "canvas": 31,
+              "publishing": 160,
+              "publishing_shutdown": 50,
+              "global_hotkeys": 117,
+              "svg": 29,
+              "skitch_file": 20,
+              "capture": 154,
+              "photo_browser": 19,
+              "app_safety": 34
+            },
+            "source_drift": [],
+            "snapshot": "build/test-snapshot.cllkgdn8",
+            "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.h3WA98",
+            "native_appkit_idle_termination": {
+              "actualIdleCaptureShutdowns": 1,
+              "passed": true,
+              "pendingShutdown": []
+            },
+            "raw_log": "build/final-verification-20261007-015338/x86_64.log"
+          }
+        },
+        "build": {
+          "architectures": [
+            "arm64",
+            "x86_64"
+          ],
+          "minimum_macos": "13.0",
+          "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.hTPs6V",
+          "source_sha256": {
+            "App.swift": "8e75837c867a46cc373d39f39625945ae0e84e68d4133e0ee864842653926f1b",
+            "Canvas.swift": "72955cf1614383f8597a229e3fa7c7dfe346399eb8d43bf3a06b327b9d68cb5d",
+            "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
+            "DocumentModel.swift": "90eaad1ba0447c1555c31f60f2f8248e03b44ac864ca2a15ca861c202353867d",
+            "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
+            "Info.plist": "2cfa9422ebc8c2dd26d53109d8c4bd4e804de5b9a8e304f58378ac3f1edfe0ab",
+            "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
+            "LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+            "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
+            "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
+            "SVGExport.swift": "b8a872653a7d9328f397a39b5e68cf85883998828f315601e5cf5ea05530e362",
+            "SkitchFile.swift": "205e56b13b8b94e77eba0a6062303457adfd76b4dc9b81bcf37a736d0ee70437"
+          },
+          "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
+        },
+        "native_startup_smoke": {
+          "binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f",
+          "verified_at": "2026-10-07T06:53:48.239781+00:00",
+          "arm64": {
+            "passed": true,
+            "exit_code": 0,
+            "result": "native startup, original-format editable save/load, PNG export succeeded",
+            "png_bytes": 24807,
+            "editable_bytes": 29480,
+            "editable_sha256": "d9ba6550146b367ef8319dc3631400b8c27bdcdcbfe9e8db99272138f04ae66a"
+          },
+          "x86_64": {
+            "passed": true,
+            "exit_code": 0,
+            "result": "native startup, original-format editable save/load, PNG export succeeded",
+            "png_bytes": 24394,
+            "editable_bytes": 29480,
+            "editable_sha256": "8bda72dd3e5edbd69b60abc26f7edf15393ce18086dd5e11a4cdf77298301916"
+          }
+        },
+        "native_startup_smoke_evidence": "build/startup-smoke-c946fdd260",
+        "validation_tools_sha256": {
+          "tools/test-app-safety.sh": "f234327da750247c5bfedd4bb5dc8b22de03002e4b5fd2aa4f213cd7e37b7c16",
+          "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
+          "tools/test.py": "a5f99aa8c83a5e6308da7dc0f39f4d7eeb36c973dac70dda115da463ac0ea85b"
+        },
+        "full_original_parity": false,
+        "desktop_checks": [
+          {
+            "build_binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f",
+            "checks": [
+              "Opaque Frame controls/titlebar surrounding transparent canvas; Cancel restores editor",
+              "Native raster Open at validated 320x120 pixels",
+              "Native Publish sheet completes; unauthenticated HTTP matches SFTP bytes"
+            ],
+            "evidence": "CUA accessibility state and screenshots in this chat; independent public-image readback",
+            "public_image": {
+              "verified_at": "2026-10-07T06:56:33.742344+00:00",
+              "public_url": "https://shoemoney.com/imgs/skitch-redux-02-final-8fb7e72d-32d0-45fe-8969-e07b8f4870c9.png",
+              "http_status": 200,
+              "content_type": "image/png",
+              "bytes": 1234,
+              "sha256": "eb5e19f566952e84f0a0ab8d3e2753f7f7ef6112c8283d0e4146b46aff43416b",
+              "pixel_size": [
+                320,
+                120
+              ],
+              "http_matches_sftp": true,
+              "native_app_status": "Published image",
+              "test_content": "Synthetic gradient only",
+              "build_binary_sha256": "c946fdd2600074791950b09607f1be945676e4dca2134ad03d41732de443fd3f"
+            }
+          },
+          {
+            "build_binary_sha256": "43bec0aee570b4e25aa2b5cffbb69432f9a3a5fccc458948bf604cf5ed320af6",
+            "checks": [
+              "Original firstlaunch import and Justype text entry/Escape commit",
+              "Tab Pencil/current-tool toggle",
+              "Editable native .skitch Save/reopen preserving typed annotation",
+              "Chosen-folder Photos thumbnails, natural sort and full-resolution double-click open"
+            ],
+            "evidence": "CUA desktop checks earlier in this milestone; subsequent changes concern shutdown and Frame chrome"
+          }
+        ],
+        "not_verified": [
+          "Original i386 runtime equivalence and historical corpus interoperability",
+          "Screen/camera capture permissions, hardware and display fidelity",
+          "System Photos-library picker",
+          "Actual app-unfocused global shortcuts",
+          "Complete original vector Boolean fill/erase and pressure/smoothing",
+          "Original window/crop/output sizing, full History, presets, preferences and legacy services"
+        ],
+        "superseded_validation": {
+          "verified_at": "2026-10-07T05:48:02.369062+00:00",
+          "binary_sha256": "8ef9738f178f278967f99f0c626ca3e46262e844700c1698d3cb1f53fc1cee7d"
+        }
+      }
+    }
   ],
   "superseded_validation": {
     "verified_at": "2026-10-07T05:48:02.369062+00:00",

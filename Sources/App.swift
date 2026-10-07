@@ -215,7 +215,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), bottom.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8), bottom.heightAnchor.constraint(equalToConstant: 52),
             status.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), status.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10)
         ])
-        canvas.strokeColor = colorWell.color; canvas.strokeWidth = 5; setTool(.arrow)
+        canvas.strokeColor = colorWell.color; canvas.strokeWidth = 5
+        canvas.strokeSmoothing = StrokeSmoothing(rawValue: UserDefaults.standard.string(forKey: "PencilSmoothing") ?? "medium") ?? .medium
+        setTool(.arrow)
     }
     func menu(_ title: String, items: [(String, Selector?, String)]) -> NSMenu {
         let m = NSMenu(title: title); m.font = .systemFont(ofSize: 20)
@@ -229,9 +231,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let image = menu("Image", items: [("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Toggle Text Outline", #selector(toggleOutline), "")])
         let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
-        for m in [appMenu, file, edit, image, text, snap] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }; NSApp.mainMenu = bar
+        let drawing = menu("Drawing", items: [])
+        let smoothing = menu("Pencil Smoothing", items: [])
+        for mode in [StrokeSmoothing.precise, .medium, .loose] {
+            let item = NSMenuItem(title: mode.rawValue.capitalized, action: #selector(changeSmoothing(_:)), keyEquivalent: "")
+            item.representedObject = mode.rawValue; item.target = self; smoothing.addItem(item)
+        }
+        let smoothingItem = NSMenuItem(title: "Pencil Smoothing", action: nil, keyEquivalent: "")
+        smoothingItem.submenu = smoothing; drawing.addItem(smoothingItem)
+        for m in [appMenu, file, edit, image, drawing, text, snap] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }; NSApp.mainMenu = bar
+    }
+    @objc func changeSmoothing(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = StrokeSmoothing(rawValue: raw) else { return }
+        canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(changeSmoothing(_:)) {
+            menuItem.state = (menuItem.representedObject as? String) == canvas.strokeSmoothing.rawValue ? .on : .off
+        }
         if menuItem.action == #selector(undo) { return activeUndoManager.canUndo }
         if menuItem.action == #selector(redo) { return activeUndoManager.canRedo }
         return true

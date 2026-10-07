@@ -31,6 +31,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     var strokeColor: NSColor = .systemRed
     var strokeWidth: CGFloat = 5
+    var strokeSmoothing: StrokeSmoothing = .medium
     var filled = false
     var shadowed = true
     var fontName = "Helvetica-Bold"
@@ -99,6 +100,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var resizingHandle: Int?
     private var resizeBounds: CGRect = .zero
     private var strokePoints: [CGPoint] = []
+    private var strokeSamples: [StrokeSample] = []
+    private var drawingPencil = false
+    private var tabletEraser = false
     private var textEditor: NSTextView?
     private var editingTextID: UUID?
     private var textBeforeEditing: EditorState?
@@ -190,8 +194,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         body()
         recordUndo(before, name: name)
     }
-    func undo() { finishTextEditing(); editingUndoManager.undo() }
-    func redo() { finishTextEditing(); editingUndoManager.redo() }
+    func undo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.undo() }
+    func redo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.redo() }
     func setZoom(_ value: CGFloat) { zoom = value }
 
     func newBlank(size: NSSize) {
@@ -602,274 +606,151 @@ final class CanvasView: NSView, NSTextViewDelegate {
         onChange?()
     }
 
-    // MARK: Pixel tools
+    // MARK: Vector paint tools
 
-    /// A four-connected scanline flood fill samples the visible composite but adds a
-    /// transparent raster overlay; it does not destroy editable objects underneath.
-    func floodFill(at point: CGPoint) {
+    /// Fill operates on annotation geometry, never the photograph's pixel colors.
+    /// Shift bypasses contact grouping and merging, as in the original ToolFill.
+    func floodFill(at point: CGPoint, grouping: Bool = true) {
         finishTextEditing()
-        var fillSource = document
-        fillSource.elements.removeAll { $0.kind == .text }
-        guard document.canvasRect.contains(point), let bitmap = SketchRenderer.bitmap(document: fillSource),
-              let bytes = bitmap.bitmapData else { return }
-        let width = bitmap.pixelsWide, height = bitmap.pixelsHigh, stride = bitmap.bytesPerRow
-        let sx = Int(point.x), sy = Int(point.y)
-        let start = sy * stride + sx * 4
-        let target = (bytes[start], bytes[start + 1], bytes[start + 2], bytes[start + 3])
-        let tolerance = 12
-        func matches(_ x: Int, _ y: Int) -> Bool {
-            let i = y * stride + x * 4
-            return abs(Int(bytes[i]) - Int(target.0)) <= tolerance &&
-                abs(Int(bytes[i + 1]) - Int(target.1)) <= tolerance &&
-                abs(Int(bytes[i + 2]) - Int(target.2)) <= tolerance &&
-                abs(Int(bytes[i + 3]) - Int(target.3)) <= tolerance
-        }
-        guard let overlay = SketchRenderer.bitmap(size: canvasSize, draw: {}), let output = overlay.bitmapData else { return }
-        var visited = [UInt8](repeating: 0, count: width * height)
-        var stack: [(Int, Int)] = [(sx, sy)]
+        guard document.canvasRect.contains(point) else { return }
         let color = SketchColor(strokeColor)
-        let alpha = UInt8((color.alpha * 255).rounded())
-        // NSBitmapImageRep uses premultiplied RGBA by default.
-        let rgba: [UInt8] = [UInt8((color.red * CGFloat(alpha)).rounded()),
-            UInt8((color.green * CGFloat(alpha)).rounded()), UInt8((color.blue * CGFloat(alpha)).rounded()), alpha]
-        if alpha == 0 || rgba == [target.0, target.1, target.2, target.3] { return }
-        var minX = width, minY = height, maxX = 0, maxY = 0
-        while let (x, y) = stack.popLast() {
-            if visited[y * width + x] != 0 || !matches(x, y) { continue }
-            var left = x, right = x
-            while left > 0 && visited[y * width + left - 1] == 0 && matches(left - 1, y) { left -= 1 }
-            while right + 1 < width && visited[y * width + right + 1] == 0 && matches(right + 1, y) { right += 1 }
-            for px in left...right {
-                visited[y * width + px] = 1
-                let out = y * overlay.bytesPerRow + px * 4
-                for channel in 0..<4 { output[out + channel] = rgba[channel] }
-            }
-            minX = min(minX, left); maxX = max(maxX, right); minY = min(minY, y); maxY = max(maxY, y)
-            for nextY in [y - 1, y + 1] where nextY >= 0 && nextY < height {
-                var inSpan = false
-                for px in left...right {
-                    let eligible = visited[nextY * width + px] == 0 && matches(px, nextY)
-                    if eligible && !inSpan { stack.append((px, nextY)) }
-                    inSpan = eligible
-                }
+        let paths = document.elements.enumerated().compactMap { index, element in
+            VectorGeometry.paintedPath(for: element).map { (index: index, element: element, path: $0) }
+        }
+        let hit = paths.last { $0.path.contains(point, using: .winding) }
+        if let hit {
+            if hit.element.color == color && color.alpha == 1 { return }
+            if hit.element.shadowed {
+                edit("Flood Fill") { document.elements[hit.index].color = color }
+                return
             }
         }
-        guard minX <= maxX, minY <= maxY else { return }
-        let rect = CGRect(x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1)
-        let image = NSImage(size: canvasSize); image.addRepresentation(overlay)
-        guard let png = SketchRenderer.bitmap(size: rect.size, draw: {
-            SketchRenderer.drawImage(image, in: CGRect(x: -rect.minX, y: -rect.minY, width: canvasSize.width, height: canvasSize.height))
-        })?.representation(using: .png, properties: [:]) else { return }
-        let contacts = fillContacts(mask: visited, width: width, height: height, region: rect)
-        edit("Flood Fill") {
-            var element = SketchElement(kind: .raster)
-            element.rect = rect; element.imagePNG = png
-            if !contacts.isEmpty {
-                let group = UUID()
-                for index in document.elements.indices where contacts.contains(document.elements[index].id) {
-                    document.elements[index].groupID = group
-                }
-                element.groupID = group
+        let candidate: CGPath
+        var visited = paths
+        var differentStyleMarker: UUID? = paths.first?.element.id
+        // Confirmed first pass; separated matching-run resume remains unverified.
+        if let hit, let hitIndex = paths.firstIndex(where: { $0.element.id == hit.element.id }) {
+            // Resolve the consecutive run that contains the clicked layer. Original
+            // separated-run iterator behavior still needs i386-runtime comparison.
+            var start = hitIndex
+            while start > 0 && paths[start - 1].element.color == hit.element.color && !paths[start - 1].element.shadowed { start -= 1 }
+            var runEnd = start
+            var region = paths[start].path
+            while runEnd + 1 < paths.count && paths[runEnd + 1].element.color == hit.element.color && !paths[runEnd + 1].element.shadowed {
+                runEnd += 1; region = region.union(paths[runEnd].path)
             }
-            document.elements.append(element); selection = contacts.union([element.id])
+            visited = Array(paths[start...runEnd]); differentStyleMarker = nil
+            for entry in paths.dropFirst(runEnd + 1) where entry.element.color != hit.element.color || entry.element.shadowed {
+                region = region.subtracting(entry.path); visited.append(entry)
+                if differentStyleMarker == nil { differentStyleMarker = entry.element.id }
+            }
+            guard let component = VectorGeometry.components(of: region).first(where: { $0.contains(point, using: .winding) }) else {
+                edit("Flood Fill") { document.elements[hit.index].color = color }
+                return
+            }
+            candidate = component
+        } else {
+            var region = CGPath(rect: document.canvasRect, transform: nil)
+            for entry in paths { region = region.subtracting(entry.path) }
+            guard let component = VectorGeometry.components(of: region).first(where: { $0.contains(point, using: .winding) }) else { return }
+            candidate = component
         }
-    }
-    /// Flood-filled pixels glue only annotations whose actual painted pixels contact
-    /// the region (not every shape with an overlapping bounding box).
-    private func fillContacts(mask: [UInt8], width: Int, height: Int, region: CGRect) -> Set<UUID> {
-        var contacts: Set<UUID> = []
-        for element in document.elements where element.kind != .text && element.paintBounds.intersects(region.insetBy(dx: -2, dy: -2)) {
-            let rect = element.paintBounds.integral.intersection(document.canvasRect)
-            guard let bitmap = SketchRenderer.bitmap(size: rect.size, draw: {
-                NSGraphicsContext.current?.cgContext.translateBy(x: -rect.minX, y: -rect.minY)
-                SketchRenderer.draw(element)
-            }), let pixels = bitmap.bitmapData else { continue }
-            var touches = false
-            for y in 0..<bitmap.pixelsHigh {
-                for x in 0..<bitmap.pixelsWide where pixels[y * bitmap.bytesPerRow + x * 4 + 3] > 8 {
-                    let px = Int(rect.minX) + x, py = Int(rect.minY) + y
-                    for (nx, ny) in [(px, py), (px - 1, py), (px + 1, py), (px, py - 1), (px, py + 1)] {
-                        if nx >= 0 && nx < width && ny >= 0 && ny < height && mask[ny * width + nx] != 0 { touches = true; break }
+        // Original growth is measured in display pixels: opaque fills hide seams;
+        // translucent fills use the smaller overlap to avoid a dark boundary.
+        let growth: CGFloat = (color.alpha == 1 ? 1 : 0.2) / zoom
+        let rim = candidate.copy(strokingWithWidth: 2 * growth, lineCap: .round, lineJoin: .round, miterLimit: 10)
+        var region = candidate.union(rim)
+        var style = SketchElement(kind: .path)
+        style.color = color; style.shadowed = false
+        var contacts = visited.filter { $0.path.intersects(region) }
+        var removed: Set<UUID> = []
+        var anchor: UUID?
+        if let marker = differentStyleMarker, let start = visited.firstIndex(where: { $0.element.id == marker }) {
+            anchor = visited.dropFirst(start).first { $0.element.id != hit?.element.id && $0.path.intersects(region) }?.element.id
+        }
+        var group: UUID?
+        var groupedMembers: Set<UUID> = []
+        if grouping && !contacts.isEmpty {
+            group = UUID()
+            for entry in contacts { groupedMembers.formUnion(groupMembers(of: entry.element)) }
+            let uniform = contacts.allSatisfy { $0.element.color == contacts[0].element.color && $0.element.shadowed == contacts[0].element.shadowed }
+            var merge = contacts
+            if hit != nil && uniform {
+                style.color = blended(color, over: contacts[0].element.color)
+                style.shadowed = contacts[0].element.shadowed
+            } else if hit != nil {
+                merge = []
+            } else if !uniform || contacts[0].element.color != color {
+                // Preserve the original order-sensitive final matching run.
+                var pending = Array(contacts.prefix(0)), subset = pending
+                for (index, entry) in contacts.enumerated() {
+                    if entry.element.color == color && !entry.element.shadowed { pending.append(entry) }
+                    else if index > 0, entry.path.intersects(contacts[index - 1].path) { subset = pending; pending = [] }
+                }
+                if !pending.isEmpty { subset = pending }
+                merge = subset
+            }
+            if !merge.isEmpty {
+                var combined = region
+                for entry in merge { combined = combined.union(entry.path) }
+                let components = VectorGeometry.components(of: combined)
+                if (hit != nil && uniform) || components.count == 1 {
+                    if let first = components.first {
+                        region = first; removed = Set(merge.map { $0.element.id })
+                        style.shadowed = merge[0].element.shadowed
+                        if hit == nil { anchor = merge.first?.element.id }
                     }
-                    if touches { break }
                 }
-                if touches { break }
             }
-            if touches { contacts.formUnion(groupMembers(of: element)) }
-        }
-        return contacts
-    }
-
-    /// Line/freehand outlines split into independent editable fragments. Filled areas
-    /// and existing raster marks use real pixel clearing. Photos and text are untouched.
-    func eraseStroke(points: [CGPoint], width: CGFloat) {
-        guard !points.isEmpty, points.allSatisfy({ $0.x.isFinite && $0.y.isFinite }),
-              width.isFinite, width > 0 else { return }
-        finishTextEditing()
-        var pathElement = SketchElement(kind: .brush)
-        pathElement.points = points; pathElement.strokeWidth = min(4096, width)
-        let affected = pathElement.paintBounds
-        edit("Erase") {
+        } else { contacts = [] }
+        var element = VectorGeometry.element(path: region, style: style)
+        element.groupID = group
+        edit("Flood Fill") {
             var result: [SketchElement] = []
-            for original in document.elements {
-                guard original.kind != .text, original.paintBounds.intersects(affected) else {
-                    result.append(original); continue
-                }
-                if [.line, .arrow, .brush].contains(original.kind) ||
-                    ([.rectangle, .ellipse].contains(original.kind) && !original.filled) {
-                    result.append(contentsOf: splitElement(original, eraser: points, width: pathElement.strokeWidth))
-                } else {
-                    result.append(erasedElement(original, points: points, width: pathElement.strokeWidth) ?? original)
-                }
+            var inserted = false
+            for var original in document.elements {
+                if original.id == anchor { result.append(element); inserted = true }
+                if removed.contains(original.id) { continue }
+                if groupedMembers.contains(original.id) { original.groupID = group }
+                result.append(original)
             }
+            if !inserted { result.append(element) }
             document.elements = result
             selection.formIntersection(Set(result.map(\.id)))
         }
     }
-    /// Subtract analytical eraser capsules from each line segment. Intersections are
-    /// evaluated in world coordinates so rotated/flipped paths still split correctly.
-    private func splitElement(_ element: SketchElement, eraser: [CGPoint], width: CGFloat) -> [SketchElement] {
-        var local = element.points
-        if element.kind == .rectangle {
-            let r = element.rect.standardized
-            local = [CGPoint(x: r.minX, y: r.minY), CGPoint(x: r.maxX, y: r.minY),
-                     CGPoint(x: r.maxX, y: r.maxY), CGPoint(x: r.minX, y: r.maxY), CGPoint(x: r.minX, y: r.minY)]
-        } else if element.kind == .ellipse {
-            let r = element.rect.standardized
-            let steps = min(2048, max(64, Int(ceil(max(r.width, r.height) * .pi / 2))))
-            local = (0...steps).map { index in
-                let angle = CGFloat(index) / CGFloat(steps) * 2 * .pi
-                return CGPoint(x: r.midX + cos(angle) * r.width / 2, y: r.midY + sin(angle) * r.height / 2)
-            }
-        }
-        let path = local.map { element.transform.applying($0) }
-        let scale = max(hypot(element.transform.a, element.transform.b), hypot(element.transform.c, element.transform.d))
-        let worldWidth = element.strokeWidth * scale
-        let radius = (width + worldWidth) / 2
-        if path.count == 1, let point = path.first {
-            let touches = eraser.count == 1 ? hypot(point.x - eraser[0].x, point.y - eraser[0].y) <= radius :
-                zip(eraser, eraser.dropFirst()).contains { distance(point, to: $0.0, and: $0.1) <= radius }
-            return touches ? [] : [element]
-        }
-        var fragments: [[CGPoint]] = []
-        var current: [CGPoint] = []
-        var didCut = false
-        func flush() {
-            if current.count >= 2 { fragments.append(current) }
-            current = []
-        }
-        for (a, b) in zip(path, path.dropFirst()) {
-            let cuts = erasedIntervals(from: a, to: b, eraser: eraser, radius: radius)
-            if !cuts.isEmpty { didCut = true }
-            var cursor: CGFloat = 0
-            let keeps: [(CGFloat, CGFloat)] = cuts.map { interval -> (CGFloat, CGFloat) in
-                defer { cursor = max(cursor, interval.1) }
-                return (cursor, interval.0)
-            } + [(cuts.last?.1 ?? 0, 1)]
-            for (low, high) in keeps where high - low > 0.000001 {
-                let start = CGPoint(x: a.x + (b.x - a.x) * low, y: a.y + (b.y - a.y) * low)
-                let end = CGPoint(x: a.x + (b.x - a.x) * high, y: a.y + (b.y - a.y) * high)
-                if let previous = current.last, hypot(previous.x - start.x, previous.y - start.y) > 0.001 { flush() }
-                if current.isEmpty { current.append(start) }
-                current.append(end)
-                if high < 0.999999 { flush() }
-            }
-            if keeps.allSatisfy({ $0.1 - $0.0 <= 0.000001 }) { flush() }
-        }
-        flush()
-        guard didCut else { return [element] }
-        // Closed outlines may join around the original path's start after a cut.
-        if fragments.count > 1, let first = fragments.first?.first, let last = fragments.last?.last,
-           hypot(first.x - last.x, first.y - last.y) < 0.001 {
-            let tail = fragments.removeLast()
-            fragments[0] = tail + fragments[0].dropFirst()
-        }
-        return fragments.enumerated().map { index, points in
-            var fragment = element
-            fragment.id = index == 0 ? element.id : UUID()
-            fragment.groupID = nil // Erased pieces must be independently movable.
-            fragment.kind = [.rectangle, .ellipse].contains(element.kind) ? .brush : element.kind
-            if element.kind == .arrow, let oldEnd = path.last, let end = points.last,
-               hypot(oldEnd.x - end.x, oldEnd.y - end.y) > 0.001 { fragment.kind = .line }
-            fragment.transform = .identity; fragment.points = points
-            fragment.strokeWidth = worldWidth
-            fragment.filled = false
-            return fragment
-        }
+    private func blended(_ foreground: SketchColor, over background: SketchColor) -> SketchColor {
+        let alpha = foreground.alpha + background.alpha * (1 - foreground.alpha)
+        guard alpha > 0 else { return .clear }
+        var result = foreground; result.alpha = alpha
+        result.red = (foreground.red * foreground.alpha + background.red * background.alpha * (1 - foreground.alpha)) / alpha
+        result.green = (foreground.green * foreground.alpha + background.green * background.alpha * (1 - foreground.alpha)) / alpha
+        result.blue = (foreground.blue * foreground.alpha + background.blue * background.alpha * (1 - foreground.alpha)) / alpha
+        return result
     }
-    private func erasedIntervals(from p: CGPoint, to q: CGPoint, eraser: [CGPoint], radius: CGFloat) -> [(CGFloat, CGFloat)] {
-        let vx = q.x - p.x, vy = q.y - p.y
-        let lengthSquared = vx * vx + vy * vy
-        var intervals: [(CGFloat, CGFloat)] = []
-        func circle(_ center: CGPoint) {
-            let dx = p.x - center.x, dy = p.y - center.y
-            if lengthSquared < 0.00000001 {
-                if dx * dx + dy * dy <= radius * radius { intervals.append((0, 1)) }
-                return
-            }
-            let linear = 2 * (dx * vx + dy * vy)
-            let constant = dx * dx + dy * dy - radius * radius
-            let discriminant = linear * linear - 4 * lengthSquared * constant
-            guard discriminant >= 0 else { return }
-            let low = max(0, (-linear - sqrt(discriminant)) / (2 * lengthSquared))
-            let high = min(1, (-linear + sqrt(discriminant)) / (2 * lengthSquared))
-            if low <= high { intervals.append((low, high)) }
-        }
-        for center in eraser { circle(center) }
-        for (a, b) in zip(eraser, eraser.dropFirst()) {
-            let ex = b.x - a.x, ey = b.y - a.y
-            let length = hypot(ex, ey)
-            if length < 0.00001 { continue }
-            let ux = ex / length, uy = ey / length
-            var low: CGFloat = 0, high: CGFloat = 1
-            func slab(origin: CGFloat, delta: CGFloat, min: CGFloat, max: CGFloat) -> Bool {
-                if abs(delta) < 0.00000001 { return origin >= min && origin <= max }
-                let t0 = (min - origin) / delta, t1 = (max - origin) / delta
-                low = Swift.max(low, Swift.min(t0, t1)); high = Swift.min(high, Swift.max(t0, t1))
-                return low <= high
-            }
-            let dx = p.x - a.x, dy = p.y - a.y
-            if slab(origin: dx * ux + dy * uy, delta: vx * ux + vy * uy, min: 0, max: length) &&
-                slab(origin: -dx * uy + dy * ux, delta: -vx * uy + vy * ux, min: -radius, max: radius) {
-                intervals.append((low, high))
-            }
-        }
-        let sorted = intervals.sorted { $0.0 < $1.0 }
-        var merged: [(CGFloat, CGFloat)] = []
-        for interval in sorted {
-            if let last = merged.last, interval.0 <= last.1 + 0.000001 {
-                merged[merged.count - 1].1 = max(last.1, interval.1)
-            } else { merged.append(interval) }
-        }
-        return merged
+
+    /// Subtract the eraser from annotation geometry, preserving editable curves,
+    /// holes and connected fragments. Text and photographs are protected.
+    func eraseStroke(points: [CGPoint], width: CGFloat) {
+        guard let mask = VectorGeometry.eraserPath(points: points, width: width) else { return }
+        erasePath(mask)
     }
-    private func erasedElement(_ element: SketchElement, points: [CGPoint], width: CGFloat) -> SketchElement? {
-        let rect = element.paintBounds.integral.intersection(document.canvasRect)
-        guard SketchDocument.validSize(rect.size) else { return nil }
-        var originalPixels: Data?
-        guard let bitmap = SketchRenderer.bitmap(size: rect.size, draw: {
-            guard let context = NSGraphicsContext.current?.cgContext else { return }
-            context.translateBy(x: -rect.minX, y: -rect.minY)
-            SketchRenderer.draw(element)
-            // Clear with Core Graphics blending rather than painting background-colored ink.
-            context.setShadow(offset: .zero, blur: 0, color: nil)
-            if let data = context.data { originalPixels = Data(bytes: data, count: context.bytesPerRow * context.height) }
-            context.setBlendMode(.clear)
-            context.setLineWidth(width); context.setLineCap(.round); context.setLineJoin(.round)
-            if points.count == 1, let point = points.first {
-                context.fillEllipse(in: CGRect(x: point.x - width / 2, y: point.y - width / 2, width: width, height: width))
-            } else if let point = points.first {
-                context.beginPath(); context.move(to: point)
-                for next in points.dropFirst() { context.addLine(to: next) }
-                context.strokePath()
-            }
-        }), let pixels = bitmap.bitmapData,
-           originalPixels != Data(bytes: pixels, count: bitmap.bytesPerRow * bitmap.pixelsHigh),
-           let png = bitmap.representation(using: .png, properties: [:]) else { return nil }
-        var erased = SketchElement(kind: .raster)
-        erased.id = element.id; erased.groupID = element.groupID
-        erased.rect = rect; erased.imagePNG = png
-        return erased
+    private func erasePath(_ mask: CGPath) {
+        finishTextEditing()
+        var result: [SketchElement] = []
+        let affectedGroups = Set(document.elements.compactMap { VectorGeometry.paintedPath(for: $0) == nil ? nil : $0.groupID })
+        var didErase = false
+        for original in document.elements {
+            if let fragments = VectorGeometry.subtract(element: original, eraser: mask) {
+                result.append(contentsOf: fragments); didErase = true
+            } else { result.append(original) }
+        }
+        guard didErase else { return }
+        let regrouped = VectorGeometry.regroup(elements: result, affectedGroups: affectedGroups)
+        edit("Erase") {
+            document.elements = regrouped
+            selection.formIntersection(Set(regrouped.map(\.id)))
+        }
     }
 
     // MARK: Drawing and interaction
@@ -927,8 +808,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         if dragMode == .erase, let point = strokePoints.last {
             NSColor.controlAccentColor.setStroke()
-            NSBezierPath(ovalIn: viewRect(CGRect(x: point.x - effectiveStrokeWidth / 2,
-                y: point.y - effectiveStrokeWidth / 2, width: effectiveStrokeWidth, height: effectiveStrokeWidth))).stroke()
+            NSBezierPath(ovalIn: viewRect(CGRect(x: point.x - effectiveStrokeWidth,
+                y: point.y - effectiveStrokeWidth, width: effectiveStrokeWidth * 2, height: effectiveStrokeWidth * 2))).stroke()
         }
     }
     override func resetCursorRects() {
@@ -940,7 +821,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     /// Fill keeps its own Control handling instead of selecting the temporary eraser.
     var effectiveTool: SketchTool {
         if currentModifiers.contains(.command) { return .select }
-        if currentModifiers.contains(.control) && tool != .fill { return .eraser }
+        if (currentModifiers.contains(.control) || tabletEraser) && tool != .fill { return .eraser }
         return tool
     }
     override func flagsChanged(with event: NSEvent) {
@@ -967,7 +848,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     private func resetGesture() {
         preview = nil; marquee = nil; gestureState = nil; gestureDocument = nil
-        gestureColor = nil; dragMode = .none; strokePoints = []; resizingHandle = nil
+        gestureColor = nil; dragMode = .none; strokePoints = []; strokeSamples = []; drawingPencil = false; resizingHandle = nil
         copyOnDrag = false; copiesCreated = false
     }
     private func sampleColor(at point: CGPoint) {
@@ -1097,6 +978,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         resetGesture()
         gestureStart = point; gestureState = state; gestureDocument = document
         gestureColor = strokeColor; strokePoints = [point]
+        strokeSamples = [strokeSample(event, at: point)]
         if spaceHeld { dragMode = .pan; needsDisplay = true; return }
         let activeTool = effectiveTool
         if [.brush, .fill, .eraser].contains(activeTool) && event.modifierFlags.contains(.option) {
@@ -1121,7 +1003,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 if !event.modifierFlags.contains(.shift) { selection.removeAll() }
                 dragMode = .marquee; marquee = CGRect(origin: point, size: .zero)
             }
-        case .fill: floodFill(at: point); resetGesture()
+        case .fill: floodFill(at: point, grouping: !event.modifierFlags.contains(.shift)); resetGesture()
         case .eraser: dragMode = .erase
         case .crop:
             selection.removeAll(); cropRect = CGRect(origin: point, size: .zero); dragMode = .crop
@@ -1134,8 +1016,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
             guard let kind = SketchElement.Kind(rawValue: activeTool.rawValue) else { return }
             var element = styledElement(kind)
             element.points = [point, point]
-            if kind == .brush { element.points = [point] }
-            element.rect = CGRect(origin: point, size: .zero)
+            if kind == .brush {
+                drawingPencil = true
+                element = pencilPreview(style: element, modifiers: event.modifierFlags)
+            } else { element.rect = CGRect(origin: point, size: .zero) }
             preview = element; selection.removeAll(); dragMode = .create
         }
         needsDisplay = true
@@ -1148,10 +1032,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         switch dragMode {
         case .create:
             guard var element = preview else { return }
-            if element.kind == .brush {
-                if let previous = element.points.last, hypot(previous.x - point.x, previous.y - point.y) > 0.1 {
-                    element.points.append(point)
-                }
+            if drawingPencil {
+                if strokeSamples.count < StrokeFitter.maximumSamples { strokeSamples.append(strokeSample(event, at: point)) }
+                element = pencilPreview(style: element, modifiers: event.modifierFlags)
             } else {
                 if event.modifierFlags.contains(.shift) {
                     if [.rectangle, .ellipse].contains(element.kind) {
@@ -1187,7 +1070,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
         case .resize: resizeSelected(to: point, preserveAspect: event.modifierFlags.contains(.shift))
         case .marquee: marquee = rect(from: gestureStart, to: point)
         case .crop: cropRect = rect(from: gestureStart, to: point).intersection(document.canvasRect)
-        case .erase: strokePoints.append(point)
+        case .erase:
+            if strokeSamples.count < StrokeFitter.maximumSamples {
+                strokePoints.append(point); strokeSamples.append(strokeSample(event, at: point))
+            }
         case .pan: panContents(dx: dx, dy: dy)
         case .sampleColor: sampleColor(at: point)
         case .none: break
@@ -1195,11 +1081,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
-        if dragMode != .none { mouseDragged(with: event) }
+        // ToolBrush and ToolEraser do not add the zero-pressure release event.
+        if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
         switch dragMode {
         case .create:
             if let element = preview,
-               element.kind == .brush || element.bounds.width > 0.5 || element.bounds.height > 0.5 {
+               !element.pathCommands.isEmpty || element.kind == .brush || element.bounds.width > 0.5 || element.bounds.height > 0.5 {
                 document.elements.append(element); selection = [element.id]
                 if let before = gestureState { recordUndo(before, name: "Draw \(element.kind.rawValue.capitalized)") }
             }
@@ -1212,12 +1099,32 @@ final class CanvasView: NSView, NSTextViewDelegate {
             if let rect = marquee {
                 for element in document.elements where element.paintBounds.intersects(rect) { selection.formUnion(groupMembers(of: element)) }
             }
-        case .erase: eraseStroke(points: strokePoints, width: effectiveStrokeWidth)
+        case .erase:
+            let commands = StrokeFitter.outline(samples: strokeSamples, size: effectiveStrokeWidth,
+                smoothing: strokeSmoothing, shiftPrecision: event.modifierFlags.contains(.shift), nib: .eraser)
+            if let mask = try? SVGPathParser.makeCGPath(commands), !mask.isEmpty { erasePath(mask.normalized()) }
         default: break
         }
         resetGesture()
         needsDisplay = true
     }
+    private func strokeSample(_ event: NSEvent, at point: CGPoint) -> StrokeSample {
+        let tablet = event.type == .tabletPoint || event.subtype == .tabletPoint
+        return StrokeSample(point: point, pressure: tablet ? CGFloat(event.pressure) : 1)
+    }
+    private func pencilPreview(style: SketchElement, modifiers: NSEvent.ModifierFlags) -> SketchElement {
+        var result = style
+        result.kind = .path; result.points = []; result.filled = true; result.strokeWidth = 0
+        result.pathCommands = StrokeFitter.outline(samples: strokeSamples, size: effectiveStrokeWidth,
+            smoothing: strokeSmoothing, shiftPrecision: modifiers.contains(.shift), nib: .pencil)
+        result.rect = (try? SVGPathParser.makeCGPath(result.pathCommands).boundingBoxOfPath) ?? .zero
+        return result
+    }
+    override func tabletProximity(with event: NSEvent) {
+        tabletEraser = event.isEnteringProximity && event.pointingDeviceType == .eraser
+        resetCursorRects(); needsDisplay = true
+    }
+
     // AppKit may deliver Control-click as a secondary-button event; it is still a pen eraser gesture.
     override func rightMouseDown(with event: NSEvent) {
         if event.modifierFlags.contains(.control) { mouseDown(with: event) } else { super.rightMouseDown(with: event) }
