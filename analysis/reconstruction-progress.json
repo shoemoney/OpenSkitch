@@ -36314,15 +36314,16 @@
   "next_actions": [
     {
       "id": "native-ux-tool-feedback",
-      "priority": "P1",
+      "priority": "P0",
       "feature_ids": [
         "unresolved_action.toolclicked",
         "shell.windows"
       ],
-      "action": "The preceding exact-binary checkpoint recorded native Crop/Arrow padding, Save filename feedback, Export labels/extension/byte preview and Page Setup cancel/accept/reopen. Complete floating Fonts family/size/effects/edit/save/Undo proof and remaining panel sizing; original UI/runtime parity remains unverified.",
+      "action": "User priority, 2026-10-07: finish the classic native interface before corner dragging/resizing. Preserve ShoeMoney logo and OpenSkitch header plus readable controls. Compare control spacing, button states, tool feedback and panel consistency against the original Skitch reference, then verify in the live Apple Silicon app. Corners and resizing remain required later; full original parity is unverified.",
       "completion_evidence": [
         "Current-binary native screenshots and actual input workflow.",
-        "Apple Silicon regression suites after any source changes."
+        "Apple Silicon regression suites after any source changes.",
+        "Original reference comparison with explicit unresolved differences."
       ]
     },
     {
