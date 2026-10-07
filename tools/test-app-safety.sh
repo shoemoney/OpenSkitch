@@ -57,6 +57,7 @@ for name, (path, data) in snapshot.items():
             raise SystemExit('Missing menu-bar installation safety boundary.')
         text = text.replace('        installMenuPresence()\n', '')
         text = text.replace('NSApp.isActive', 'AppSafetyActivation.isActive')
+        text = text.replace('NSWorkspace.shared.accessibilityDisplayShouldReduceMotion', 'AppSafetyAnimations.reduceMotion')
         replacements = {
             'NSAlert(': 'AppSafetyAlert(',
             'NSWindow(': 'AppSafetyWindow(',
@@ -81,6 +82,11 @@ for name, (path, data) in snapshot.items():
         if re.search(r'\bGlobalHotkeyManager\b', text):
             raise SystemExit('Unrecognized live hotkey-manager construction; refusing to run.')
         target.write_text(text)
+    elif name == 'WindowZoom.swift':
+        text = data.decode()
+        if 'NSPanel(' not in text:
+            raise SystemExit('Missing zoom window safety boundary.')
+        target.write_text(text.replace('NSPanel(', 'AppSafetyDragPanel('))
     elif name == 'HistoryBrowser.swift':
         # History now constructs its own window. Preserve the same nonvisible
         # boundary as App.swift without modifying the production UI source.

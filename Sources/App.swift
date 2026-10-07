@@ -176,6 +176,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var activeDragID: UUID?
     var dragThumbnailID: UUID?
     var dragThumbnailWindow: NSPanel?
+    var windowZoom: WindowZoomAnimation?
+    var windowZoomID: UUID?
+    var animatesWindowZoom: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
     var actualButton: NSButton?
     var resizeButton: NSButton?
     let navigator = CanvasNavigator(frame: NSRect(x: 0, y: 0, width: 180, height: 170))
@@ -288,6 +291,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationStarted { return shutdownPending.isEmpty ? .terminateNow : .terminateLater }
+        if windowZoom != nil { makeVisible() }
         saveRecovery()
         guard allowDiscard(discardingForTermination: true) else { return .terminateCancel }
         terminationStarted = true; decidingTermination = true
@@ -345,6 +349,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleVisible() {
         guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
+        if windowZoom != nil { makeVisible(); return }
         if dragThumbnailWindow != nil {
             removeDragThumbnail()
             if UserDefaults.standard.integer(forKey: "statusMenu") == 2 { window.miniaturize(nil) }
@@ -404,7 +409,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.contentView = view; dragThumbnailWindow = panel; dragThumbnailID = id
         saveRecovery(); timer?.fireDate = .distantFuture
         fontPanel?.orderOut(nil); navigatorWindow?.orderOut(nil)
-        panel.orderFrontRegardless(); window.orderOut(nil); writeLayoutEvidence()
+        if !startWindowZoom(image: image, source: window.frame, destination: rect, direction: .shrink, completion: { [weak self, weak panel] in
+            guard self?.dragThumbnailID == id else { return }
+            panel?.orderFrontRegardless(); self?.writeLayoutEvidence()
+        }) { panel.orderFrontRegardless() }
+        window.orderOut(nil); writeLayoutEvidence()
     }
     func endDrag(_ id: UUID, succeeded: Bool) {
         guard activeDragID == id, !terminationStarted else { return }
@@ -417,16 +426,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func restoreDragThumbnail(_ id: UUID) {
         guard dragThumbnailID == id, dragThumbnailWindow != nil, !terminationStarted else { return }
-        makeVisible()
+        let image = (dragThumbnailWindow?.contentView as? DragThumbnailView)?.image
+        let source = dragThumbnailWindow!.frame
+        removeDragThumbnail()
+        NSApp.activate(ignoringOtherApps: true)
+        guard let image, startWindowZoom(image: image, source: source, destination: window.frame, direction: .restore,
+                                        completion: { [weak self] in self?.makeVisible() }) else { makeVisible(); return }
+        writeLayoutEvidence()
     }
     func removeDragThumbnail() {
+        cancelWindowZoom()
         (dragThumbnailWindow?.contentView as? DragThumbnailView)?.restore = nil
         dragThumbnailWindow?.orderOut(nil); dragThumbnailWindow?.close()
         dragThumbnailWindow = nil; dragThumbnailID = nil
     }
     func replaceDragPresentation() {
         activeDragID = nil
-        if dragThumbnailWindow != nil { makeVisible() }
+        if dragThumbnailWindow != nil || windowZoom != nil { makeVisible() }
+    }
+    @discardableResult
+    func startWindowZoom(image: NSImage, source: CGRect, destination: CGRect, direction: WindowZoomDirection, completion: @escaping () -> Void) -> Bool {
+        guard animatesWindowZoom, !terminationStarted else { return false }
+        cancelWindowZoom()
+        let token = UUID()
+        guard let animation = WindowZoomAnimation(image: image, source: source, destination: destination, direction: direction, completion: { [weak self] in
+            guard let self, self.windowZoomID == token, !self.terminationStarted else { return }
+            self.windowZoom = nil; self.windowZoomID = nil; completion()
+        }) else { return false }
+        windowZoom = animation; windowZoomID = token; animation.start(); return true
+    }
+    func cancelWindowZoom() {
+        let previous = windowZoom
+        windowZoom = nil; windowZoomID = nil; previous?.cancel()
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -1393,6 +1424,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                      "frame": NSStringFromRect(dragThumbnailWindow?.frame ?? .zero),
                                      "clickToExpand": (dragThumbnailWindow?.contentView as? DragThumbnailView)?.clickToExpand ?? false,
                                      "dragging": activeDragID != nil]
+        evidence["windowZoom"] = ["active": windowZoom != nil, "frame": windowZoom?.lastRenderedFrame ?? 0,
+                                  "frames": windowZoom?.frameCount ?? 0,
+                                  "restoring": windowZoom?.direction == .restore]
         evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,

@@ -39,8 +39,9 @@ final class AppSafetyFontPanel: NSFontPanel {
 }
 
 final class AppSafetyDragPanel: NSPanel {
+    var fronts = 0
     override var isVisible: Bool { false }
-    override func orderFrontRegardless() {}
+    override func orderFrontRegardless() { fronts += 1 }
     override func orderOut(_ sender: Any?) {}
     override func close() {}
 }
@@ -49,6 +50,7 @@ enum AppSafetyActivation {
     static var isActive = true
     static func suppress() {}
 }
+enum AppSafetyAnimations { static var reduceMotion = true }
 
 @MainActor
 enum AppSafetyTermination {
@@ -2668,6 +2670,61 @@ enum AppSafetyTests {
                 app.restoreDragThumbnail(replacedID)
                 drag.endExport(provider: ObjectIdentifier(replaced), succeeded: true)
                 try expect(window.isVisible && app.dragThumbnailWindow == nil, "Late old drag completion cannot hide or thumbnail the new drawing")
+            }),
+            ("Recovered drag zoom completes once; cancel, reopen, Quit and replacement retire stale animations", {
+                let fixture = try Fixture(), app = fixture.app, window = app.window as! AppSafetyWindow
+                window.simulatesVisibility = true; window.shown = true
+                AppSafetyAnimations.reduceMotion = false
+                defer { AppSafetyAnimations.reduceMotion = true }
+                let drag = app.dragExportView!
+                @MainActor func start() throws -> NSFilePromiseProvider {
+                    let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: drag)
+                    try expect(drag.beginExport(provider: provider, payload: drag.prepare!()!, controlRect: NSRect(x: 0, y: 0, width: 115, height: 50)), "Animated drag starts")
+                    drag.moveExport(to: NSPoint(x: 200, y: 200)); return provider
+                }
+                @MainActor func finish(_ animation: WindowZoomAnimation) {
+                    for _ in 0...animation.frameCount { animation.advance() }
+                }
+                let state = try app.canvas.snapshotDocumentData(), generation = app.documentGeneration, frame = window.frame
+                let provider = try start(), shrinking = app.windowZoom!
+                let thumbnail = app.dragThumbnailWindow as! AppSafetyDragPanel
+                try expect(shrinking.state == .running && shrinking.frameCount == 25 && thumbnail.fronts == 0 && !window.isVisible,
+                           "Shrink overlay owns presentation before the thumbnail appears")
+                drag.endExport(provider: ObjectIdentifier(provider), succeeded: true)
+                try expect((thumbnail.contentView as! DragThumbnailView).clickToExpand, "Early drop success marks the future thumbnail expandable")
+                finish(shrinking)
+                try expect(app.windowZoom == nil && thumbnail.fronts == 1 && !window.isVisible, "Recovered shrink completion orders the persistent thumbnail exactly once")
+                _ = (thumbnail.contentView as! DragThumbnailView).accessibilityPerformPress()
+                let restoring = app.windowZoom!
+                try expect(app.dragThumbnailWindow == nil && restoring.direction == .restore && restoring.frameCount == 15 && !window.isVisible,
+                           "Restore replaces the thumbnail with the recovered15-frame overlay")
+                finish(restoring)
+                try expect(window.isVisible && app.windowZoom == nil && window.frame == frame && app.documentGeneration == generation && (try app.canvas.snapshotDocumentData()) == state,
+                           "Animation completion restores the same editor without document or geometry changes")
+                let cancelled = try start(), previousShrink = app.windowZoom!
+                drag.endExport(provider: ObjectIdentifier(cancelled), succeeded: false)
+                try expect(previousShrink.state == .cancelled && previousShrink.timer == nil && app.windowZoom?.direction == .restore,
+                           "Cancelling an in-flight shrink retires its callback and starts restore")
+                let interruptedRestore = app.windowZoom!
+                app.newFile()
+                interruptedRestore.advance(); previousShrink.advance()
+                try expect(window.isVisible && app.windowZoom == nil && app.dragThumbnailWindow == nil && interruptedRestore.state == .cancelled,
+                           "Replacement retires both animations and cannot be hidden by their late callbacks")
+                let reopened = try start(), interruptedShrink = app.windowZoom!
+                app.makeVisible(); interruptedShrink.advance()
+                drag.endExport(provider: ObjectIdentifier(reopened), succeeded: true)
+                try expect(window.isVisible && app.windowZoom == nil && app.dragThumbnailWindow == nil && interruptedShrink.state == .cancelled,
+                           "Dock/menu reopen completes immediately and prevents stale thumbnail ordering")
+                let quitting = try start(), quitAnimation = app.windowZoom!
+                app.dirty = true; AppSafetyAlert.answers = [.init(title: "Save your drawing?", response: .alertSecondButtonReturn)]
+                try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel && window.isVisible && quitAnimation.state == .cancelled && app.windowZoom == nil,
+                           "Quit during animation restores the editor before a cancelled decision; no overlay is stranded")
+                drag.endExport(provider: ObjectIdentifier(quitting), succeeded: false)
+                AppSafetyAnimations.reduceMotion = true
+                let reduced = try start()
+                try expect(app.windowZoom == nil && (app.dragThumbnailWindow as! AppSafetyDragPanel).fronts == 1, "System Reduce Motion keeps the instant lifecycle")
+                drag.endExport(provider: ObjectIdentifier(reduced), succeeded: false)
+                try expect(window.isVisible && app.windowZoom == nil, "Reduce Motion cancellation restores immediately")
             }),
             ("deferred shutdown waits, deduplicates Quit and replies once before final cleanup", deferredShutdownSuccess),
             ("asynchronous shutdown failure retains recovery and permits protected Quit retry", deferredShutdownFailureRetry),
