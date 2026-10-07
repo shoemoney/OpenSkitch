@@ -20,8 +20,10 @@ final class FrameChromeView: NSView {
 }
 
 final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
-    var export: (() -> Data?)?
-    var fileName: (() -> String)?
+    struct Payload { let data: Data; let name: String; let delivered: (URL) -> Void }
+    var prepare: (() -> Payload?)?
+    private var payloads: [ObjectIdentifier: Payload] = [:]
+    private var sessions: [ObjectIdentifier: ObjectIdentifier] = [:]
     override func draw(_ dirtyRect: NSRect) {
         NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
         let title = "Drag Me"
@@ -30,26 +32,33 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
         title.draw(at: NSPoint(x: (bounds.width-size.width)/2, y: (bounds.height-size.height)/2), withAttributes: attrs)
     }
     override func mouseDragged(with event: NSEvent) {
-        guard export?() != nil else { return }
+        guard let payload = prepare?() else { return }
         let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: self)
+        payloads[ObjectIdentifier(provider)] = payload
         let item = NSDraggingItem(pasteboardWriter: provider)
         item.setDraggingFrame(bounds, contents: NSImage(systemSymbolName: "photo", accessibilityDescription: "Export image"))
-        beginDraggingSession(with: [item], event: event, source: self)
+        let session = beginDraggingSession(with: [item], event: event, source: self)
+        sessions[ObjectIdentifier(session)] = ObjectIdentifier(provider)
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (fileName?() ?? "Skitch") + ".png" }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        if let provider = sessions.removeValue(forKey: ObjectIdentifier(session)), operation.isEmpty { payloads.removeValue(forKey: provider) }
+    }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.name ?? "Skitch") + ".png" }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
-        do { guard let data = export?() else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "Unable to render the image."]) }; try data.write(to: url, options: .atomic); completionHandler(nil) } catch { completionHandler(error) }
+        let payload = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
+        do { guard let payload else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }; try payload.data.write(to: url, options: .atomic); payload.delivered(url); completionHandler(nil) } catch { completionHandler(error) }
     }
     func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue { .main }
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate {
     var window: NSWindow!
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
     let capture = CaptureCoordinator()
     let publishing = PublishingCoordinator()
+    let historyRemoteDeletion = HistoryRemoteDeletionCoordinator()
     let hotkeys = GlobalHotkeyManager()
     let photoBrowser = PhotoBrowserCoordinator()
     let nameField = NSTextField(string: "Untitled")
@@ -69,7 +78,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var shutdownPending: Set<String> = []
     var shutdownError: Error?
     var timer: Timer?
-    var historyWindow: NSWindow?
+    var historyBrowser: HistoryBrowser?
+    var historyWindow: NSWindow? { historyBrowser?.window }
+    var historyStore: HistoryStore?
+    struct ShareSnapshot { let snapshot: HistoryStore.Snapshot; let name: String; let generation: UUID }
+    var sharePicker: NSSharingServicePicker?
+    var pickerSnapshot: ShareSnapshot?
+    var sharingSnapshots: [ObjectIdentifier: ShareSnapshot] = [:]
+    var currentArchiveID: UUID?
+    var historyFollowTimer: Timer?
     var snapButton: NSButton!
     var frameButton: NSButton!
     var cancelFrameButton: NSButton!
@@ -122,7 +139,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         saveRecovery()
         guard allowDiscard(discardingForTermination: true) else { return .terminateCancel }
         terminationStarted = true; decidingTermination = true
-        shutdownPending = ["capture", "publishing", "photos"]; shutdownError = nil
+        shutdownPending = ["capture", "publishing", "photos", "history-deletion"]; shutdownError = nil
+        historyRemoteDeletion.shutdown { [weak self] result in self?.acknowledgeShutdown("history-deletion", result: result) }
         photoBrowser.shutdown { [weak self] in self?.acknowledgeShutdown("photos", result: .success(())) }
         capture.shutdown { [weak self] (result: Result<Void, Error>) in self?.acknowledgeShutdown("capture", result: result) }
         publishing.shutdown { [weak self] (result: Result<Void, Error>) in self?.acknowledgeShutdown("publishing", result: result) }
@@ -157,7 +175,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationWillTerminate(_ notification: Notification) {
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
-        timer?.invalidate(); try? hotkeys.unregister()
+        timer?.invalidate(); historyFollowTimer?.invalidate(); try? hotkeys.unregister()
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -204,7 +222,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:))
         let drag = DragExportView(); drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
-        drag.export = { [weak self] in self?.canvas.imageData(format: "png") }; drag.fileName = { [weak self] in self?.safeName() ?? "Skitch" }
+        drag.prepare = { [weak self] in
+            guard let self, let data = self.canvas.imageData(format: "png"), let snapshot = try? self.historySnapshot() else { return nil }
+            let name = self.safeName(), generation = self.documentGeneration
+            return DragExportView.Payload(data: data, name: name, delivered: { [weak self] url in
+                self?.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
+            })
+        }
         let bottom = stack([nameField, zoomControl, button("Resize…", #selector(resize)), button("Export…", #selector(exportFile)), button("Share…", #selector(share(_:))), drag], horizontal: true)
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
         for v in [top, sidebarScroll, scroll, bottom, status] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
@@ -284,7 +308,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let item = NSMenuItem(title: "\(label) · \(Int((canvas.zoom*100).rounded()))%", action: nil, keyEquivalent: "")
         item.tag = 999; item.representedObject = Double(canvas.zoom); zoomControl.menu?.insertItem(item, at: 0); zoomControl.select(item)
     }
-    func changed() { if !restoring { dirty = true }; window?.isDocumentEdited = dirty; updateStatus() }
+    func changed() {
+        if !restoring { dirty = true }
+        window?.isDocumentEdited = dirty; updateStatus()
+        historyFollowTimer?.invalidate()
+        if currentArchiveID != nil {
+            let timer = Timer(timeInterval: 1, repeats: false) { [weak self] _ in Task { @MainActor in self?.followHistory() } }
+            historyFollowTimer = timer; RunLoop.main.add(timer, forMode: .common)
+        }
+    }
     func updateStatus() { let s = canvas.canvasSize; status.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
     func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
     func error(_ error: Error) { let a = NSAlert(error: error); a.runModal() }
@@ -300,12 +332,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return false
     }
-    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
+    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; followHistory(); currentArchiveID = nil; leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
     @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if p.runModal() == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
         guard allowDiscard() else { return }
         do {
+            followHistory()
             if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) {
                 let file = try SkitchFile.read(url)
                 try canvas.loadDocument(data: file.canvasData); legacyMetadata = file.metadata
@@ -317,13 +350,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
                 }
                 canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); legacyMetadata = .init(); currentURL = nil }
-            documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions(); fitCanvasToWindow(); nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
+            currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions(); fitCanvasToWindow(); nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
         } catch { self.error(error) }
     }
     func save(forceChoose: Bool = false) -> Bool {
         var url = forceChoose ? nil : currentURL
         if url == nil { let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".skitch"; p.allowedContentTypes = [UTType(filenameExtension: "skitch") ?? .data, UTType(filenameExtension: "skitchredux") ?? .data]; if p.runModal() != .OK { return false }; url = p.url }
-        do { guard let url else { return false }; let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot); try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: url); canvas.commitPendingTextEditing(); currentURL = url; dirty = false; window.isDocumentEdited = false; updateStatus(); return true } catch { self.error(error); return false }
+        do {
+            guard let url else { return false }
+            let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot)
+            try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: url)
+            canvas.commitPendingTextEditing(); currentURL = url; dirty = false; window.isDocumentEdited = false; updateStatus()
+            archive(try HistoryStore.Snapshot(canvasData: snapshot, metadata: legacyMetadata, preview: canvas.imageData(format: "png")), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
+            return true
+        } catch { self.error(error); return false }
     }
     @objc func saveFile() { _ = save() }
     @objc func saveAs() { _ = save(forceChoose: true) }
@@ -331,6 +371,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // Queued timer work must not interpret the temporary Discard dirty flag
         // as permission to delete recovery before backend cleanup succeeds.
         guard !terminationStarted || finalizingTermination else { return }
+        followHistory()
         let url = support.appendingPathComponent("Recovery.skitch")
         guard dirty || canvas.hasPendingTextChanges else { removeRecovery(); return }
         guard let snapshot = try? canvas.snapshotDocumentData(), let document = try? CanvasView.validatedDocumentData(snapshot), let data = try? SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).encoded() else { return }
@@ -342,38 +383,240 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func removeRecovery() {
         for name in ["Recovery.skitch", "Recovery.skitchredux"] { try? FileManager.default.removeItem(at: support.appendingPathComponent(name)) }
     }
+    func archiveStore() throws -> HistoryStore {
+        if let historyStore { return historyStore }
+        let store = try HistoryStore(directory: support.appendingPathComponent("History"))
+        historyStore = store
+        let home = URL(fileURLWithPath: NSHomeDirectory())
+        let legacyIndex = home.appendingPathComponent("Library/Application Support/Skitch/history")
+        if ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] == nil,
+           FileManager.default.fileExists(atPath: legacyIndex.path) {
+            do {
+                guard (try legacyIndex.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true else { throw HistoryStore.Failure.unsafePath }
+                _ = try store.importLegacy(indexData: Data(contentsOf: legacyIndex), archiveDirectory: home.appendingPathComponent("Pictures/Skitch"))
+            } catch { status.stringValue = "Old Skitch History could not be imported; originals were kept: " + error.localizedDescription }
+        }
+        return store
+    }
+    func historySnapshot() throws -> HistoryStore.Snapshot {
+        let raw = try canvas.snapshotDocumentData()
+        let document = try CanvasView.validatedDocumentData(raw)
+        let preview = SketchRenderer.bitmap(document: document)?.representation(using: .png, properties: [:])
+        return try HistoryStore.Snapshot(canvasData: raw, metadata: legacyMetadata, preview: preview)
+    }
+    @discardableResult
+    func archive(_ snapshot: HistoryStore.Snapshot, name: String, action: HistoryStore.Action,
+                 destination: String? = nil, remoteURL: URL? = nil, remoteBinding: [String: String]? = nil, generation: UUID) -> Bool {
+        guard !snapshot.isEmpty else { return false }
+        do {
+            let store = try archiveStore()
+            let id = try store.archive(snapshot, name: name, action: action, destination: destination, remoteURL: remoteURL, remoteBinding: remoteBinding)
+            if documentGeneration == generation {
+                followHistory(); currentArchiveID = id
+                // An asynchronous export may have completed after more edits.
+                // Keep its successful-output snapshot, then follow the live copy.
+                followHistory()
+            }
+            refreshHistory()
+            return true
+        } catch { status.stringValue = "History could not be updated: " + error.localizedDescription; return false }
+    }
+    func followHistory() {
+        historyFollowTimer?.invalidate(); historyFollowTimer = nil
+        guard let id = currentArchiveID else { return }
+        do { try archiveStore().follow(id, snapshot: historySnapshot(), name: safeName()); refreshHistory() }
+        catch { status.stringValue = "History update failed; the previous archive was preserved: " + error.localizedDescription }
+    }
     @objc func saveHistory() {
-        do { let dir = support.appendingPathComponent("History"); let stem = "\(Int(Date().timeIntervalSince1970))-\(UUID().uuidString.prefix(8))-\(safeName())"; let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot); try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: dir.appendingPathComponent(stem+".skitch")); if let data = canvas.imageData(format: "png") { try data.write(to: dir.appendingPathComponent(stem+".png"), options: .atomic) }; status.stringValue = "Saved to History" } catch { self.error(error) }
+        do {
+            if archive(try historySnapshot(), name: safeName(), action: .archived, generation: documentGeneration) { status.stringValue = "Saved to History" }
+        } catch { self.error(error) }
+    }
+    func refreshHistory() {
+        guard let browser = historyBrowser, let store = historyStore else { return }
+        browser.update(items: store.entries.map { entry in
+            HistoryBrowser.Item(id: entry.id, name: entry.name, date: entry.date, size: entry.size,
+                action: entry.action.title, text: entry.text, destination: entry.destination,
+                link: entry.remoteURL, previewURL: store.previewURL(entry), missing: store.missing(entry.id))
+        })
     }
     @objc func showHistory() {
-        let urls = ((try? FileManager.default.contentsOfDirectory(at: support.appendingPathComponent("History"), includingPropertiesForKeys: nil)) ?? []).filter { ["skitch", "skitchredux"].contains($0.pathExtension) }.sorted { $0.lastPathComponent > $1.lastPathComponent }
-        let list = NSStackView(); list.orientation = .vertical; list.spacing = 12; list.alignment = .leading
-        if urls.isEmpty { list.addArrangedSubview(label("Your saved images will appear here.")) }
-        for (index,url) in urls.enumerated() {
-            let preview = NSImageView(); preview.image = NSImage(contentsOf: url.deletingPathExtension().appendingPathExtension("png")); preview.imageScaling = .scaleProportionallyUpOrDown; preview.widthAnchor.constraint(equalToConstant: 160).isActive = true; preview.heightAnchor.constraint(equalToConstant: 100).isActive = true
-            let b = button(url.deletingPathExtension().lastPathComponent, #selector(openHistory(_:))); b.tag = index; b.identifier = NSUserInterfaceItemIdentifier(url.path); b.lineBreakMode = .byTruncatingMiddle
-            list.addArrangedSubview(stack([preview,b], horizontal: true))
-        }
-        let w = NSWindow(contentRect: NSRect(x: 0,y: 0,width: 800,height: 620), styleMask: [.titled,.closable,.resizable], backing: .buffered, defer: false); w.title = "Skitch History"; w.isReleasedWhenClosed = false
-        let scroll = NSScrollView(frame: w.contentView!.bounds); scroll.autoresizingMask = [.width,.height]; scroll.hasVerticalScroller = true; scroll.documentView = list; list.frame = NSRect(x: 20,y: 0,width: 740,height: max(120,CGFloat(urls.count)*112)); w.contentView!.addSubview(scroll); historyWindow = w; w.center(); w.makeKeyAndOrderFront(nil)
+        do {
+            _ = try archiveStore(); followHistory()
+            if historyBrowser == nil {
+                let browser = HistoryBrowser()
+                browser.onOpen = { [weak self] ids in if let id = ids.first { self?.openHistory(id) } }
+                browser.onCopy = { [weak self] ids in self?.copyHistory(ids) }
+                browser.onCopyLink = { [weak self] ids in self?.copyHistoryLink(ids) }
+                browser.onOpenLink = { [weak self] ids in
+                    guard let self, let id = ids.first, let url = self.historyStore?.entry(id)?.remoteURL,
+                          ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return }
+                    NSWorkspace.shared.open(url)
+                }
+                browser.onRemove = { [weak self] ids in self?.removeHistory(ids, deleteFiles: false) }
+                browser.onDeleteFiles = { [weak self] ids in self?.removeHistory(ids, deleteFiles: true) }
+                browser.onDeleteRemote = { [weak self] ids in self?.deleteHistoryRemote(ids) }
+                browser.onExport = { [weak self] id, format in
+                    guard let self else { throw HistoryStore.Failure.missing }
+                    return try self.historyExport(id, format: format)
+                }
+                browser.onError = { [weak self] in self?.error($0) }
+                historyBrowser = browser
+            }
+            refreshHistory(); historyBrowser?.showWindow(nil); historyBrowser?.window?.makeKeyAndOrderFront(nil)
+        } catch { self.error(error) }
     }
-    @objc func openHistory(_ sender: NSButton) { if let path = sender.identifier?.rawValue { openURL(URL(fileURLWithPath: path)); window.makeKeyAndOrderFront(nil) } }
+    struct HistoryEditorState {
+        let data: Data; let metadata: LegacyBridge.Metadata; let name: String
+        let url: URL?; let archiveID: UUID?; let dirty: Bool
+    }
+    func historyEditorState() throws -> HistoryEditorState {
+        HistoryEditorState(data: try canvas.snapshotDocumentData(), metadata: legacyMetadata, name: nameField.stringValue,
+                           url: currentURL, archiveID: currentArchiveID, dirty: dirty)
+    }
+    /// The whole document identity participates in the same Undo operation as
+    /// the artwork, so reopening History cannot redirect a later Save.
+    func restoreHistoryEditorState(_ state: HistoryEditorState) throws {
+        _ = try CanvasView.validatedDocumentData(state.data)
+        canvas.commitPendingTextEditing()
+        let inverse = try historyEditorState()
+        followHistory(); leaveFrame()
+        restoring = true
+        defer { restoring = false }
+        try canvas.loadDocument(data: state.data, clearingUndo: false)
+        legacyMetadata = state.metadata; nameField.stringValue = state.name; currentURL = state.url
+        currentArchiveID = state.archiveID; dirty = state.dirty; documentGeneration = UUID()
+        let manager = canvas.editingUndoManager
+        let grouping = !manager.isUndoing && !manager.isRedoing
+        if grouping { manager.beginUndoGrouping() }
+        manager.registerUndo(withTarget: self) { app in
+            do { try app.restoreHistoryEditorState(inverse) } catch { app.error(error) }
+        }
+        manager.setActionName("Open History")
+        if grouping { manager.endUndoGrouping() }
+        fitCanvasToWindow(); window.isDocumentEdited = dirty; updateStatus(); refreshHistory()
+    }
+    func openHistory(_ id: UUID) {
+        guard !terminationStarted else { return }
+        do {
+            let store = try archiveStore(), file = try store.read(id)
+            guard let entry = store.entry(id) else { throw HistoryStore.Failure.missing }
+            try restoreHistoryEditorState(HistoryEditorState(data: file.canvasData, metadata: file.metadata,
+                name: entry.name, url: nil, archiveID: id, dirty: true))
+            historyBrowser?.window?.orderOut(nil)
+            window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas)
+        } catch { self.error(error); refreshHistory() }
+    }
+    func historyExport(_ id: UUID, format: String) throws -> Data {
+        let file = try archiveStore().read(id)
+        if format == "skitch" { return try file.encoded() }
+        if format == "svg" { return try file.encoded(includeSupplementalState: false) }
+        let view = CanvasView(frame: .zero); try view.loadDocument(data: file.canvasData)
+        guard let data = view.imageData(format: format) else { throw HistoryStore.Failure.missing }
+        return data
+    }
+    func copyHistory(_ ids: [UUID]) {
+        do {
+            guard let id = ids.first else { return }
+            let file = try archiveStore().read(id), native = try file.encoded()
+            let view = CanvasView(frame: .zero); try view.loadDocument(data: file.canvasData)
+            guard let png = view.imageData(format: "png") else { throw HistoryStore.Failure.missing }
+            let board = NSPasteboard.general; board.clearContents()
+            board.setData(png, forType: .png)
+            board.setData(native, forType: NSPasteboard.PasteboardType("com.shoemoney.skitch-redux.native"))
+            if let tiff = view.renderedImage().tiffRepresentation { board.setData(tiff, forType: .tiff) }
+        } catch { self.error(error) }
+    }
+    func copyHistoryLink(_ ids: [UUID]) {
+        guard let id = ids.first, let entry = historyStore?.entry(id), entry.action == .shared,
+              let url = entry.remoteURL, ["https", "http"].contains(url.scheme?.lowercased() ?? "") else { return }
+        NSPasteboard.general.clearContents(); NSPasteboard.general.setString(url.absoluteString, forType: .string)
+    }
+    func removeHistory(_ ids: [UUID], deleteFiles: Bool) {
+        guard !ids.isEmpty else { return }
+        let alert = NSAlert(); alert.messageText = deleteFiles ? "Move archived drawings to Trash?" : "Hide drawings from History?"
+        alert.informativeText = deleteFiles ? "The selected History copies and previews will move to Trash. Exported originals and web posts are kept." : "The selected drawings will leave the History list. Their archive files and web posts are kept."
+        alert.addButton(withTitle: deleteFiles ? "Move to Trash" : "Hide"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        do {
+            if deleteFiles { try archiveStore().trash(Set(ids)) } else { try archiveStore().remove(Set(ids), deleteFiles: false) }
+            if let id = currentArchiveID, ids.contains(id) { currentArchiveID = nil }
+            refreshHistory()
+        } catch { self.error(error) }
+    }
+    func deleteHistoryRemote(_ ids: [UUID]) {
+        guard !terminationStarted, let id = ids.first, ids.count == 1,
+              let entry = historyStore?.entry(id), let url = entry.remoteURL, let binding = entry.remoteBinding else {
+            status.stringValue = "This item has no verified publication destination for deletion."; return
+        }
+        let alert = NSAlert(); alert.messageText = "Delete this web post?"
+        alert.informativeText = "This removes the published image at " + url.absoluteString + ". Its editable History copy will be kept."
+        alert.addButton(withTitle: "Delete from Web"); alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        status.stringValue = "Deleting web post…"
+        historyRemoteDeletion.deleteRemote(url: url, binding: binding, presenting: window) { [weak self] result in
+            Task { @MainActor in
+                guard let self else { return }
+                switch result {
+                case .success:
+                    do { try self.archiveStore().clearRemote(id); self.refreshHistory(); self.status.stringValue = "Web post deleted; History copy kept" }
+                    catch { self.error(error) }
+                case .failure(let error): if !self.terminationStarted { self.error(error) }
+                }
+            }
+        }
+    }
     @objc func showPhotos() {
         photoBrowser.show(relativeTo: window) { [weak self] url in self?.openURL(url) }
     }
     @objc func exportFile() {
         let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".png"; p.allowedContentTypes = [.png,.jpeg,.tiff,.pdf,.bmp,.svg, UTType(filenameExtension: "skitch") ?? .data]; p.allowsOtherFileTypes = false
-        if p.runModal() == .OK, let url = p.url { do { let data: Data; if ["svg", "skitch"].contains(url.pathExtension.lowercased()) { let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot); data = try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).encoded(includeSupplementalState: url.pathExtension.lowercased() == "skitch") } else { guard let encoded = canvas.imageData(format: url.pathExtension.lowercased()) else { throw NSError(domain: "SkitchRedux", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."]) }; data = encoded }; try data.write(to: url, options: .atomic); status.stringValue = "Exported \(url.lastPathComponent)" } catch { self.error(error) } }
+        if p.runModal() == .OK, let url = p.url { do { let data: Data; if ["svg", "skitch"].contains(url.pathExtension.lowercased()) { let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot); data = try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).encoded(includeSupplementalState: url.pathExtension.lowercased() == "skitch") } else { guard let encoded = canvas.imageData(format: url.pathExtension.lowercased()) else { throw NSError(domain: "SkitchRedux", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."]) }; data = encoded }; try data.write(to: url, options: .atomic); status.stringValue = "Exported \(url.lastPathComponent)"; archive(try historySnapshot(), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration) } catch { self.error(error) } }
     }
     @objc func printImage() { let view = NSImageView(frame: NSRect(origin: .zero,size: canvas.canvasSize)); view.image = canvas.renderedImage(); view.imageScaling = .scaleProportionallyUpOrDown; let p = NSPrintInfo.shared.copy() as! NSPrintInfo; p.horizontalPagination = .fit; p.verticalPagination = .fit; NSPrintOperation(view: view, printInfo: p).run() }
-    @objc func share(_ sender: NSButton) { let picker = NSSharingServicePicker(items: [canvas.renderedImage()]); picker.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY) }
+    @objc func share(_ sender: NSButton) {
+        guard let snapshot = try? historySnapshot() else { return }
+        pickerSnapshot = ShareSnapshot(snapshot: snapshot, name: safeName(), generation: documentGeneration)
+        let picker = NSSharingServicePicker(items: [canvas.renderedImage()]); picker.delegate = self; sharePicker = picker
+        picker.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+    }
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, delegateFor sharingService: NSSharingService) -> NSSharingServiceDelegate? {
+        if let snapshot = pickerSnapshot { sharingSnapshots[ObjectIdentifier(sharingService)] = snapshot }
+        return self
+    }
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
+        if service == nil { pickerSnapshot = nil }; sharePicker = nil
+    }
+    func sharingService(_ service: NSSharingService, didShareItems items: [Any]) {
+        guard let value = sharingSnapshots.removeValue(forKey: ObjectIdentifier(service)) else { return }
+        pickerSnapshot = nil
+        archive(value.snapshot, name: value.name, action: .shared, destination: service.title, generation: value.generation)
+    }
+    func sharingService(_ service: NSSharingService, didFailToShareItems items: [Any], error: Error) {
+        sharingSnapshots.removeValue(forKey: ObjectIdentifier(service)); pickerSnapshot = nil
+        if !terminationStarted { self.error(error) }
+    }
     @objc func shortcutSettings() { hotkeys.showSettings(attachedTo: window) }
     @objc func sharingSettings() { publishing.showSettings(relativeTo: window) }
     @objc func publishImage() {
-        guard let data = canvas.imageData(format: "png") else { return }
+        guard let data = canvas.imageData(format: "png"), let snapshot = try? historySnapshot() else { return }
+        let name = safeName(), generation = documentGeneration
+        let fileName = name+"-"+UUID().uuidString.lowercased()+".png"
+        let binding = try? historyRemoteDeletion.captureBinding(fileName: fileName)
         status.stringValue = "Publishing image…"
-        publishing.publish(data: data, fileName: safeName()+"-"+UUID().uuidString.lowercased()+".png", presenting: window) { [weak self] result in
-            Task { @MainActor in self?.receivePublishing(result) }
+        publishing.publish(data: data, fileName: fileName, presenting: window) { [weak self] result in
+            // Publishing guarantees delivery on main, including nested AppKit
+            // termination loops. Archive success before its shutdown barrier can
+            // acknowledge completion; an extra Task could run after app exit.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.receivePublishing(result)
+                if case .success(let url) = result {
+                    let currentBinding = try? self.historyRemoteDeletion.captureBinding(for: url)
+                    let retainedBinding = binding == currentBinding ? binding : nil
+                    self.archive(snapshot, name: name, action: .shared, destination: url.absoluteString, remoteURL: url, remoteBinding: retainedBinding, generation: generation)
+                }
+            }
         }
     }
     func receivePublishing(_ result: Result<URL, Error>) {
@@ -407,7 +650,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // here so timed, camera and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
-            canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; fitCanvasToWindow(); nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; fitCanvasToWindow(); nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {

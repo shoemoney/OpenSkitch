@@ -44,12 +44,22 @@ final class AppSafetyHotkeyManager {
 
 // Unexpected file dialogs fail the test instead of blocking or showing UI.
 final class AppSafetyFilePanel {
+    struct Answer {
+        let response: NSApplication.ModalResponse
+        var url: URL? = nil
+    }
+    static var answers: [Answer] = []
     var allowedContentTypes: [UTType] = []
     var nameFieldStringValue = ""
     var allowsOtherFileTypes = false
     var allowsMultipleSelection = false
     var url: URL?
     func runModal() -> NSApplication.ModalResponse {
+        if !Self.answers.isEmpty {
+            let answer = Self.answers.removeFirst()
+            url = answer.url
+            return answer.response
+        }
         AppSafetyAlert.unexpected.append("Unexpected file dialog")
         return .cancel
     }
@@ -213,6 +223,7 @@ enum AppSafetyTests {
         deinit {
             MainActor.assumeIsolated {
                 app.timer?.invalidate()
+                app.historyFollowTimer?.invalidate()
                 app.window.delegate = nil
                 app.window.close()
                 app.historyWindow?.delegate = nil
@@ -822,17 +833,33 @@ enum AppSafetyTests {
         try expect(try app.canvas.snapshotDocumentData() == pending && Data(contentsOf: recovery) == recovered && Data(contentsOf: a) == savedA,
                    "Cancelled main Close must preserve pending text, recovery and saved bytes")
 
-        // Reopen through the real History action, using its actual openURL path.
+        // Original History Open is an undoable document transaction. Cancelling
+        // main Close must not disable it or discard the recoverable prior draft.
+        let store = try app.archiveStore()
+        let historySnapshot = try historyDrawing("Archived B after cancelled Close", color: .green)
+        let historyID = try store.archive(historySnapshot, name: "History B", action: .archived)
+        let historyPrompts = AppSafetyAlert.seen.count, prior = try app.historyEditorState()
+        app.openHistory(historyID)
+        try expect(try app.canvas.snapshotDocumentData() == SkitchFile.decode(historySnapshot.native).canvasData &&
+                   app.currentArchiveID == historyID && app.currentURL == nil && app.dirty &&
+                   AppSafetyAlert.seen.count == historyPrompts,
+                   "History UUID Open after cancelled Close is undoable and does not prompt to discard the prior draft")
+        app.undo()
+        try expectHistoryState(app, prior, "Undo History after cancelled main Close restores all prior pending text, identity and dirty flags")
+        try expect(try Data(contentsOf: recovery) == recovered && Data(contentsOf: a) == savedA,
+                   "Undoable History Open leaves the prior recovery and exported original unchanged")
+
+        // Ordinary file replacement retains its separate Cancel/Discard policy.
+        let restoredDraft = app.canvas.document
         var documentB = SketchDocument(size: CGSize(width: 123, height: 99))
         documentB.backgroundColor = SketchColor(.green)
         let b = fixture.file("History-B"); try documentB.encoded().write(to: b)
-        let row = NSButton(); row.identifier = NSUserInterfaceItemIdentifier(b.path)
-        answer(.alertSecondButtonReturn); app.openHistory(row)
-        try expect(app.currentURL == a && app.canvas.document == before && text.superview === app.canvas && app.dirty,
-                   "History Open must still honor Cancel after cancelled main Close")
-        answer(.alertThirdButtonReturn); app.openHistory(row)
+        answer(.alertSecondButtonReturn); app.openURL(b)
+        try expect(try app.currentURL == a && app.canvas.document == restoredDraft && app.canvas.snapshotDocumentData() == pending && app.dirty,
+                   "File Open must still honor Cancel after cancelled main Close")
+        answer(.alertThirdButtonReturn); app.openURL(b)
         try expect(app.currentURL == b && app.canvas.document == documentB && !app.dirty,
-                   "Approved History Open must install B with its proper save destination")
+                   "Approved file Open must install B with its proper save destination")
         let reopenedText = try editor(app, text: "Protect newer edits in reopened B")
         let reopenedModel = app.canvas.document, reopenedPending = try app.canvas.snapshotDocumentData()
         app.saveRecovery()
@@ -846,7 +873,7 @@ enum AppSafetyTests {
                    "History Close must not ask to discard or mutate the live editor")
         answer(.alertSecondButtonReturn); app.newFile()
         try expect(app.currentURL == b && app.canvas.document == reopenedModel && app.dirty && reopenedText.superview === app.canvas,
-                   "New must honor Cancel for newer edits after a cancelled Close and approved History Open")
+                   "New must honor Cancel for newer edits after a cancelled Close and approved file Open")
         answer(.alertSecondButtonReturn)
         try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "Quit must still honor Cancel for the reopened document's newer edits")
         app.saveRecovery()
@@ -1366,6 +1393,255 @@ enum AppSafetyTests {
         try expect(try !chrome.showsCanvasHole && app.canvas.snapshotDocumentData() == before,
                    "Frame cancellation must restore opaque chrome without changing editable data")
     }
+    // Each History case gets its own index under the harness support directory;
+    // startup/recovery tests and earlier automatic exports cannot contaminate it.
+    static func isolatedHistory(_ app: AppDelegate) throws -> HistoryStore {
+        app.historyFollowTimer?.invalidate(); app.historyFollowTimer = nil
+        let store = try HistoryStore(directory: app.support.appendingPathComponent("HistorySafety-" + UUID().uuidString))
+        app.historyStore = store; app.currentArchiveID = nil
+        return store
+    }
+    static func historyDrawing(_ title: String, color: NSColor = .red) throws -> HistoryStore.Snapshot {
+        var document = SketchDocument(size: CGSize(width: 120, height: 90))
+        var shape = SketchElement(kind: .rectangle)
+        shape.rect = CGRect(x: 12, y: 15, width: 30, height: 20); shape.filled = true; shape.color = SketchColor(color)
+        var text = SketchElement(kind: .text)
+        text.text = title; text.rect = CGRect(x: 10, y: 40, width: 100, height: 40)
+        document.elements = [shape, text]
+        return try HistoryStore.Snapshot(canvasData: document.encoded(),
+            metadata: .init(root: ["futureHistorySetting": title], originalSize: document.size), preview: nil)
+    }
+    static func preparePannedHistory(_ app: AppDelegate) throws -> Data {
+        let size = CGSize(width: 100, height: 80)
+        try app.canvas.loadDocument(data: SketchDocument(size: size).encoded())
+        let background = try image(size: size)
+        app.canvas.setBackground(background); app.canvas.tool = .select; app.canvas.setZoom(1)
+        var shape = SketchElement(kind: .rectangle)
+        shape.rect = CGRect(x: 15, y: 20, width: 18, height: 22); shape.color = SketchColor(.red)
+        app.canvas.document.elements = [shape]
+        app.legacyMetadata = .init(root: ["futureHistorySetting": "A with hidden pixels"], originalSize: size)
+        app.canvas.editingUndoManager.removeAllActions()
+        let unpanned = try app.canvas.snapshotDocumentData()
+        try pan(app, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 85, y: 20))
+        let raw = try app.canvas.snapshotDocumentData()
+        let object = try JSONSerialization.jsonObject(with: raw) as! [String: Any]
+        try expect(object["canvasPanBackground"] != nil && raw != unpanned, "History fixture must contain actual hidden pan pixels")
+        return unpanned
+    }
+    static func expectHistoryState(_ app: AppDelegate, _ state: AppDelegate.HistoryEditorState, _ message: String) throws {
+        try expect(try app.canvas.snapshotDocumentData() == state.data && app.legacyMetadata == state.metadata &&
+                   app.nameField.stringValue == state.name && app.currentURL == state.url &&
+                   app.currentArchiveID == state.archiveID && app.dirty == state.dirty && app.window.isDocumentEdited == state.dirty,
+                   message)
+    }
+    static func historyOpenUndoRedo() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        _ = try preparePannedHistory(app)
+        let beforeColor = try app.canvas.snapshotDocumentData()
+        app.canvas.setBackgroundColor(.yellow)
+        app.nameField.stringValue = "A original filename"
+        let destination = fixture.file("History-A").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = destination
+        try expect(app.save(), "Panned A must save successfully before History Open")
+        let prior = try app.historyEditorState(), disk = try Data(contentsOf: destination)
+        try expect(prior.archiveID != nil && !prior.dirty && app.canvas.editingUndoManager.canUndo,
+                   "A must have a clean destination, archive association and pre-existing Undo")
+        let snapshotB = try historyDrawing("B archived metadata", color: .green)
+        let idB = try store.archive(snapshotB, name: "B filename", action: .archived)
+        app.openHistory(idB)
+        let opened = try app.historyEditorState(), fileB = try SkitchFile.decode(snapshotB.native)
+        try expect(try opened.data == fileB.canvasData && opened.metadata == fileB.metadata && opened.name == "B filename" &&
+                   opened.url == nil && opened.archiveID == idB && opened.dirty,
+                   "History Open restores B's full native state as an unsaved independent destination")
+        app.undo(); try expectHistoryState(app, prior, "Undo History Open restores A's raw pan, metadata, filename, URL, archive and clean flags")
+        app.redo(); try expectHistoryState(app, opened, "Redo History Open restores B's complete identity and dirty flags")
+        app.undo(); app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == beforeColor && app.legacyMetadata == prior.metadata &&
+                   app.currentURL == destination && app.currentArchiveID == prior.archiveID && app.dirty,
+                   "History Open must retain prior canvas Undo actions without redirecting Save or metadata")
+        app.redo(); app.redo()
+        try expectHistoryState(app, opened, "Redo can traverse the prior canvas edit and the History Open transaction")
+        try expect(try Data(contentsOf: destination) == disk && store.read(prior.archiveID!).canvasData == prior.data,
+                   "Opening and traversing History must never overwrite A's exported original or lose its hidden pixels")
+    }
+    static func historyOpenPendingText() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        let destination = try fixture.saveA(), original = try Data(contentsOf: destination)
+        app.nameField.stringValue = "Pending A"; app.legacyMetadata = .init(root: ["futureHistorySetting": "pending A"])
+        let text = try editor(app, text: "Uncommitted before History Open")
+        text.string += " without notification"
+        app.dirty = false; app.window.isDocumentEdited = false
+        let pending = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
+        let id = try store.archive(historyDrawing("Pending B"), name: "B", action: .archived)
+        app.openHistory(id); app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == pending && app.legacyMetadata == metadata &&
+                   app.currentURL == destination && app.nameField.stringValue == "Pending A" && app.currentArchiveID == nil &&
+                   app.dirty && app.window.isDocumentEdited,
+                   "History Undo must retain the entire previously pending annotation and mark it unsaved even with a stale dirty flag")
+        try expect(app.canvas.editingUndoManager.canUndo, "Committing pending text for History must retain its own older Undo action")
+        app.undo(); try expect(app.canvas.document.elements.isEmpty, "Older Undo still removes the newly committed annotation")
+        app.redo(); try expect(try app.canvas.snapshotDocumentData() == pending, "Redo restores exact text from the pending snapshot")
+        app.redo(); try expect(app.currentArchiveID == id && app.currentURL == nil && app.legacyMetadata.root["futureHistorySetting"] == "Pending B",
+                               "Redo History after typing Undo restores B's metadata and save destination policy")
+        try expect(try Data(contentsOf: destination) == original && AppSafetyAlert.seen.isEmpty,
+                   "Undoable History Open neither silently saves the prior file nor asks to discard its recoverable edits")
+    }
+    static func historyFollowReplacement() throws {
+        for replacement in ["new", "native", "capture"] {
+            try autoreleasepool {
+                let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+                _ = try preparePannedHistory(app); app.nameField.stringValue = "Follow A"
+                try expect(try app.archive(app.historySnapshot(), name: app.safeName(), action: .archived, generation: app.documentGeneration),
+                           "History action must attach the current nonempty document")
+                let id = app.currentArchiveID!, entry = store.entry(id)!
+                let text = try editor(app, text: "Latest pending text for " + replacement), typing = text.undoManager
+                app.nameField.stringValue = "Renamed A " + replacement
+                if replacement == "new" {
+                    try expect(app.historyFollowTimer != nil, "A live edit must schedule the modern latest-copy debounce")
+                    try waitForMain("The scheduled History follow must record the latest pending text", until: {
+                        (try? store.read(id).document.elements.contains { $0.kind == .text && $0.text == text.string }) == true
+                    })
+                    try expect(text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
+                               "Automatic History debounce must leave the editor and typing Undo intact")
+                }
+                app.followHistory()
+                let followed = try app.canvas.snapshotDocumentData()
+                try expect(try store.read(id).canvasData == followed && store.entry(id)?.name == app.safeName() &&
+                           store.entry(id)?.date == entry.date && store.entry(id)?.action == entry.action,
+                           "Follow writes pending text, hidden pixels and rename while retaining the original action identity/date")
+                try expect(text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
+                           "Following History must not commit the live annotation editor or replace its typing history")
+                app.saveRecovery()
+                try expect(try SkitchFile.read(app.support.appendingPathComponent("Recovery.skitch")).canvasData == followed &&
+                           text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
+                           "Recovery of an associated archive must retain pending text without ending the live editor")
+                text.string += " final before replacement"
+                let latest = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
+                answer(.alertThirdButtonReturn)
+                switch replacement {
+                case "new": app.newFile()
+                case "native":
+                    let url = fixture.file("Follow-B").deletingPathExtension().appendingPathExtension("skitch")
+                    try historyDrawing("Native replacement B").native.write(to: url)
+                    app.openURL(url)
+                default: app.receiveCapture(.success(try image()))
+                }
+                try expect(try app.currentArchiveID == nil && store.entries.count == 1 && store.read(id).canvasData == latest &&
+                           store.read(id).metadata == metadata && AppSafetyAlert.answers.isEmpty,
+                           "\(replacement) replacement must flush A's latest immutable copy before detaching it")
+                app.canvas.setBackgroundColor(.green); app.followHistory()
+                try expect(try store.read(id).canvasData == latest && store.entries.count == 1,
+                           "Edits to the replacement must not follow into A's previous archive")
+            }
+        }
+    }
+    static func historyFailedIndexWrite() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        _ = try preparePannedHistory(app)
+        try expect(try app.archive(app.historySnapshot(), name: "Committed A", action: .archived, generation: app.documentGeneration),
+                   "History failure fixture must have a committed revision")
+        let id = app.currentArchiveID!, entry = store.entry(id)!
+        let nativeURL = store.directory.appendingPathComponent(entry.nativeFile), indexURL = store.directory.appendingPathComponent("index.json")
+        let native = try Data(contentsOf: nativeURL), index = try Data(contentsOf: indexURL)
+        let files = Set(try FileManager.default.contentsOfDirectory(atPath: store.directory.path))
+        let text = try editor(app, text: "Keep editor despite failed History follow"), typing = text.undoManager
+        let pending = try app.canvas.snapshotDocumentData()
+        store.writeIndex = { _, _ in throw Failure(description: "Injected History index failure") }
+        defer { store.writeIndex = { try $0.write(to: $1, options: .atomic) } }
+        app.followHistory()
+        try expect(store.entry(id) == entry && app.currentArchiveID == id && app.status.stringValue.contains("previous archive was preserved"),
+                   "Failed follow must retain the committed index, association and actionable status")
+        try expect(try Data(contentsOf: nativeURL) == native && Data(contentsOf: indexURL) == index &&
+                   Set(FileManager.default.contentsOfDirectory(atPath: store.directory.path)) == files,
+                   "Failed index commit preserves every prior byte and cleans only the uncommitted revision")
+        let reloaded = try HistoryStore(directory: store.directory)
+        try expect(try reloaded.entries == [entry] && reloaded.read(id).canvasData == SkitchFile.decode(native).canvasData,
+                   "A fresh store must still read the previous full drawing after the failed update")
+        try expect(try !app.archive(app.historySnapshot(), name: "Rejected action", action: .exported, destination: "local-test", generation: app.documentGeneration) &&
+                   app.currentArchiveID == id && store.entries == [entry],
+                   "A failed new archive cannot replace the previous association or append an index record")
+        try expect(try app.canvas.snapshotDocumentData() == pending && text.superview === app.canvas && text.undoManager === typing && app.dirty,
+                   "History write failures must preserve the pending document and live typing history")
+    }
+    static func historySaveOutcomes() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        _ = try preparePannedHistory(app); app.nameField.stringValue = "Saved History A"
+        _ = try editor(app, text: "Saved pending text")
+        let snapshot = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
+        let destination = fixture.file("History-save").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = destination
+        try expect(app.save(), "Successful native Save")
+        let id = app.currentArchiveID!, entry = store.entry(id)!, exported = try Data(contentsOf: destination)
+        try expect(try store.entries.count == 1 && entry.action == .exported && entry.destination == destination.path &&
+                   entry.name == "Saved History A" && store.read(id).canvasData == snapshot && store.read(id).metadata == metadata &&
+                   SkitchFile.decode(exported).canvasData == snapshot && !app.dirty,
+                   "Only a successful Save creates an Exported archive with exact saved pending text, pan source and metadata")
+        let text = try editor(app, text: "Unsaved after successful export"), pending = try app.canvas.snapshotDocumentData()
+        let invalid = app.support.appendingPathComponent("missing-parent-" + UUID().uuidString).appendingPathComponent("failed.skitch")
+        let proposed = try SkitchFile(document: CanvasView.validatedDocumentData(pending), metadata: metadata, canvasData: pending)
+        let errorTitle: String
+        do { try proposed.write(to: invalid); throw Failure(description: "Missing directory write unexpectedly succeeded") }
+        catch let failure as Failure { throw failure }
+        catch { errorTitle = error.localizedDescription }
+        AppSafetyAlert.answers.append(.init(title: errorTitle, response: .alertFirstButtonReturn))
+        app.currentURL = invalid
+        try expect(!app.save(), "Failed native Save must report failure")
+        try expect(try store.entries == [entry] && app.currentArchiveID == id && store.read(id).canvasData == snapshot &&
+                   Data(contentsOf: destination) == exported && !FileManager.default.fileExists(atPath: invalid.path),
+                   "Failed Save must not archive output, update the prior revision or overwrite the successful export")
+        try expect(try app.canvas.snapshotDocumentData() == pending && text.superview === app.canvas && app.dirty,
+                   "Failed Save keeps pending edits and the native editor uncommitted")
+    }
+    static func historyStaleArchiveCompletion() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        _ = try preparePannedHistory(app); app.nameField.stringValue = "Captured output A"
+        let captured = try app.historySnapshot(), generation = app.documentGeneration, name = app.safeName()
+        let exported = fixture.file("Immutable-output").deletingPathExtension().appendingPathExtension("skitch")
+        try captured.native.write(to: exported)
+        answer(.alertThirdButtonReturn); app.newFile()
+        try app.canvas.loadDocument(data: SkitchFile.decode(historyDrawing("Current B").native).canvasData)
+        app.legacyMetadata = .init(root: ["futureHistorySetting": "Current B"])
+        app.currentURL = fixture.file("Current-B"); app.nameField.stringValue = "Current B"
+        let text = try editor(app, text: "Pending current B"), typing = text.undoManager
+        // Seed B's existing association through the store so this regression
+        // exercises the stale callback independently of preview-generation bugs.
+        let snapshotB = try HistoryStore.Snapshot(canvasData: app.canvas.snapshotDocumentData(), metadata: app.legacyMetadata, preview: nil)
+        let idB = try store.archive(snapshotB, name: app.safeName(), action: .archived)
+        app.currentArchiveID = idB
+        let current = try app.historyEditorState(), entryB = store.entry(idB)!
+        var completed = false, archived = false
+        DispatchQueue.main.async {
+            archived = app.archive(captured, name: name, action: .exported, destination: exported.path, generation: generation)
+            completed = true
+        }
+        try waitForMain("Captured archive callback did not complete", until: { completed })
+        try expect(archived && store.entries.count == 2 && store.entry(idB) == entryB, "Stale success creates A's record without following or changing B's record")
+        guard let entryA = store.entries.first(where: { $0.id != idB }) else { throw Failure(description: "Missing old-generation archive") }
+        let fileA = try store.read(entryA.id), capturedFile = try SkitchFile.decode(captured.native)
+        try expect(try fileA.canvasData == capturedFile.canvasData && fileA.metadata == capturedFile.metadata &&
+                   entryA.name == name && entryA.action == .exported && entryA.destination == exported.path && Data(contentsOf: exported) == captured.native,
+                   "A delayed success archives only the captured immutable bytes/metadata/name, never the replacement drawing")
+        try expectHistoryState(app, current, "An old-generation completion must not attach its archive or change the current drawing's identity")
+        try expect(text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
+                   "Delayed archive completion must retain B's live editor and typing Undo")
+    }
+    static func historyEmptyAndCancelledOutputs() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        let empty = try app.historySnapshot()
+        try expect(empty.isEmpty && !app.archive(empty, name: "Empty", action: .exported, destination: "unused", generation: app.documentGeneration),
+                   "A blank document cannot create an output archive")
+        app.currentURL = fixture.file("Empty-save")
+        try expect(app.save() && store.entries.isEmpty && app.currentArchiveID == nil, "A valid blank Save writes the requested file without creating an empty History record")
+        _ = try preparePannedHistory(app); let pending = try app.canvas.snapshotDocumentData()
+        AppSafetyFilePanel.answers.append(.init(response: .cancel))
+        try expect(!app.save(forceChoose: true) && store.entries.isEmpty && app.currentArchiveID == nil,
+                   "Cancel Save As cannot create a successful-output archive")
+        let savedURL = app.currentURL
+        app.startCapture("interactive")
+        try expect(try app.canvas.snapshotDocumentData() == pending && app.currentURL == savedURL && app.dirty &&
+                   store.entries.isEmpty && app.currentArchiveID == nil && AppSafetyFilePanel.answers.isEmpty && AppSafetyAlert.seen.isEmpty,
+                   "A cancelled capture must keep the draft and cannot create an empty or cancelled-output record")
+    }
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -1412,11 +1688,19 @@ enum AppSafetyTests {
             ("raster Open uses valid pixels when TIFF logical points are invalid", rasterPointSizeNormalization),
             ("queued publishing callbacks remain silent during Quit; cancellation remains silent afterward", publishingCallbacksDuringQuit),
             ("actual idle Capture acknowledges synchronously before deferred AppKit termination", realIdleCaptureShutdown),
-            ("Frame chrome stays opaque around its transparent canvas hole in light/dark appearance", frameChromeDrawing)
+            ("Frame chrome stays opaque around its transparent canvas hole in light/dark appearance", frameChromeDrawing),
+            ("History Open Undo/Redo retains full pan, metadata, filename, URL, archive, dirty flags and prior Undo", historyOpenUndoRedo),
+            ("History Open preserves pending text through older Undo/Redo without saving its prior destination", historyOpenPendingText),
+            ("History follow keeps latest pending edits and detaches on New/native/capture replacement", historyFollowReplacement),
+            ("History index failure preserves prior readable revision and live editor", historyFailedIndexWrite),
+            ("successful Save archives exported native state; failed Save archives nothing", historySaveOutcomes),
+            ("asynchronous old-generation archive preserves immutable output and current document identity", historyStaleArchiveCompletion),
+            ("blank Save, cancelled Save As and cancelled capture cannot archive empty/cancelled outputs", historyEmptyAndCancelledOutputs)
         ]
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []
+            AppSafetyFilePanel.answers = []
             AppSafetyCaptureCoordinator.requests = []
             AppSafetyCaptureCoordinator.holdShutdown = false
             AppSafetyCaptureCoordinator.shutdownRequests = 0
@@ -1434,6 +1718,7 @@ enum AppSafetyTests {
                     try test()
                     try expect(AppSafetyAlert.unexpected.isEmpty, "Unexpected alerts: \(AppSafetyAlert.unexpected)")
                     try expect(AppSafetyAlert.answers.isEmpty, "An expected alert did not run")
+                    try expect(AppSafetyFilePanel.answers.isEmpty, "An expected file panel did not run")
                 }
                 print("PASS \(name)"); results.append(["name": name, "passed": true])
             } catch {

@@ -595,14 +595,14 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         return file
     }
-    func loadDocument(data: Data) throws {
+    func loadDocument(data: Data, clearingUndo: Bool = true) throws {
         let file = try Self.decodeValidatedCanvasFile(data)
         finishTextEditing()
         document = file.document
         panBackground = file.canvasPanBackground
         selection.removeAll(); cropRect = nil; preview = nil
         resetGesture()
-        editingUndoManager.removeAllActions()
+        if clearingUndo { editingUndoManager.removeAllActions() }
         onChange?()
     }
 

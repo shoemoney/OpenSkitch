@@ -73,6 +73,13 @@ for name, (path, data) in snapshot.items():
         if re.search(r'\bGlobalHotkeyManager\b', text):
             raise SystemExit('Unrecognized live hotkey-manager construction; refusing to run.')
         target.write_text(text)
+    elif name == 'HistoryBrowser.swift':
+        # History now constructs its own window. Preserve the same nonvisible
+        # boundary as App.swift without modifying the production UI source.
+        text = data.decode()
+        if 'NSWindow(' not in text:
+            raise SystemExit('Missing History window safety boundary.')
+        target.write_text(text.replace('NSWindow(', 'AppSafetyWindow('))
     else:
         target.write_bytes(data)
     manifest.append({'name': name, 'path': str(path), 'sha256': hashlib.sha256(data).hexdigest()})
