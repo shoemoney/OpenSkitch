@@ -1,16 +1,16 @@
 {
-  "verified_at": "2026-10-07T17:19:41.627336+00:00",
-  "checkpoint_id": "visibility-ee914f076f",
-  "checkpoint_state": "current_build_suites_startup_and_listed_native_close_reopen_undo_verified",
+  "verified_at": "2026-10-07T17:36:49.091428+00:00",
+  "checkpoint_id": "drag-thumbnail-a48faf4a2f",
+  "checkpoint_state": "current_build_suites_and_startup_verified_desktop_pending",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.iGtGjs",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.LyJdFL",
     "source_sha256": {
-      "App.swift": "ca84e8d0b601204ae0b90b832a98fbbd7e06da8d95c401b30dfd366f9c10c31b",
+      "App.swift": "ccf5b4634c4aa8d45418012e8af08e40d0aadcd9381133eb6100c47ef917b5e2",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
@@ -41,6 +41,9 @@
     "resource_sha256": {
       "CursorMove.png": "50ec303249a161e796b0e54977a5408b393d92a5252cb7891a6f68e46c593192",
       "SkitchMac.icns": "81a2b816d8f8aa05fe712147e7bad66626a4607049d02fef80fc7166dd2b7663",
+      "Skitch_Cancel_DragMe.png": "feda111f7ea378d48239a0d52c38d39b4a2826ce258fa320e454e321a701cd62",
+      "Skitch_ShowSkitch.png": "378bf2d187868c142c376184000372cbce5cb0d7260eb5bd13e0f457c4a9b32a",
+      "Skitch_ShowSkitch_mouseover.png": "196d30fef466fc4793a8509da24d62622ed210364f31675a28daa6bdb5dac1aa",
       "ToolOffArrow.png": "e08d62527c75b6f4de394715835e1eb6fc892c3d3698a1855c377a91508422ff",
       "ToolOffBrush.png": "143708ff84330ef53879f3e79d816fdf568fec2ff5b7371b9107996f7ea31487",
       "ToolOffCircle.png": "034ff76a6566858b0d321fd20b7320f964e27b97f2efdf4d34b1116d561c72f2",
@@ -62,23 +65,23 @@
       "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
       "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52"
     },
-    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f"
+    "binary_sha256": "a48faf4a2fe1f79fb4eb9badedded581c1a143f0bbe6d7eeb3be606e65f71b6d"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "d92df260311a9253ddc3bb9016036e9e4d91466fcd1f379ae51da5f13afe9022",
+  "build_manifest_sha256": "2430251be7b128e414ef065f2fd523f8b43b09d4d25a8f7b35cbaba1f37ab2b6",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/visibility-verification/build.log",
-  "build_log_sha256": "27be169be90afbc7ce4cbfab76c791ee62df49d7a6c087d4e6f239ac469f14e7",
+  "build_log_path": "build/drag-thumbnail-verification/build.log",
+  "build_log_sha256": "117556e156865847cbe194474e04cb07adc746c6182b9b02923359c7059e8057",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.gq5sfr8b",
-      "log_path": "build/visibility-verification/arm64.log",
-      "log_sha256": "439292ee8e43a141a0cf1e76b5d75f5a99020046d935297144b9ab26e334e45d",
-      "checks": 2487,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.3rgh35i5",
+      "log_path": "build/drag-thumbnail-verification/arm64.log",
+      "log_sha256": "2bd362bce7398ee069d6811ba211847b8e57d1c9e2611cdfda33f2d22ba269d4",
+      "checks": 2490,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -86,27 +89,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.cj3ecaaw",
-      "log_path": "build/visibility-verification/x86_64.log",
-      "log_sha256": "a8de96c6881a53b5e553d6c160f5c84d2cae01c1e12a666b20cbc2463da7f5b2",
-      "checks": 2487,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.uogsn987",
+      "log_path": "build/drag-thumbnail-verification/x86_64.log",
+      "log_sha256": "74d98ab80b19d781a1bcf7b686b57194b81a83c5c5c0f0eb216f21f7908fc19b",
+      "checks": 2490,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/visibility-verification/results.json",
-  "full_suite_results_sha256": "04a66be18779ed2ec4dabcad55d9ce49fdec84bf0fefefe88787b03769d8bf9c",
+  "full_suite_results_path": "build/drag-thumbnail-verification/results.json",
+  "full_suite_results_sha256": "b455615e4a09b59c73f3b4e116ea0643ca942e087b298edf087e53e44a4a57dd",
   "native_startup_smoke": {
-    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
-    "verified_at": "2026-10-07T17:04:56.065827+00:00",
+    "binary_sha256": "a48faf4a2fe1f79fb4eb9badedded581c1a143f0bbe6d7eeb3be606e65f71b6d",
+    "verified_at": "2026-10-07T17:35:56.085385+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "2ada983b56c74453a21767144db4e990628d9ccb0d68b41b34469fb5f626b38a"
+      "editable_sha256": "f54c834ce5d37d4d2318b4ce1957d8d37d94ee2461e25a46299e28832dbc9e2e"
     },
     "x86_64": {
       "passed": true,
@@ -114,50 +117,31 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "b54fa3b8bc91470123de7bb783efefa2fabeb96908659a99e23c5842c94fb979"
+      "editable_sha256": "5675e249ff2f9efd364533b01a5cce3ba6433b7a4261de5d5976d4c3b8a3d459"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-ee914f076f/results.json",
-  "native_startup_smoke_results_sha256": "6768cb77626fe784ee56796078371476a8ec8bffe9c08be04499e0fd1028d3ef",
+  "native_startup_smoke_results_path": "build/startup-smoke-a48faf4a2f/results.json",
+  "native_startup_smoke_results_sha256": "8a967d91fd73174d0eae2eb7253e2fa933b436905d904b8e27d981ec12f20b7f",
   "validation_tools_sha256": {
     "tools/test.py": "6af94957d08019ddcb30ed63bd5ce09f93f5efd9133c8052b093f2b9acedfe39",
-    "tools/build.sh": "8b0e4b0b85f40d0ce7009927386dfa43e6eba22864070e90656593c15e9d96c2",
+    "tools/build.sh": "8aae27f758367cbf7338672878b9dd5d3b0dc73365aec0b28deadb7724678d81",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "6b1ec831ae13f5a3ed38f572eb7c6d761609bbb262c55609f4e4bf3eb60496d8"
+    "tools/test-app-safety.sh": "dab6474e2d6b1357aca359400184a806c65f1d2e4e08f8550462c3e5577a97f2"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2487,
+    "checks_per_architecture": 2490,
     "suites": 23,
-    "results_path": "build/visibility-verification/results.json",
-    "results_sha256": "04a66be18779ed2ec4dabcad55d9ce49fdec84bf0fefefe88787b03769d8bf9c"
+    "results_path": "build/drag-thumbnail-verification/results.json",
+    "results_sha256": "b455615e4a09b59c73f3b4e116ea0643ca942e087b298edf087e53e44a4a57dd"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
-    "startup_log_path": "build/visibility-verification/startup.log",
-    "startup_log_sha256": "ee43a70f910d6faadd8a7b0e3cbdc45a8560d020dc980aaaefbe477b830c9fcc"
+    "binary_sha256": "a48faf4a2fe1f79fb4eb9badedded581c1a143f0bbe6d7eeb3be606e65f71b6d",
+    "startup_log_path": "build/drag-thumbnail-verification/startup.log",
+    "startup_log_sha256": "0d66600912c592a9a26d82c3c8683dd9f557cb598453eae4a81779b9e4db2d21"
   },
-  "current_desktop_checks": [
-    {
-      "id": "native-close-reopen-undo",
-      "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
-      "architecture": "arm64",
-      "passed": true,
-      "verification_kind": "native_input_accessibility_and_visual_review",
-      "evidence_path": "build/visibility-verification/desktop-proof.json",
-      "evidence_sha256": "2735d48d15606e957682261406ea71f375b07ceb3ada9af30be301d3f2eecba0",
-      "checkpoint_scope": "current_exactee914f076f_listed_close_reopen_undo_only",
-      "checks": [
-        "Command-W after a native title-bar focus click hid the editor without Dock miniaturization. Owned layout recorded visible=false; reopening the existing app restored the same window frame and drawing.",
-        "A Visibility proof annotation was typed through the native editor, remained after Hide/reopen, and was removed/restored through native Edit-menu Undo/Redo. The text editor itself ended across that desktop transition; controlled tests preserve staged typing but no complete native editor-continuity claim is made.",
-        "Save As wrote an independently decoded editable verification copy containing the annotation. The preceding native saved baseline remains byte-identical.",
-        "The original menu-bar images match the package and build manifest. Owned state confirms the status item is installed. Direct menu-icon click was not exercised.",
-        "Close, Hide and Minimize menus expose their recovered actions. A later native Minimize attempt returned an unexpected Untitled canvas; that desktop contract is not verified.",
-        "The next native file-open observation timed out repeatedly. The owned app process remained running and its one-second stack sample was idle in the normal AppKit event loop; an application hang was not established."
-      ]
-    }
-  ],
+  "current_desktop_checks": [],
   "historical_validations": [
     {
       "id": "current-source-scan",
@@ -652,6 +636,33 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "visibility-ee914f076f",
+      "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
+      "full_suite_results_path": "build/visibility-verification/results.json",
+      "full_suite_results_sha256": "04a66be18779ed2ec4dabcad55d9ce49fdec84bf0fefefe88787b03769d8bf9c",
+      "desktop_checks": [
+        {
+          "id": "native-close-reopen-undo",
+          "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
+          "architecture": "arm64",
+          "passed": true,
+          "verification_kind": "native_input_accessibility_and_visual_review",
+          "evidence_path": "build/visibility-verification/desktop-proof.json",
+          "evidence_sha256": "2735d48d15606e957682261406ea71f375b07ceb3ada9af30be301d3f2eecba0",
+          "checkpoint_scope": "current_exactee914f076f_listed_close_reopen_undo_only",
+          "checks": [
+            "Command-W after a native title-bar focus click hid the editor without Dock miniaturization. Owned layout recorded visible=false; reopening the existing app restored the same window frame and drawing.",
+            "A Visibility proof annotation was typed through the native editor, remained after Hide/reopen, and was removed/restored through native Edit-menu Undo/Redo. The text editor itself ended across that desktop transition; controlled tests preserve staged typing but no complete native editor-continuity claim is made.",
+            "Save As wrote an independently decoded editable verification copy containing the annotation. The preceding native saved baseline remains byte-identical.",
+            "The original menu-bar images match the package and build manifest. Owned state confirms the status item is installed. Direct menu-icon click was not exercised.",
+            "Close, Hide and Minimize menus expose their recovered actions. A later native Minimize attempt returned an unexpected Untitled canvas; that desktop contract is not verified.",
+            "The next native file-open observation timed out repeatedly. The owned app process remained running and its one-second stack sample was idle in the normal AppKit event loop; an application hang was not established."
+          ]
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -701,6 +712,11 @@
     "Original custom zoom/corner animation, statusMenu=1 Dock suppression, preference UI, drag thumbnail/iconify/restore and previous-app frontmost restoration remain incomplete.",
     "Native Minimize behavior, menu-icon click, auxiliary-window visibility details and native pending-text editor continuity remain unverified.",
     "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
-    "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta."
+    "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta.",
+    "Current drag-thumbnail desktop interaction remains unverified. Cua app selection and screenshot observation of the previously running editor timed out; no current-build native drag/drop/hover/restore proof was obtained.",
+    "Original drag zoom/corner animation remains unfinished: current panel appears immediately rather than the recovered25-frame shrink and15-frame restore.",
+    "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
+    "Original floating snapshot includes native/window effects that are not established by cached owned-view rendering.",
+    "Complete Fonts native workflow and full original runtime parity remain unverified."
   ]
 }

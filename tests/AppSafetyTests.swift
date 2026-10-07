@@ -38,6 +38,13 @@ final class AppSafetyFontPanel: NSFontPanel {
     override func convert(_ font: NSFont) -> NSFont { conversion?(font) ?? font }
 }
 
+final class AppSafetyDragPanel: NSPanel {
+    override var isVisible: Bool { false }
+    override func orderFrontRegardless() {}
+    override func orderOut(_ sender: Any?) {}
+    override func close() {}
+}
+
 enum AppSafetyActivation {
     static var isActive = true
     static func suppress() {}
@@ -274,6 +281,7 @@ enum AppSafetyTests {
                 app.dragPreviewTimer?.invalidate()
                 app.navigatorTimer?.invalidate()
                 app.closeFontPanel()
+                app.removeDragThumbnail()
                 app.navigatorWindow?.orderOut(nil)
                 app.navigatorWindow?.close()
                 app.window.delegate = nil
@@ -2566,6 +2574,101 @@ enum AppSafetyTests {
                 app.terminationStarted = false
             }),
             ("Quit Save persists pending text and clears recovery", quitSave),
+            ("Drag export snapshots remain immutable across successful, cancelled and failed promises", {
+                let view = DragExportView(frame: NSRect(x: 0, y: 0, width: 115, height: 50))
+                var begun: [UUID] = [], left: [UUID] = [], ended: [(UUID, Bool)] = [], failed: [UUID] = [], deliveries: [URL] = []
+                view.onBegin = { begun.append($0) }; view.onLeaveControl = { left.append($0) }
+                view.onEnd = { ended.append(($0, $1)) }; view.onDeliveryFailure = { failed.append($0) }
+                let bytes = Data("immutable promised image".utf8)
+                let payload = DragExportView.Payload(data: bytes, name: "Captured drawing", format: "jpg", delivered: { deliveries.append($0) })
+                let rect = NSRect(x: 100, y: 200, width: 115, height: 50)
+                let provider = NSFilePromiseProvider(fileType: UTType.jpeg.identifier, delegate: view)
+                try expect(view.beginExport(provider: provider, payload: payload, controlRect: rect), "A prepared export starts once")
+                try expect(!view.beginExport(provider: NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: view), payload: payload, controlRect: rect), "A held mouse drag cannot start a second promise")
+                view.moveExport(to: NSPoint(x: 110, y: 210)); try expect(left.isEmpty, "Inside Drag Me cannot iconify the editor")
+                view.moveExport(to: NSPoint(x: 300, y: 210)); try expect(left == begun, "Crossing the screen-space boundary requests iconify for that export")
+                try expect(view.filePromiseProvider(provider, fileNameForType: UTType.jpeg.identifier) == "Captured drawing.jpg", "Filename and selected format belong to the captured promise")
+                let destination = URL(fileURLWithPath: ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"]!).appendingPathComponent("promised-drawing.jpg")
+                var completionError: Error?
+                view.filePromiseProvider(provider, writePromiseTo: destination) { completionError = $0 }
+                try expect(completionError == nil && (try Data(contentsOf: destination)) == bytes && deliveries == [destination], "Delivery writes captured bytes and archives only after a successful write")
+                view.endExport(provider: ObjectIdentifier(provider), succeeded: true)
+                try expect(ended.count == 1 && ended[0].0 == begun[0] && ended[0].1, "Delivery before the native end callback still leaves the right thumbnail expandable")
+                let cancelled = NSFilePromiseProvider(fileType: UTType.jpeg.identifier, delegate: view)
+                try expect(view.beginExport(provider: cancelled, payload: payload, controlRect: rect), "A second export starts after the first finishes")
+                view.endExport(provider: ObjectIdentifier(cancelled), succeeded: false)
+                view.filePromiseProvider(cancelled, writePromiseTo: destination) { completionError = $0 }
+                try expect(completionError != nil && deliveries.count == 1 && failed.isEmpty && !ended[1].1, "Cancelled promise cannot overwrite or archive an existing output")
+                let unwritable = NSFilePromiseProvider(fileType: UTType.jpeg.identifier, delegate: view)
+                try expect(view.beginExport(provider: unwritable, payload: payload, controlRect: rect), "Failure fixture starts")
+                view.endExport(provider: ObjectIdentifier(unwritable), succeeded: true)
+                view.filePromiseProvider(unwritable, writePromiseTo: destination.appendingPathComponent("missing/image.jpg")) { completionError = $0 }
+                try expect(completionError != nil && failed == [begun[2]] && deliveries.count == 1, "A delayed write failure identifies only its own thumbnail and never archives")
+            }),
+            ("Drag thumbnail uses original geometry and restores document, committed text and Undo", {
+                let fixture = try Fixture(), app = fixture.app, window = fixture.app.window as! AppSafetyWindow
+                window.simulatesVisibility = true; window.shown = true
+                app.timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in }
+                let destination = try fixture.saveA(), saved = try Data(contentsOf: destination)
+                let editor = try editor(app, text: "Drag thumbnail proof")
+                let drag = app.dragExportView!, provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: drag)
+                let generation = app.documentGeneration, frame = window.frame
+                let payload = drag.prepare!()!
+                try expect(editor.superview == nil && app.canvas.document.elements.contains { $0.text == "Drag thumbnail proof" }, "Drag start commits pending typing as the original stopFieldEditing action did")
+                let state = try app.canvas.snapshotDocumentData()
+                try expect(drag.beginExport(provider: provider, payload: payload, controlRect: NSRect(x: 10, y: 10, width: 115, height: 50)), "Prepared native export begins")
+                let id = app.activeDragID!
+                drag.moveExport(to: NSPoint(x: 500, y: 500))
+                try expect(app.dragThumbnailID == id && app.dragThumbnailWindow is AppSafetyDragPanel && !window.isVisible && !window.isMiniaturized,
+                           "Leaving Drag Me creates the separate panel and hides, rather than miniaturizes, the editor")
+                let thumbnail = app.dragThumbnailWindow!.contentView as! DragThumbnailView
+                try expect(thumbnail.image != nil && !thumbnail.clickToExpand && app.timer!.fireDate.timeIntervalSinceNow > 1_000, "In-flight thumbnail retains the editor snapshot and pauses recovery")
+                drag.endExport(provider: ObjectIdentifier(provider), succeeded: true)
+                try expect(app.activeDragID == nil && thumbnail.clickToExpand && !window.isVisible, "Success leaves a persistent click-to-expand thumbnail")
+                try expect(thumbnail.accessibilityPerformPress(), "The thumbnail exposes the same restore action to accessibility")
+                try expect(app.dragThumbnailWindow == nil && window.isVisible && window.frame == frame && app.timer!.fireDate.timeIntervalSinceNow <= 15,
+                           "Thumbnail click restores the same frame, editor and timer")
+                try expect(try app.canvas.snapshotDocumentData() == state && app.documentGeneration == generation && app.currentURL == destination && Data(contentsOf: destination) == saved,
+                           "Restoring does not change artwork, identity, destination or saved bytes")
+                app.canvas.editingUndoManager.undo()
+                try expect(!app.canvas.document.elements.contains { $0.text == "Drag thumbnail proof" }, "Committed drag text retains document Undo")
+                app.canvas.editingUndoManager.redo()
+                try expect(app.canvas.document.elements.contains { $0.text == "Drag thumbnail proof" }, "Committed drag text retains document Redo")
+                let rect = AppDelegate.dragThumbnailRect(windowFrame: NSRect(x: 0, y: 0, width: 1000, height: 500), controlRect: NSRect(x: 200, y: 300, width: 100, height: 50))
+                try expect(rect == NSRect(x: 186, y: 280, width: 128, height: 90), "Recovered thumbnail long side128, minimum dimension90 and control-centered placement")
+            }),
+            ("Cancelled drag, failed delivery and stale callbacks cannot strand or replace the editor", {
+                let fixture = try Fixture(), app = fixture.app, window = app.window as! AppSafetyWindow
+                window.simulatesVisibility = true; window.shown = true
+                let drag = app.dragExportView!
+                @MainActor func start() throws -> (NSFilePromiseProvider, UUID) {
+                    let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: drag)
+                    try expect(drag.beginExport(provider: provider, payload: drag.prepare!()!, controlRect: NSRect(x: 0, y: 0, width: 115, height: 50)), "Lifecycle export starts")
+                    let id = app.activeDragID!; drag.moveExport(to: NSPoint(x: 200, y: 200)); return (provider, id)
+                }
+                let (cancelled, oldID) = try start()
+                drag.endExport(provider: ObjectIdentifier(cancelled), succeeded: false)
+                try expect(window.isVisible && app.dragThumbnailWindow == nil, "Cancellation immediately restores the editor")
+                let (current, currentID) = try start()
+                app.restoreDragThumbnail(oldID); app.endDrag(oldID, succeeded: false)
+                try expect(app.dragThumbnailID == currentID && !window.isVisible, "Old callbacks cannot restore or end a newer drag")
+                drag.endExport(provider: ObjectIdentifier(current), succeeded: true)
+                var failure: Error?
+                drag.filePromiseProvider(current, writePromiseTo: fixture.file("missing").appendingPathComponent("image.png")) { failure = $0 }
+                try expect(failure != nil && window.isVisible && app.dragThumbnailWindow == nil, "Promised-file failure after successful native drop restores the matching editor")
+                let (last, lastID) = try start()
+                app.terminationStarted = true; app.restoreDragThumbnail(lastID); app.endDrag(lastID, succeeded: false)
+                try expect(!window.isVisible && app.dragThumbnailID == lastID, "Late drag callbacks cannot reopen the editor during Quit")
+                app.terminationStarted = false
+                drag.endExport(provider: ObjectIdentifier(last), succeeded: false)
+                try expect(window.isVisible, "A cancelled Quit still permits the drag cancellation to restore")
+                let (replaced, replacedID) = try start()
+                app.newFile()
+                try expect(window.isVisible && app.dragThumbnailWindow == nil && app.activeDragID == nil, "New drawing retires a previous drag thumbnail and shows the replacement")
+                app.restoreDragThumbnail(replacedID)
+                drag.endExport(provider: ObjectIdentifier(replaced), succeeded: true)
+                try expect(window.isVisible && app.dragThumbnailWindow == nil, "Late old drag completion cannot hide or thumbnail the new drawing")
+            }),
             ("deferred shutdown waits, deduplicates Quit and replies once before final cleanup", deferredShutdownSuccess),
             ("asynchronous shutdown failure retains recovery and permits protected Quit retry", deferredShutdownFailureRetry),
             ("synchronous shutdown failure cancels directly and permits Cancel/Save retry", synchronousShutdownFailureRetry),

@@ -15,6 +15,7 @@ cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/menu.png" "$ROOT/original/Skitch.app/Contents/Resources/menu-sel.png" "$APP/Contents/Resources/"
+cp "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch_mouseover.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_Cancel_DragMe.png" "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 file "$APP/Contents/MacOS/SkitchRedux"

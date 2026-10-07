@@ -44,8 +44,19 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     struct Payload { let data: Data; let name: String; var format: String = "png"; let delivered: (URL) -> Void }
     var prepare: (() -> Payload?)?
     var overview: NSImage? { didSet { needsDisplay = true } }
-    private var payloads: [ObjectIdentifier: Payload] = [:]
+    var onBegin: ((UUID) -> Void)?
+    var onLeaveControl: ((UUID) -> Void)?
+    var onEnd: ((UUID, Bool) -> Void)?
+    var onDeliveryFailure: ((UUID) -> Void)?
+    private struct Export {
+        let id: UUID
+        let provider: NSFilePromiseProvider
+        let payload: Payload
+        let controlRect: NSRect
+    }
+    private var payloads: [ObjectIdentifier: Export] = [:]
     private var sessions: [ObjectIdentifier: ObjectIdentifier] = [:]
+    private var activeProvider: ObjectIdentifier?
     override func draw(_ dirtyRect: NSRect) {
         NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
         if let overview { overview.draw(in: bounds.insetBy(dx: 4, dy: 4), from: .zero, operation: .sourceOver, fraction: 0.2) }
@@ -55,24 +66,92 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
         title.draw(at: NSPoint(x: (bounds.width-size.width)/2, y: (bounds.height-size.height)/2), withAttributes: attrs)
     }
     override func mouseDragged(with event: NSEvent) {
-        guard let payload = prepare?() else { return }
+        guard activeProvider == nil, let window, let payload = prepare?() else { return }
         let provider = NSFilePromiseProvider(fileType: (UTType(filenameExtension: payload.format) ?? .data).identifier, delegate: self)
-        payloads[ObjectIdentifier(provider)] = payload
+        guard beginExport(provider: provider, payload: payload, controlRect: window.convertToScreen(convert(bounds, to: nil))) else { return }
         let item = NSDraggingItem(pasteboardWriter: provider)
-        item.setDraggingFrame(bounds, contents: NSImage(systemSymbolName: "photo", accessibilityDescription: "Export image"))
+        let preview = NSImage(size: NSSize(width: 128, height: 128), flipped: false) { [overview] rect in
+            overview?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 0.5)
+            return true
+        }
+        item.setDraggingFrame(NSRect(x: bounds.midX - 64, y: bounds.midY - 64, width: 128, height: 128), contents: preview)
         let session = beginDraggingSession(with: [item], event: event, source: self)
         sessions[ObjectIdentifier(session)] = ObjectIdentifier(provider)
     }
     func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation { .copy }
-    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
-        if let provider = sessions.removeValue(forKey: ObjectIdentifier(session)), operation.isEmpty { payloads.removeValue(forKey: provider) }
+    func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
+    func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
+        guard sessions[ObjectIdentifier(session)] == activeProvider else { return }
+        moveExport(to: screenPoint)
     }
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.name ?? "Skitch") + "." + (payloads[ObjectIdentifier(filePromiseProvider)]?.format ?? "png") }
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        if let provider = sessions.removeValue(forKey: ObjectIdentifier(session)) { endExport(provider: provider, succeeded: !operation.isEmpty) }
+    }
+    @discardableResult
+    func beginExport(provider: NSFilePromiseProvider, payload: Payload, controlRect: NSRect) -> Bool {
+        guard activeProvider == nil else { return false }
+        let key = ObjectIdentifier(provider), export = Export(id: UUID(), provider: provider, payload: payload, controlRect: controlRect)
+        payloads[key] = export; activeProvider = key
+        activeExport = export
+        onBegin?(export.id)
+        return true
+    }
+    private var activeExport: Export?
+    func moveExport(to screenPoint: NSPoint) {
+        guard let export = activeExport, !export.controlRect.contains(screenPoint) else { return }
+        onLeaveControl?(export.id)
+    }
+    func endExport(provider: ObjectIdentifier, succeeded: Bool) {
+        guard activeProvider == provider, let export = activeExport else { return }
+        activeProvider = nil; activeExport = nil
+        if !succeeded { payloads.removeValue(forKey: provider) }
+        onEnd?(export.id, succeeded)
+    }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.payload.name ?? "Skitch") + "." + (payloads[ObjectIdentifier(filePromiseProvider)]?.payload.format ?? "png") }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
-        let payload = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
-        do { guard let payload else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }; try payload.data.write(to: url, options: .atomic); payload.delivered(url); completionHandler(nil) } catch { completionHandler(error) }
+        let export = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
+        do {
+            guard let export else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }
+            try export.payload.data.write(to: url, options: .atomic)
+            export.payload.delivered(url); completionHandler(nil)
+        } catch {
+            if let export { onDeliveryFailure?(export.id) }
+            completionHandler(error)
+        }
     }
     func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue { .main }
+}
+
+final class DragThumbnailView: NSView {
+    var image: NSImage?
+    var clickToExpand = false { didSet { needsDisplay = true } }
+    var restore: (() -> Void)?
+    private var hovering = false
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        for area in trackingAreas { removeTrackingArea(area) }
+        addTrackingArea(NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: self))
+    }
+    override func mouseEntered(with event: NSEvent) { hovering = true; needsDisplay = true }
+    override func mouseExited(with event: NSEvent) { hovering = false; needsDisplay = true }
+    override func mouseDown(with event: NSEvent) {}
+    override func mouseUp(with event: NSEvent) { restore?() }
+    override func accessibilityPerformPress() -> Bool {
+        guard let restore else { return false }
+        restore(); return true
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        image?.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
+        if clickToExpand {
+            NSColor.white.withAlphaComponent(0.1).setFill(); bounds.fill()
+            let name = hovering ? "Skitch_ShowSkitch_mouseover" : "Skitch_ShowSkitch"
+            if let overlay = NSImage(named: name) {
+                overlay.draw(in: NSRect(x: (bounds.width-overlay.size.width)/2, y: (bounds.height-overlay.size.height)/2, width: overlay.size.width, height: overlay.size.height), from: .zero, operation: .sourceOver, fraction: 1)
+            }
+        } else if hovering, let overlay = NSImage(named: "Skitch_Cancel_DragMe") {
+            overlay.draw(in: NSRect(x: (bounds.width-overlay.size.width)/2, y: (bounds.height-overlay.size.height)/2, width: overlay.size.width, height: overlay.size.height), from: .zero, operation: .sourceOver, fraction: 1)
+        }
+    }
 }
 
 @MainActor
@@ -94,6 +173,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let dragSizeLabel = NSTextField(labelWithString: "")
     var dragExportView: DragExportView?
     var dragPreviewTimer: Timer?
+    var activeDragID: UUID?
+    var dragThumbnailID: UUID?
+    var dragThumbnailWindow: NSPanel?
     var actualButton: NSButton?
     var resizeButton: NSButton?
     let navigator = CanvasNavigator(frame: NSRect(x: 0, y: 0, width: 180, height: 170))
@@ -263,6 +345,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleVisible() {
         guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
+        if dragThumbnailWindow != nil {
+            removeDragThumbnail()
+            if UserDefaults.standard.integer(forKey: "statusMenu") == 2 { window.miniaturize(nil) }
+            writeLayoutEvidence(); return
+        }
         if !window.isVisible || window.isMiniaturized || !NSApp.isActive {
             makeVisible()
         } else {
@@ -276,6 +363,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func makeVisible() {
         guard !terminationStarted else { return }
+        removeDragThumbnail()
         NSApp.activate(ignoringOtherApps: true)
         if window.isMiniaturized { window.deminiaturize(nil) }
         window.makeKeyAndOrderFront(nil)
@@ -290,7 +378,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
         timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
+        removeDragThumbnail(); activeDragID = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
+    }
+    static func dragThumbnailRect(windowFrame: NSRect, controlRect: NSRect) -> NSRect {
+        guard windowFrame.width > 0, windowFrame.height > 0 else { return .zero }
+        let scale = 128 / max(windowFrame.width, windowFrame.height)
+        let width = max(90, windowFrame.width * scale), height = max(90, windowFrame.height * scale)
+        return NSRect(x: controlRect.midX-width/2, y: controlRect.midY-height/2, width: width, height: height).integral
+    }
+    func iconifyDrag(_ id: UUID) {
+        guard activeDragID == id, dragThumbnailWindow == nil, !terminationStarted,
+              window.isVisible, window.attachedSheet == nil, let drag = dragExportView,
+              let content = window.contentView, let bitmap = content.bitmapImageRepForCachingDisplay(in: content.bounds) else { return }
+        content.cacheDisplay(in: content.bounds, to: bitmap)
+        let image = NSImage(size: content.bounds.size); image.addRepresentation(bitmap)
+        let rect = Self.dragThumbnailRect(windowFrame: window.frame, controlRect: window.convertToScreen(drag.convert(drag.bounds, to: nil)))
+        let panel = NSPanel(contentRect: rect, styleMask: [.borderless], backing: .buffered, defer: false)
+        panel.isReleasedWhenClosed = false; panel.backgroundColor = .clear; panel.isOpaque = false
+        panel.hasShadow = true; panel.level = .statusBar; panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
+        let view = DragThumbnailView(frame: NSRect(origin: .zero, size: rect.size)); view.image = image
+        view.setAccessibilityElement(true); view.setAccessibilityRole(.button)
+        view.setAccessibilityLabel("Restore Skitch editor")
+        view.restore = { [weak self] in self?.restoreDragThumbnail(id) }
+        panel.contentView = view; dragThumbnailWindow = panel; dragThumbnailID = id
+        saveRecovery(); timer?.fireDate = .distantFuture
+        fontPanel?.orderOut(nil); navigatorWindow?.orderOut(nil)
+        panel.orderFrontRegardless(); window.orderOut(nil); writeLayoutEvidence()
+    }
+    func endDrag(_ id: UUID, succeeded: Bool) {
+        guard activeDragID == id, !terminationStarted else { return }
+        activeDragID = nil
+        if !succeeded { restoreDragThumbnail(id) }
+        else if dragThumbnailID == id {
+            (dragThumbnailWindow?.contentView as? DragThumbnailView)?.clickToExpand = true
+            writeLayoutEvidence()
+        }
+    }
+    func restoreDragThumbnail(_ id: UUID) {
+        guard dragThumbnailID == id, dragThumbnailWindow != nil, !terminationStarted else { return }
+        makeVisible()
+    }
+    func removeDragThumbnail() {
+        (dragThumbnailWindow?.contentView as? DragThumbnailView)?.restore = nil
+        dragThumbnailWindow?.orderOut(nil); dragThumbnailWindow?.close()
+        dragThumbnailWindow = nil; dragThumbnailID = nil
+    }
+    func replaceDragPresentation() {
+        activeDragID = nil
+        if dragThumbnailWindow != nil { makeVisible() }
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -342,11 +478,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:))
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         drag.prepare = { [weak self] in
-            guard let self, let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragAtOriginalSize, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
+            guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return nil }
+            self.canvas.commitPendingTextEditing()
+            self.updateDragPreview()
+            guard let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragAtOriginalSize, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
             let name = self.safeName(), generation = self.documentGeneration
             return DragExportView.Payload(data: data, name: name, format: self.dragFormat, delivered: { [weak self] url in
-                self?.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
+                guard let self, !self.terminationStarted else { return }
+                self.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
             })
+        }
+        drag.onBegin = { [weak self] id in self?.activeDragID = id }
+        drag.onLeaveControl = { [weak self] id in self?.iconifyDrag(id) }
+        drag.onEnd = { [weak self] id, succeeded in self?.endDrag(id, succeeded: succeeded) }
+        drag.onDeliveryFailure = { [weak self] id in
+            guard let self, !self.terminationStarted else { return }
+            if self.activeDragID == id { self.activeDragID = nil }
+            self.restoreDragThumbnail(id)
         }
         let actual = button("Actual Size", #selector(toggleActualSize)); actual.font = .systemFont(ofSize: 20); actualButton = actual
         let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
@@ -550,7 +698,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return false
     }
-    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; activeResizeSession?.cancel(); followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
+    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; replaceDragPresentation(); activeResizeSession?.cancel(); followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
     @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if p.runModal() == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
@@ -572,7 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); legacyMetadata = .init(); currentURL = nil }
             currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions()
             if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) { fitCanvasToWindow() } else { adoptRasterViewport() }
-            nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; updateStatus()
+            nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; replaceDragPresentation(); updateStatus()
         } catch { self.error(error) }
     }
     func save(forceChoose: Bool = false) -> Bool {
@@ -736,7 +884,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             try restoreHistoryEditorState(HistoryEditorState(data: file.canvasData, metadata: file.metadata,
                 name: entry.name, url: nil, archiveID: id, dirty: true))
             historyBrowser?.window?.orderOut(nil)
-            window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas)
+            replaceDragPresentation(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas)
         } catch { self.error(error); refreshHistory() }
     }
     func historyExport(_ id: UUID, format: String) throws -> Data {
@@ -936,7 +1084,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // here so timed, camera and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
-            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {
@@ -1241,6 +1389,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         var evidence: [String: Any] = ["windowFrame": NSStringFromRect(window.frame), "canvasScreenRect": NSStringFromRect(rect), "canvasInputTopLeft": [rect.minX,top-rect.maxY], "screenFrame": NSStringFromRect(NSScreen.screens.first?.frame ?? .zero), "nativeBackingScale":window.backingScaleFactor, "nameFontSize":nameField.font?.pointSize ?? 0,"statusFontSize":status.font?.pointSize ?? 0]
         evidence["shell"] = ["visible": window.isVisible, "miniaturized": window.isMiniaturized,
                              "statusMenu": UserDefaults.standard.integer(forKey: "statusMenu"), "menuIconInstalled": statusItem != nil]
+        evidence["dragThumbnail"] = ["present": dragThumbnailWindow != nil,
+                                     "frame": NSStringFromRect(dragThumbnailWindow?.frame ?? .zero),
+                                     "clickToExpand": (dragThumbnailWindow?.contentView as? DragThumbnailView)?.clickToExpand ?? false,
+                                     "dragging": activeDragID != nil]
         evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,
