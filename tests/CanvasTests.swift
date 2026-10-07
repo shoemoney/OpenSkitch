@@ -199,6 +199,7 @@ struct CanvasTests {
             ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
             ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
             ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
+            ("active text grip replaces stale selection chrome through move zoom commit and cancel", textGripSelectionChrome),
             ("Control eraser, secondary mouse and recovered modifier precedence", controlEraser),
             ("Space pans snap and drawing, preserves offscreen pixels and undo", spacePan),
             ("Tab Pencil toggle and Option eyedropper only notify UI", toolAndColorGestures),
@@ -1714,6 +1715,50 @@ struct CanvasTests {
         try expect(c.document == original && c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName,
                    "Existing annotation cancel leaves prior Undo and Redo unchanged")
         c.redo(); try expect(c.document.backgroundColor == SketchColor(.green), "Prior redo remains usable after grip cancel")
+    }
+    static func textGripSelectionChrome() throws {
+        let c = canvas(NSSize(width: 500, height: 300)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Move this text"
+        text.rect = CGRect(x: 80, y: 60, width: 220, height: 60)
+        let shape = rectangle(CGRect(x: 350, y: 180, width: 60, height: 50), color: .blue)
+        c.document.elements = [text, shape]; c.tool = .select; c.selection = [text.id]
+        let before = c.document
+        let reference = canvas(c.canvasSize)
+        reference.document = before; reference.document.elements.removeAll { $0.id == text.id }
+        func rendered(_ view: CanvasView) throws -> Data {
+            guard let data = SketchRenderer.bitmap(size: view.bounds.size, draw: { view.draw(view.bounds) })?
+                .representation(using: .png, properties: [:]) else {
+                throw Failure(description: "Selection chrome render")
+            }
+            return data
+        }
+        let selected = try rendered(c)
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 90, y: 70), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        try expect(try rendered(c) == rendered(reference), "Active text is represented by its native editor and grip, without stale selection pixels")
+        try expect(c.selection == [text.id] && c.selectionBounds == text.bounds && c.document == before,
+                   "Hiding editing chrome preserves committed selection geometry and document")
+        grip.mouseDragged(with: TextGripDragEvent(45, 25))
+        try expect(try rendered(c) == rendered(reference), "Movement does not leave resize handles at the old text position")
+        c.selection = [text.id, shape.id]; reference.selection = [shape.id]
+        try expect(try rendered(c) == rendered(reference), "Other selected artwork retains its own resize handles while text is pending")
+        c.zoom = 0.75; reference.zoom = 0.75
+        try expect(try rendered(c) == rendered(reference), "Zoom retains only non-editor chrome at the new display scale")
+        try expect(window.firstResponder === editor && c.hasPendingTextChanges && !c.editingUndoManager.canUndo,
+                   "Chrome drawing and zoom preserve typing focus and pending movement history")
+        let moved = try SketchDocument.decode(c.snapshotDocumentData())
+        c.commitPendingTextEditing(); reference.document = moved; reference.selection = c.selection
+        try expect(try rendered(c) == rendered(reference), "Committed text regains resize handles at its moved bounds")
+        try expect(editor.superview == nil && grip.superview == nil && c.document == moved,
+                   "Commit removes native editor and grip without losing the moved document")
+        c.undo(); c.selection = [text.id]; c.zoom = 1
+        try expect(c.document == before && (try rendered(c)) == selected, "Undo restores original text and selection pixels")
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 90, y: 70), clicks: 2))
+        c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!.mouseDragged(with: TextGripDragEvent(-20, 30))
+        c.cancelOperation(nil)
+        try expect(c.document == before && c.selection == [text.id] && (try rendered(c)) == selected,
+                   "Cancel restores original selection chrome without retaining pending editor geometry")
     }
     static func controlEraser() throws {
         let c = canvas(); let window = host(c); defer { window.close() }

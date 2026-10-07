@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-10-07T13:17:56.544853+00:00",
-  "checkpoint_id": "grip-final-051d184893",
+  "verified_at": "2026-10-07T13:58:45.201975+00:00",
+  "checkpoint_id": "selection-chrome-final-2301f19b1d",
   "checkpoint_state": "current_build_full_suites_startup_and_scoped_desktop_verified",
   "build": {
     "architectures": [
@@ -8,11 +8,11 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.g1K2iu",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.b9PRwl",
     "source_sha256": {
       "App.swift": "8b6bf31bc931e7d700251cf559b30650c11f469119d58318624d85e24b2a7828",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
-      "Canvas.swift": "15ea00436c20905eedec226d10f322376e8bedfb5a06afbe139d8b76d81ca534",
+      "Canvas.swift": "370ca31fe5c471bb58a858e4f826f3a6d57869c64be9c5f1966b681e7528d6ad",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -38,23 +38,23 @@
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
       "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7"
     },
-    "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9"
+    "binary_sha256": "2301f19b1d2232c9c2f8524acb63ab334f518af16e5503f619e357ef360c4030"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "81ac496a98549a2238a75ff63341236b146cf39eef95531a2c1d7427ea6ac9f2",
+  "build_manifest_sha256": "cac958d5982b3d0243c2f3de6c21ac65e6b5cb5f4755d38676ffd520b8c64009",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/grip-verification/build.log",
-  "build_log_sha256": "c1ba3dee90ff2e799101e07e2ebd2a1c5d5f561b5b05774006b767ee4330aa41",
+  "build_log_path": "build/selection-chrome-verification/build.log",
+  "build_log_sha256": "f6748b19f5bd383220dbe7b46c7dfea9674acdb5966594703aae925dcc85159c",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.f1muadiv",
-      "log_path": "build/grip-verification/arm64.log",
-      "log_sha256": "53f68fcc744fd8e258e36d62d76221649e544f611a3b7445d63a62fe3dff65bc",
-      "checks": 2488,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.6s98fve5",
+      "log_path": "build/selection-chrome-verification/arm64.log",
+      "log_sha256": "eb90bb50d1f97faeef2438ddfeb508586b52d01d817a9266861a66771d7149f5",
+      "checks": 2489,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -62,27 +62,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.s5ef08vx",
-      "log_path": "build/grip-verification/x86_64.log",
-      "log_sha256": "bff0ef12c350991ad27280917065d8a9f86a61304cdb167522503db906894743",
-      "checks": 2488,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.ksjggjgr",
+      "log_path": "build/selection-chrome-verification/x86_64.log",
+      "log_sha256": "2a020f4a63bb4208a6cca9bc8dcf9185207961ed892734bf7a52ed14f3ccfc6a",
+      "checks": 2489,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/grip-verification/results.json",
-  "full_suite_results_sha256": "bb971d4039a28c24d61af4b0086aa757cdfb15a6528590be3532db387c6dee57",
+  "full_suite_results_path": "build/selection-chrome-verification/results.json",
+  "full_suite_results_sha256": "a73a200f9bbd4f5b149ea92c0f036c8be00373d1f4ceed186fb79695516bfaea",
   "native_startup_smoke": {
-    "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9",
-    "verified_at": "2026-10-07T13:12:15.625932+00:00",
+    "binary_sha256": "2301f19b1d2232c9c2f8524acb63ab334f518af16e5503f619e357ef360c4030",
+    "verified_at": "2026-10-07T13:49:54.204671+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "412cf0e3370a7f390c45b4ad76993430c29314a087ab5bf50da0a2c766b1528d"
+      "editable_sha256": "ba00e1f7aab69fe96fe13800b9c14bb977acbb0495a44fe392306cc81df0f9a4"
     },
     "x86_64": {
       "passed": true,
@@ -90,11 +90,11 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "87d67ea13ee9431a72b022c43eba5cdc44ca936abbc163448ec4cd99a3dd898f"
+      "editable_sha256": "6c84c84b3259b4ae059aec772a6b3dd9c7fef33d955bd39642d195aac366aaaf"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-051d184893/results.json",
-  "native_startup_smoke_results_sha256": "8561e37ad3e4e4a480c075145d973cb8434c2d0361eb78a48716893d48ce51b3",
+  "native_startup_smoke_results_path": "build/startup-smoke-2301f19b1d/results.json",
+  "native_startup_smoke_results_sha256": "66732a9fbb014f4e636c0ee14814c3e9361c11d851cd55079905259c317a6773",
   "validation_tools_sha256": {
     "tools/test.py": "6af94957d08019ddcb30ed63bd5ce09f93f5efd9133c8052b093f2b9acedfe39",
     "tools/build.sh": "fb2bed4e7f646a086ffada50f262dbdfe79001b1924019768293fb18b412daf2",
@@ -102,35 +102,36 @@
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2488,
+    "checks_per_architecture": 2489,
     "suites": 23,
-    "results_path": "build/grip-verification/results.json",
-    "results_sha256": "bb971d4039a28c24d61af4b0086aa757cdfb15a6528590be3532db387c6dee57"
+    "results_path": "build/selection-chrome-verification/results.json",
+    "results_sha256": "a73a200f9bbd4f5b149ea92c0f036c8be00373d1f4ceed186fb79695516bfaea"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9",
-    "startup_log_path": "build/grip-verification/startup.log",
-    "startup_log_sha256": "544ccae4e3c5cefe2d5c7e4160f2ea1ec726cac2959320556f29497af46383ba"
+    "binary_sha256": "2301f19b1d2232c9c2f8524acb63ab334f518af16e5503f619e357ef360c4030",
+    "startup_log_path": "build/selection-chrome-verification/startup.log",
+    "startup_log_sha256": "739d352e91fafe976810c6b90840c9f063026e130c1e99c2620b497725a762a2"
   },
   "current_desktop_checks": [
     {
-      "id": "native-text-grip-final",
-      "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9",
+      "id": "native-text-selection-chrome-final",
+      "binary_sha256": "2301f19b1d2232c9c2f8524acb63ab334f518af16e5503f619e357ef360c4030",
       "architecture": "arm64",
       "passed": true,
-      "evidence_path": "build/grip-desktop-proof.json",
-      "evidence_sha256": "5e92a092eba03b7b9b8e42adfb53962ff424686019fe02b447d77d4a92278f9a",
-      "checkpoint_scope": "current_exact051d184893",
+      "evidence_path": "build/selection-chrome-desktop-proof.json",
+      "evidence_sha256": "f04167d2a0c77ff4bb1d6912d9fa3a7c3ceb782bed661eb1be436f1bbf48dcd7",
+      "checkpoint_scope": "current_exact2301f19b1d",
       "checks": [
-        "Final binary opened existing baseline; double-click starts editable text with exposed colored grip.",
-        "Drag from screenshot (889,738) to (1089,838) moved editor 100x50 source pixels while its text selection remained active.",
-        "Right then typing appended after drag in the same native editor; frame notification grew the grip to contain both wrapped lines.",
-        "Second drag from (1089,850) to (1189,890) moved another 50x20 source pixels without shrinking the multiline field.",
-        "Native Text/Spelling menu actions appeared enabled with the annotation responder active; toggle state and suggestions were not verified.",
-        "Escape committed typing and movement together; separate Save As preserved original baseline.",
-        "One Command-Z restored original text and placement. One Command-Shift-Z restored both. Separate saved files independently match each expected state.",
-        "Command-Q exited: Cua app inventory no longer contained Skitch Redux on the follow-up read. Fresh getApp and Open loaded Grip-redone-native.skitch with both lines at the moved position and Saved status."
+        "Current build opened Grip-before-native.skitch. Native double-click selected annotation text and displayed its exposed red grip without a second gold annotation resize box.",
+        "Cua drag from (889,738) to (1089,838) moved the grip and pending editor. Right followed by typing appended with clean selection while native Annotation text remained focused.",
+        "Pending screenshot shows multiline red grip at the new position and no annotation selection rectangle at the old position.",
+        "Escape removed editor/grip and restored eight gold resize handles around the moved two-line annotation.",
+        "Separate Save As wrote Selection-chrome-moved-native.skitch with Saved status, preserving the baseline file.",
+        "One Command-Z restored original text, placement and selection handles; a separate Undo save independently matches the baseline document.",
+        "One Command-Shift-Z restored moved text and selection handles. A separate Redo save independently matches the moved document.",
+        "Command-Q finished exiting: follow-up Cua app inventory no longer contained Skitch Redux. Fresh launch and Open loaded Selection-chrome-redone-native.skitch with moved multiline text and Saved status.",
+        "Single-click selection after reopening placed resize handles around the moved text."
       ]
     }
   ],
@@ -493,10 +494,38 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "grip-final-051d184893",
+      "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9",
+      "full_suite_results_path": "build/grip-verification/results.json",
+      "full_suite_results_sha256": "bb971d4039a28c24d61af4b0086aa757cdfb15a6528590be3532db387c6dee57",
+      "desktop_checks": [
+        {
+          "id": "native-text-grip-final",
+          "binary_sha256": "051d18489318a73a4881fa5fa5a09c7d46013c3e855b35d49bce0deba7837de9",
+          "architecture": "arm64",
+          "passed": true,
+          "evidence_path": "build/grip-desktop-proof.json",
+          "evidence_sha256": "5e92a092eba03b7b9b8e42adfb53962ff424686019fe02b447d77d4a92278f9a",
+          "checkpoint_scope": "current_exact051d184893",
+          "checks": [
+            "Final binary opened existing baseline; double-click starts editable text with exposed colored grip.",
+            "Drag from screenshot (889,738) to (1089,838) moved editor 100x50 source pixels while its text selection remained active.",
+            "Right then typing appended after drag in the same native editor; frame notification grew the grip to contain both wrapped lines.",
+            "Second drag from (1089,850) to (1189,890) moved another 50x20 source pixels without shrinking the multiline field.",
+            "Native Text/Spelling menu actions appeared enabled with the annotation responder active; toggle state and suggestions were not verified.",
+            "Escape committed typing and movement together; separate Save As preserved original baseline.",
+            "One Command-Z restored original text and placement. One Command-Shift-Z restored both. Separate saved files independently match each expected state.",
+            "Command-Q exited: Cua app inventory no longer contained Skitch Redux on the follow-up read. Fresh getApp and Open loaded Grip-redone-native.skitch with both lines at the moved position and Saved status."
+          ]
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
-  "text_verification_scope": "Recovered original text-grip geometry/drag and continuous spelling default, scoped reconstruction tests and native movement/save/reopen. Exact original runtime, adaptive colors, close reachability and font-panel appearance remain unverified.",
+  "text_verification_scope": "Active native text editor suppresses its committed selection box while retaining other selected artwork chrome. Executed pixel comparisons cover movement/zoom/commit/cancel/Undo; desktop checks are limited to listed current-binary observations. Original runtime equivalence and full font panel behavior remain unverified.",
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
@@ -520,9 +549,13 @@
     "Original adaptive outline/shadow colors, editor grip/close and mixed-font panel remain incomplete.",
     "Exact original 32-bit runtime visual/behavioral comparison and full original feature parity remain unverified.",
     "Native desktop checks are arm64 only. x86_64 regression/startup checks run under Rosetta; no physical Intel verification.",
-    "While pending text moves, general selection chrome still shows pre-edit document bounds; active-editor chrome fidelity remains incomplete.",
     "Font/style dialog visual layout, original adaptive outline/shadow colors and full original font-panel behavior remain unverified.",
     "Continuous spelling enabled default is verified by executed native-control tests. Desktop toggle state, spelling suggestions and spelling-panel behavior remain unverified.",
-    "SkitchTextClose is present in original metadata; construction not found in inspected initializer/class references/resources, so reachability and close-widget implementation remain unresolved."
+    "SkitchTextClose is present in original metadata; construction not found in inspected initializer/class references/resources, so reachability and close-widget implementation remain unresolved.",
+    "Full original feature parity and exact original 32-bit runtime visual/behavioral comparison remain unverified.",
+    "Native desktop checks are arm64 only. x86_64 suites/startup run under Rosetta, without physical Intel verification.",
+    "Mixed selections, zoom and explicit cancel have executed Canvas regression coverage; this desktop run covered one existing text annotation, movement, typing, commit, Undo/Redo and save/reopen.",
+    "Original modeless font panel, mixed font conversion, adaptive outline/shadow colors and text-close widget reachability remain incomplete or unverified.",
+    "Capture/camera/Photos permissions, hardware, physical tablet behavior, legacy services and complete publication workflows were not exercised by this checkpoint."
   ]
 }

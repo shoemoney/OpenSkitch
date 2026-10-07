@@ -1137,7 +1137,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     private func drawSelectionChrome() {
         NSColor.controlAccentColor.setStroke()
-        if let bounds = selectionBounds, !selection.isEmpty {
+        if let bounds = selectedBounds(excluding: editingTextID) {
             let path = NSBezierPath(rect: viewRect(bounds).insetBy(dx: -2, dy: -2))
             path.lineWidth = 1.5; path.stroke()
             for point in handlePoints(for: bounds) {
@@ -1249,7 +1249,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
         CGRect(x: rect.minX * displayScale.width, y: rect.minY * displayScale.height, width: rect.width * displayScale.width, height: rect.height * displayScale.height)
     }
     var selectionBounds: CGRect? {
-        let elements = document.elements.filter { selection.contains($0.id) }
+        selectedBounds(excluding: nil)
+    }
+    private func selectedBounds(excluding editorID: UUID?) -> CGRect? {
+        // The native editor's grip supplies its editing frame. The committed
+        // annotation may be moving in a pending transaction, so its old bounds
+        // must not leave a second resize box behind. Other selections keep theirs.
+        let elements = document.elements.filter { selection.contains($0.id) && $0.id != editorID }
         return elements.dropFirst().reduce(elements.first?.bounds) { result, element in
             result?.union(element.bounds) ?? element.bounds
         }
