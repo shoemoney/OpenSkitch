@@ -19,6 +19,17 @@ final class AppSafetyWindow: NSWindow {
     override func orderBack(_ sender: Any?) {}
 }
 
+final class AppSafetyFontPanel: NSFontPanel {
+    var shown = false
+    var conversion: ((NSFont) -> NSFont)?
+    override var isVisible: Bool { shown }
+    override func orderFront(_ sender: Any?) { shown = true }
+    override func makeKeyAndOrderFront(_ sender: Any?) { shown = true }
+    override func orderOut(_ sender: Any?) { shown = false }
+    override func close() { shown = false }
+    override func convert(_ font: NSFont) -> NSFont { conversion?(font) ?? font }
+}
+
 enum AppSafetyActivation {
     static func suppress() {}
 }
@@ -91,7 +102,6 @@ final class AppSafetyAlert: NSAlert {
         let title: String
         let response: NSApplication.ModalResponse
         var text: String? = nil
-        var configureTextStyle: ((TextStyleForm) -> Void)? = nil
     }
     static var answers: [Answer] = []
     static var seen: [String] = []
@@ -106,7 +116,6 @@ final class AppSafetyAlert: NSAlert {
         let answer = Self.answers.removeFirst()
         if answer.title != messageText { Self.unexpected.append(messageText) }
         if let text = answer.text, let field = accessoryView as? NSTextField { field.stringValue = text }
-        if let form = accessoryView as? TextStyleForm { answer.configureTextStyle?(form) }
         return answer.response
     }
 }
@@ -243,6 +252,7 @@ enum AppSafetyTests {
                 app.historyFollowTimer?.invalidate()
                 app.dragPreviewTimer?.invalidate()
                 app.navigatorTimer?.invalidate()
+                app.closeFontPanel()
                 app.navigatorWindow?.orderOut(nil)
                 app.navigatorWindow?.close()
                 app.window.delegate = nil
@@ -1776,18 +1786,20 @@ enum AppSafetyTests {
         var shape = SketchElement(kind: .rectangle); shape.rect = CGRect(x: 320, y: 20, width: 100, height: 80)
         app.canvas.document.elements = [text, shape]; app.canvas.selection = [text.id, shape.id]
         let before = try app.canvas.snapshotDocumentData()
-        AppSafetyAlert.answers = [.init(title: "Skitch Text Style", response: .alertSecondButtonReturn, configureTextStyle: { form in
-            form.restoreDefault(); form.size.stringValue = "48"
-        })]
         app.chooseFont()
-        try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo, "Cancelled style form does not alter selected artwork")
-        AppSafetyAlert.answers = [.init(title: "Skitch Text Style", response: .alertFirstButtonReturn, configureTextStyle: { form in
-            precondition(form.resolvedFont()?.fontName == "Courier-Bold" && form.resolvedFont()?.pointSize == 37)
-            form.restoreDefault(); form.size.stringValue = "48"
-        })]
-        app.chooseFont(); let after = app.canvas.document
-        try expect(after.elements[0].fontName == "Helvetica-Bold" && after.elements[0].fontSize == 48 && after.elements[0].outlined && after.elements[0].shadowed, "Dialog restores original style with explicit size")
-        try expect(after.elements[0].color == text.color && after.elements[1] == shape, "Dialog leaves color and shape intact")
+        guard let panel = app.fontPanel as? AppSafetyFontPanel, let form = app.textStyleForm else { throw Failure(description: "Native Font Panel factory") }
+        try expect(panel.isVisible && app.window.attachedSheet == nil && panel.accessoryView === form && NSFontManager.shared.target === app, "Font Panel is modeless with original custom effects accessory")
+        try expect(app.validModesForFontPanel(panel).rawValue == 7 && NSFontManager.shared.selectedFont?.fontName == "Courier-Bold" && NSFontManager.shared.selectedFont?.pointSize == 37, "Original face size collections mask and selected font")
+        try expect(try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo, "Opening Fonts has no document mutation")
+        app.chooseFont(); try expect(!panel.isVisible && (try app.canvas.snapshotDocumentData()) == before, "Original Show/Hide toggle does not change artwork")
+        app.chooseFont()
+        panel.conversion = { _ in NSFont(name: "Helvetica-Bold", size: 48)! }
+        form.setChoices(outlined: true, shadowed: true); app.changeFont(NSFontManager.shared)
+        let after = app.canvas.document
+        try expect(after.elements[0].fontName == "Helvetica-Bold" && after.elements[0].fontSize == 48 && after.elements[0].outlined && after.elements[0].shadowed, "Native font action applies converted font and effects live")
+        try expect(after.elements[0].color == text.color && after.elements[1] == shape && panel.isVisible, "Live action leaves colors/shapes intact and keeps Fonts open")
+        try expect(app.windowShouldClose(panel) && AppSafetyTermination.requests == 0, "Closing Fonts does not quit the application")
+        panel.close(); try expect(!panel.isVisible && app.canvas.document == after, "Closing modeless Fonts retains committed live changes")
         app.canvas.undo(); try expect(try app.canvas.snapshotDocumentData() == before, "App font action is one Undo")
         app.toggleTextShadow(); app.toggleOutline()
         try expect(app.canvas.document.elements[0].fontName == text.fontName && app.canvas.document.elements[0].fontSize == 37 && app.canvas.document.elements[0].outlined && app.canvas.document.elements[0].shadowed && app.canvas.document.elements[1] == shape, "Effect toggles invert selected text rather than stale defaults, preserving fonts and shapes")
@@ -1798,6 +1810,50 @@ enum AppSafetyTests {
         let spelling = textMenu.items.compactMap(\.submenu).first { $0.title == "Spelling" }!
         try expect(spelling.items.map { NSStringFromSelector($0.action!) } == ["showGuessPanel:", "checkSpelling:", "toggleContinuousSpellChecking:"] && spelling.items.allSatisfy { $0.target == nil }, "Original spelling selectors retain responder-chain routing")
         try expect(spelling.items.map(\.keyEquivalent) == [":", ";", ""], "Original spelling keyboard equivalents")
+    }
+    static func fontPanelContextAndPending() throws {
+        let fixture = try Fixture(), app = fixture.app
+        var a = SketchElement(kind: .text); a.text = "First"; a.fontName = "Helvetica-Bold"; a.fontSize = 23
+        a.rect = CGRect(x: 30, y: 30, width: 250, height: 70); a.outlined = false; a.shadowed = true
+        var b = a; b.id = UUID(); b.text = "Second"; b.fontSize = 37; b.rect.origin.y = 160; b.outlined = true; b.shadowed = false
+        app.canvas.document.elements = [a,b]; app.canvas.selection = [a.id,b.id]
+        app.chooseFont()
+        let panel = app.fontPanel as! AppSafetyFontPanel, form = app.textStyleForm!
+        try expect(NSFontManager.shared.isMultiple && form.outlineChoice == nil && form.shadowChoice == nil, "Different selected effects display original mixed states")
+        panel.conversion = { NSFontManager.shared.convert($0, toFamily: "Courier") }
+        app.changeFont(NSFontManager.shared)
+        for (old,new) in zip([a,b],app.canvas.document.elements) {
+            try expect(NSFont(name: new.fontName, size: new.fontSize)?.familyName == "Courier" && new.fontSize == old.fontSize && new.outlined == old.outlined && new.shadowed == old.shadowed, "Panel converts each selected font without flattening mixed sizes or effects")
+        }
+        app.canvas.zoom = 0.5
+        try expect(NSFontManager.shared.selectedFont?.pointSize == 11.5, "Panel follows displayed font scale without modifying source size")
+        app.canvas.selection = [b.id]
+        try expect(!NSFontManager.shared.isMultiple && NSFontManager.shared.selectedFont?.pointSize == 18.5 && form.outlineChoice == true && form.shadowChoice == false, "Changing selection refreshes the same modeless panel")
+        let beforeReplacement = app.canvas.document
+        let field = try editor(app, text: "Live field")
+        let typing = field.undoManager, caret = field.selectedRange()
+        panel.conversion = { NSFontManager.shared.convert($0, toSize: 20) }
+        app.changeFont(NSFontManager.shared)
+        try expect(field.superview === app.canvas && app.window.firstResponder === field && field.undoManager === typing && field.selectedRange() == caret && panel.isVisible, "Modeless font action retains native typing focus and history")
+        let pending = try SketchDocument.decode(app.canvas.snapshotDocumentData())
+        try expect(pending.elements.last?.fontSize == 40 && field.font?.pointSize == 20 && app.dirty, "Displayed panel size converts back to source pixels and dirties recovery")
+        app.defaultTextStyle()
+        let defaults = try SketchDocument.decode(app.canvas.snapshotDocumentData()).elements.last!
+        try expect(defaults.fontSize == 40 && defaults.fontName == "Helvetica-Bold" && defaults.outlined && defaults.shadowed && field.superview === app.canvas, "Default Style preserves pending size and native editor")
+        app.toggleOutline(); app.toggleOutline(); app.toggleTextShadow(); app.toggleTextShadow()
+        let toggled = try SketchDocument.decode(app.canvas.snapshotDocumentData()).elements.last!
+        try expect(toggled.outlined && toggled.shadowed && field.superview === app.canvas,
+                   "Repeated text-menu toggles use staged effects and retain active typing")
+        app.canvas.cancelOperation(nil)
+        try expect(app.canvas.document == beforeReplacement, "Cancel abandons new field and its live font changes")
+        app.canvas.newBlank(size: NSSize(width: 200, height: 150))
+        panel.conversion = { NSFontManager.shared.convert($0, toFamily: "Courier") }
+        app.changeFont(NSFontManager.shared)
+        try expect(app.canvas.document.elements.isEmpty && app.canvas.fontName.contains("Courier"), "An open panel follows a replaced document and changes only future defaults")
+        let future = app.canvas.fontName; app.terminationStarted = true
+        panel.conversion = { NSFontManager.shared.convert($0, toFamily: "Helvetica") }
+        app.changeFont(NSFontManager.shared); form.outline.performClick(nil)
+        try expect(app.canvas.fontName == future && app.canvas.document.elements.isEmpty, "Termination blocks late panel and accessory actions")
     }
     static func resizeSheetPreviewLifecycle() throws {
         let fixture = try Fixture(), app = fixture.app
@@ -2393,7 +2449,11 @@ enum AppSafetyTests {
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
             fputs("Run tools/test-app-safety.sh for isolated execution.\n", stderr); exit(2)
         }
+        NSFontManager.setFontPanelFactory(AppSafetyFontPanel.self)
         _ = NSApplication.shared; NSApp.setActivationPolicy(.prohibited)
+        guard NSFontManager.shared.fontPanel(true) is AppSafetyFontPanel else {
+            fputs("Font panel test factory failed; no window will be ordered.\n", stderr); exit(2)
+        }
         if CommandLine.arguments.contains("--native-idle-termination") {
             let delegate = AppSafetyNativeTerminationDelegate(evidence: URL(fileURLWithPath: evidence))
             NSApp.delegate = delegate
@@ -2402,6 +2462,7 @@ enum AppSafetyTests {
         }
         let tests: [(String, () throws -> Void)] = [
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
+            ("Modeless Fonts follows mixed selections scale pending editors and document replacement", fontPanelContextAndPending),
             ("Resize Apply previews from one baseline; Cancel restores all state; OK commits one crop Undo", resizeSheetPreviewLifecycle),
             ("Resize first-Apply baseline, native Save and independent edits prevent stale preview rollback", resizePreviewInterruptionAndSave),
             ("Resize previews cannot overwrite recovery/History or enter Open History Undo", resizePreviewRecoveryAndHistory),

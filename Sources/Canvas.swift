@@ -6,6 +6,53 @@ private final class SketchTextEditor: NSTextView {
     // Native typing history stays separate from document transactions. Committing
     // an annotation registers one canvas undo step, regardless of keystroke count.
     private let typingHistory = UndoManager()
+    private var refreshingStyle = false
+    private var annotationStyle: (SketchElement, CGFloat)?
+    private var styleObservers: [NSObjectProtocol] = []
+    deinit { for observer in styleObservers { NotificationCenter.default.removeObserver(observer) } }
+    func applyAnnotationStyle(_ element: SketchElement, scale: CGFloat) {
+        guard !refreshingStyle else { return }
+        annotationStyle = (element, scale)
+        if styleObservers.isEmpty {
+            for name in [NSNotification.Name.NSUndoManagerDidUndoChange, NSNotification.Name.NSUndoManagerDidRedoChange] {
+                styleObservers.append(NotificationCenter.default.addObserver(forName: name, object: typingHistory, queue: nil) { [weak self] _ in
+                    guard let self, let (element, scale) = self.annotationStyle else { return }
+                    self.applyAnnotationStyle(element, scale: scale)
+                })
+            }
+        }
+        refreshingStyle = true
+        defer { refreshingStyle = false }
+        let caret = selectedRange()
+        let displayedSize = max(18, element.fontSize * scale)
+        let displayedFont = NSFont(name: element.fontName, size: displayedSize) ?? .boldSystemFont(ofSize: displayedSize)
+        // Native typing Undo restores attributed strings as well as words. The
+        // annotation's staged style remains authoritative throughout editing.
+        if font != displayedFont { font = displayedFont }
+        textColor = element.color.nsColor
+        var attributes: [NSAttributedString.Key: Any] = [
+            .font: displayedFont, .foregroundColor: element.color.nsColor,
+            .paragraphStyle: SketchRenderer.textParagraphStyle
+        ]
+        if element.outlined { attributes[.strokeColor] = NSColor.white; attributes[.strokeWidth] = -3 }
+        if element.shadowed {
+            let shadow = NSShadow()
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
+            shadow.shadowBlurRadius = 4 * scale
+            shadow.shadowOffset = NSSize(width: 2 * scale, height: -3 * scale)
+            attributes[.shadow] = shadow
+        }
+        let range = NSRange(location: 0, length: (string as NSString).length)
+        textStorage?.beginEditing()
+        for key in [NSAttributedString.Key.strokeColor, .strokeWidth, .shadow] where attributes[key] == nil {
+            textStorage?.removeAttribute(key, range: range)
+        }
+        textStorage?.addAttributes(attributes, range: range)
+        textStorage?.endEditing()
+        typingAttributes = attributes
+        setSelectedRange(caret)
+        needsDisplay = true
+    }
     override var undoManager: UndoManager? { typingHistory }
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = super.menu(for: event) ?? NSMenu()
@@ -142,6 +189,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             if !zoom.isFinite { zoom = oldValue; return }
             zoom = min(16, max(0.05, zoom))
             updateCanvasSize()
+            onTextStyleContextChange?()
         }
     }
     var document = SketchDocument() {
@@ -152,6 +200,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             if replacement { actualNormalOutputSize = nil; resetGesture() }
             if !settingPanBackground && oldValue.backgroundPNG != document.backgroundPNG { panBackground = nil }
             updateCanvasSize(); needsDisplay = true
+            onTextStyleContextChange?()
             if replacement, viewportEdit != nil {
                 // The incoming document is authoritative; cancel the shell gesture
                 // without restoring the old document over its replacement.
@@ -163,6 +212,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     var onChange: (() -> Void)?
     var onTextStyleRequested: (() -> Void)?
+    var onTextStyleContextChange: (() -> Void)?
     /// Called after an in-flight viewport edit has been cancelled and cleared.
     var onViewportEditCancelled: (() -> Void)?
     var onHistoryRestored: ((CGSize) -> Void)?
@@ -211,7 +261,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     override var intrinsicContentSize: NSSize { NSSize(width: outputSize.width * zoom, height: outputSize.height * zoom) }
 
     // Internal access also makes the executable tests independent of a visible window.
-    var selection: Set<UUID> = [] { didSet { needsDisplay = true } }
+    var selection: Set<UUID> = [] { didSet { needsDisplay = true; onTextStyleContextChange?() } }
     var cropRect: CGRect? { didSet { needsDisplay = true } }
     private var preview: SketchElement?
     private var marquee: CGRect?
@@ -242,9 +292,24 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var strokeSamples: [StrokeSample] = []
     private var drawingPencil = false
     private var tabletEraser = false
-    private var textEditor: NSTextView?
+    private var textEditor: SketchTextEditor?
     private var textEditorGrip: SketchTextGrip?
     private var textEditorOffset: CGPoint = .zero
+    private struct PendingTextStyle: Equatable {
+        var fontName: String
+        var fontSize: CGFloat
+        var outlined: Bool
+        var shadowed: Bool
+        init(_ element: SketchElement) {
+            fontName = element.fontName; fontSize = element.fontSize
+            outlined = element.outlined; shadowed = element.shadowed
+        }
+        func apply(to element: inout SketchElement) {
+            element.fontName = fontName; element.fontSize = fontSize
+            element.outlined = outlined; element.shadowed = shadowed
+        }
+    }
+    private var pendingTextStyles: [UUID: PendingTextStyle] = [:]
     private var editingTextID: UUID?
     private var textBeforeEditing: EditorState?
     private var isFinishingText = false
@@ -327,9 +392,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if frame.size != size { setFrameSize(size) }
         invalidateIntrinsicContentSize()
         if let editor = textEditor, let id = editingTextID,
-           let element = document.elements.first(where: { $0.id == id }) {
-            editor.frame = viewRect(element.bounds).offsetBy(dx: textEditorOffset.x * displayScale.width,
-                                                            dy: textEditorOffset.y * displayScale.height)
+           let source = document.elements.first(where: { $0.id == id }) {
+            let element = elementIncludingPendingText(source)
+            editor.frame = viewRect(element.bounds)
+            editor.applyAnnotationStyle(element, scale: displayScale.height)
             textEditorGrip?.frame = SketchTextGrip.attachedFrame(editor.frame)
         }
         needsDisplay = true
@@ -650,23 +716,55 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     func restoreDefaultTextStyle() {
         fontName = "Helvetica-Bold"; outlined = true; shadowed = true
-        edit("Default Skitch Style") {
-            for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind == .text {
-                document.elements[index].fontName = fontName
-                document.elements[index].outlined = true; document.elements[index].shadowed = true
-                // The recovered original reset preserves each selected text size.
-                document.elements[index].rect.size.height = textHeight(for: document.elements[index])
-            }
-        }
+        convertSelectedTextFonts({ NSFont(name: "Helvetica-Bold", size: $0.pointSize) }, outline: true, shadow: true, name: "Default Skitch Style")
     }
 
     func applyTextEffectsToSelection(outline: Bool? = nil, shadow: Bool? = nil) {
-        edit("Change Text Style") {
-            for index in document.elements.indices where selection.contains(document.elements[index].id) && document.elements[index].kind == .text {
-                if let outline { document.elements[index].outlined = outline }
-                if let shadow { document.elements[index].shadowed = shadow }
+        convertSelectedTextFonts(nil, outline: outline, shadow: shadow)
+    }
+
+    var selectedTextElements: [SketchElement] {
+        document.elements.filter { $0.kind == .text && selection.contains($0.id) }.map(elementIncludingPendingText)
+    }
+    /// Convert each original font independently. A mixed effect is nil and keeps
+    /// each annotation's value. Validate every result before touching pending work.
+    @discardableResult
+    func convertSelectedTextFonts(_ convert: ((NSFont) -> NSFont?)?, outline: Bool? = nil,
+                                  shadow: Bool? = nil, name: String = "Change Text Style") -> Bool {
+        let selected = selectedTextElements
+        var styles: [UUID: PendingTextStyle] = [:]
+        for element in selected {
+            var style = PendingTextStyle(element)
+            if let convert {
+                let old = NSFont(name: element.fontName, size: element.fontSize) ?? .boldSystemFont(ofSize: element.fontSize)
+                guard let font = convert(old), font.pointSize.isFinite, font.pointSize > 0, font.pointSize <= 4096,
+                      font.pointSize >= 18 || font.pointSize == element.fontSize else { return false }
+                style.fontName = font.fontName; style.fontSize = font.pointSize
+            }
+            if let outline { style.outlined = outline }
+            if let shadow { style.shadowed = shadow }
+            if style != PendingTextStyle(element) { styles[element.id] = style }
+        }
+        guard !styles.isEmpty else { return true }
+        if let editor = textEditor {
+            let caret = editor.selectedRange()
+            pendingTextStyles.merge(styles) { _, new in new }
+            updateCanvasSize()
+            editor.setSelectedRange(caret)
+            onTextStyleContextChange?(); onChange?()
+        } else {
+            edit(name) {
+                for index in document.elements.indices {
+                    guard let style = styles[document.elements[index].id] else { continue }
+                    let old = document.elements[index]
+                    style.apply(to: &document.elements[index])
+                    if old.fontName != style.fontName || old.fontSize != style.fontSize {
+                        document.elements[index].rect.size.height = textHeight(for: document.elements[index])
+                    }
+                }
             }
         }
+        return true
     }
 
     func copySelection() {
@@ -1110,7 +1208,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if framePreview { context?.clear(dirtyRect) }
         context?.scaleBy(x: displayScale.width, y: displayScale.height)
         if !framePreview { drawCheckerboard(in: document.canvasRect) }
-        var visible = document
+        var visible = documentIncludingPendingText()
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
         SketchRenderer.draw(visible, includeBackground: !framePreview)
         if let preview { SketchRenderer.draw(preview) }
@@ -1256,6 +1354,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         // annotation may be moving in a pending transaction, so its old bounds
         // must not leave a second resize box behind. Other selections keep theirs.
         let elements = document.elements.filter { selection.contains($0.id) && $0.id != editorID }
+            .map { editorID == nil ? $0 : elementIncludingPendingText($0) }
         return elements.dropFirst().reduce(elements.first?.bounds) { result, element in
             result?.union(element.bounds) ?? element.bounds
         }
@@ -1546,35 +1645,40 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     private func documentIncludingPendingText() -> SketchDocument {
         var snapshot = document
-        guard let editor = textEditor, let id = editingTextID,
-              let index = snapshot.elements.firstIndex(where: { $0.id == id }) else { return snapshot }
-        if editor.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            snapshot.elements.remove(at: index)
-        } else {
-            snapshot.elements[index].translate(x: textEditorOffset.x, y: textEditorOffset.y)
-            if snapshot.elements[index].text != editor.string {
-                snapshot.elements[index].text = editor.string
-                snapshot.elements[index].rect.size.height = textHeight(for: snapshot.elements[index])
-            }
+        snapshot.elements = document.elements.map(elementIncludingPendingText).filter {
+            $0.id != editingTextID || !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
         return snapshot
+    }
+    private func elementIncludingPendingText(_ source: SketchElement) -> SketchElement {
+        var element = source
+        pendingTextStyles[element.id]?.apply(to: &element)
+        if element.id == editingTextID, let editor = textEditor {
+            element.text = editor.string
+            element.translate(x: textEditorOffset.x, y: textEditorOffset.y)
+        }
+        if element.kind == .text, element.text != source.text || element.fontName != source.fontName || element.fontSize != source.fontSize {
+            element.rect.size.height = textHeight(for: element)
+        }
+        return element
     }
     private func beginTextEditing(_ id: UUID, before: EditorState? = nil) {
         guard let element = document.elements.first(where: { $0.id == id }) else { return }
         textBeforeEditing = before ?? state
         resetGesture()
         editingTextID = id
-        textEditorOffset = .zero
+        textEditorOffset = .zero; pendingTextStyles.removeAll()
         let editor = SketchTextEditor(frame: viewRect(element.bounds))
         editor.isRichText = false; editor.isEditable = true; editor.isSelectable = true
         editor.allowsUndo = true; editor.isContinuousSpellCheckingEnabled = true
-        editor.drawsBackground = true
-        editor.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.96)
+        editor.usesFontPanel = true
+        editor.drawsBackground = false
         editor.font = NSFont(name: element.fontName, size: max(18, element.fontSize * displayScale.height)) ??
             NSFont.boldSystemFont(ofSize: max(18, element.fontSize * displayScale.height))
         editor.textColor = element.color.nsColor
         editor.textContainerInset = NSSize(width: 4, height: 4)
         editor.string = element.text
+        editor.applyAnnotationStyle(element, scale: displayScale.height)
         editor.delegate = self
         editor.setAccessibilityLabel("Annotation text")
         textEditor = editor; addSubview(editor)
@@ -1589,6 +1693,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         window?.makeFirstResponder(editor)
         editor.selectAll(nil)
         needsDisplay = true
+        onTextStyleContextChange?()
     }
     private func movePendingText(by delta: CGSize) {
         guard !isFinishingText, let editor = textEditor, let id = editingTextID,
@@ -1610,6 +1715,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     func textDidChange(_ notification: Notification) {
         guard !isFinishingText, let editor = textEditor, notification.object as? NSTextView === editor else { return }
+        if let id = editingTextID, let source = document.elements.first(where: { $0.id == id }) {
+            editor.applyAnnotationStyle(elementIncludingPendingText(source), scale: displayScale.height)
+        }
         needsDisplay = true
         onChange?()
     }
@@ -1633,7 +1741,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         isFinishingText = true
         let before = textBeforeEditing
         let pending = documentIncludingPendingText()
-        textEditorOffset = .zero
+        textEditorOffset = .zero; pendingTextStyles.removeAll()
         if cancel, let before {
             restoreEditorState(before)
         } else {
@@ -1652,6 +1760,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if !cancel, let before { recordUndo(before, name: "Edit Text") }
         if cancel && hadPendingChanges { onChange?() }
         needsDisplay = true
+        onTextStyleContextChange?()
     }
     private func startTyping(with event: NSEvent) -> Bool {
         guard viewportEdit == nil, window?.firstResponder === self, textEditor == nil, dragMode == .none, !spaceHeld,

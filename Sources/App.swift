@@ -55,7 +55,7 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, NSFontChanging, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate {
     var window: NSWindow!
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
     let capture = CaptureCoordinator()
@@ -99,6 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var windowGesture: WindowGesture?
     var adjustingWindowFrame = false
     var navigatorTimer: Timer?
+    var fontPanel: NSFontPanel?
+    var textStyleForm: TextStyleForm?
+    var fontPanelRefreshTimer: Timer?
+    var fontPanelRecordedTypography = false
+    var applyingFontChange = false
     var activeResizeSession: ResizePanelSession?
     var toolButtons: [SketchTool: NSButton] = [:]
     var currentURL: URL?
@@ -142,6 +147,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
+        canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection() }
         canvas.onViewportEditCancelled = { [weak self] in
             self?.endWindowGesture(cancelled: true)
             self?.activeResizeSession?.cancel()
@@ -216,7 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationWillTerminate(_ notification: Notification) {
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
-        timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); try? hotkeys.unregister()
+        timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -343,6 +349,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(chooseFont) {
+            menuItem.title = fontPanel?.isVisible == true ? "Hide Fonts" : "Show Fonts"
+            return !terminationStarted
+        }
         if menuItem.action == #selector(toggleActualSize) { menuItem.state = isActualSize ? .on : .off; return canToggleActualSize }
         if menuItem.action == #selector(resize) { return !isActualSize && !frameMode }
         if menuItem.action == #selector(changeSmoothing(_:)) {
@@ -962,24 +972,102 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func prompt(_ title: String, text: String, value: String) -> String? { let a = NSAlert(); a.messageText = title; a.informativeText = text; let field = NSTextField(string: value); field.font = .systemFont(ofSize: 20); field.frame = NSRect(x: 0,y: 0,width: 340,height: 32); a.accessoryView = field; a.addButton(withTitle: "OK"); a.addButton(withTitle: "Cancel"); return a.runModal() == .alertFirstButtonReturn ? field.stringValue : nil }
     @objc func chooseFont() {
         guard !terminationStarted else { return }
-        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
-        let font = NSFont(name: selected?.fontName ?? canvas.fontName, size: selected?.fontSize ?? canvas.fontSize) ?? .boldSystemFont(ofSize: 24)
-        let form = TextStyleForm(font: font, outlined: selected?.outlined ?? canvas.outlined, shadowed: selected?.shadowed ?? canvas.shadowed)
-        let alert = NSAlert(); alert.messageText = "Skitch Text Style"; alert.accessoryView = form
-        alert.addButton(withTitle: "Apply"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn, let font = form.resolvedFont() else { return }
-        canvas.fontName = font.fontName; canvas.fontSize = font.pointSize
-        canvas.outlined = form.outline.state == .on; canvas.shadowed = form.shadowControl.state == .on
-        canvas.applyTextStyleToSelection(includingShadow: true); window.makeFirstResponder(canvas)
+        if let panel = fontPanel, panel.isVisible { panel.orderOut(nil); fontPanelRefreshTimer?.invalidate(); return }
+        let panel = NSFontManager.shared.fontPanel(true) ?? NSFontPanel.shared
+        fontPanel = panel; panel.delegate = self; panel.isReleasedWhenClosed = false
+        let form = textStyleForm ?? TextStyleForm(outlined: canvas.outlined, shadowed: canvas.shadowed)
+        textStyleForm = form; panel.accessoryView = form
+        form.onOutlineChange = { [weak self] value in
+            guard let self, !self.terminationStarted else { return }
+            self.canvas.outlined = value; self.canvas.applyTextEffectsToSelection(outline: value); self.syncFontPanelSelection()
+        }
+        form.onShadowChange = { [weak self] value in
+            guard let self, !self.terminationStarted else { return }
+            self.canvas.shadowed = value; self.canvas.applyTextEffectsToSelection(shadow: value); self.syncFontPanelSelection()
+        }
+        form.onDefaultRequested = { [weak self] in self?.defaultTextStyle() }
+        let manager = NSFontManager.shared; manager.target = self; manager.action = #selector(changeFont(_:))
+        syncFontPanelSelection()
+        panel.orderFront(nil)
+        // AppKit restores the shared panel's saved small frame when first shown.
+        // Size the loaded panel, then keep all readable controls on this screen.
+        panel.setContentSize(NSSize(width: 940, height: 720))
+        if let main = window, let screen = main.screen {
+            let visible = screen.visibleFrame.insetBy(dx: 12, dy: 12)
+            var frame = panel.frame
+            frame.origin = CGPoint(x: min(max(main.frame.midX - frame.width / 2, visible.minX), visible.maxX - frame.width),
+                                   y: min(max(main.frame.midY - frame.height / 2, visible.minY), visible.maxY - frame.height))
+            panel.setFrame(frame, display: true)
+        }
+        TextStyleForm.prepareFontPanelLayout(panel)
+        TextStyleForm.prepareFontPanel(panel)
+        if window != nil { writeLayoutEvidence() }
+        fontPanelRefreshTimer?.invalidate()
+        fontPanelRecordedTypography = false
+        fontPanelRefreshTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, let panel = self.fontPanel, panel.isVisible else { self?.fontPanelRefreshTimer?.invalidate(); return }
+                // The modern shared panel creates its split views after Show.
+                // Apply the opening layout once those native views are loaded.
+                if !self.fontPanelRecordedTypography { TextStyleForm.prepareFontPanelLayout(panel) }
+                TextStyleForm.prepareFontPanel(panel)
+                if self.window != nil, !self.fontPanelRecordedTypography {
+                    self.writeLayoutEvidence(); self.fontPanelRecordedTypography = true
+                }
+            }
+        }
     }
-    @objc func defaultTextStyle() { canvas.restoreDefaultTextStyle() }
+    func validModesForFontPanel(_ fontPanel: NSFontPanel) -> NSFontPanel.ModeMask { NSFontPanel.ModeMask(rawValue: 7) }
+    func syncFontPanelSelection() {
+        guard fontPanel != nil, !applyingFontChange else { return }
+        let selected = canvas.selectedTextElements
+        let first = selected.first
+        let source = NSFont(name: first?.fontName ?? canvas.fontName, size: first?.fontSize ?? canvas.fontSize) ?? .boldSystemFont(ofSize: 24)
+        let displayed = NSFontManager.shared.convert(source, toSize: source.pointSize * canvas.displayScale.height)
+        NSFontManager.shared.setSelectedFont(displayed, isMultiple: selected.count > 1)
+        func uniform(_ values: [Bool], fallback: Bool) -> Bool? {
+            guard let value = values.first else { return fallback }
+            return values.allSatisfy { $0 == value } ? value : nil
+        }
+        textStyleForm?.setChoices(outlined: uniform(selected.map(\.outlined), fallback: canvas.outlined),
+                                  shadowed: uniform(selected.map(\.shadowed), fallback: canvas.shadowed))
+    }
+    func changeFont(_ sender: NSFontManager?) {
+        guard !terminationStarted, let panel = fontPanel, let form = textStyleForm else { return }
+        let scale = canvas.displayScale.height
+        let manager = NSFontManager.shared
+        let convert: (NSFont) -> NSFont? = { source in
+            let displayed = manager.convert(source, toSize: source.pointSize * scale)
+            let changed = panel.convert(displayed)
+            return manager.convert(changed, toSize: changed.pointSize / scale)
+        }
+        let first = canvas.selectedTextElements.first
+        let source = NSFont(name: first?.fontName ?? canvas.fontName, size: first?.fontSize ?? canvas.fontSize) ?? .boldSystemFont(ofSize: 24)
+        guard let future = convert(source), future.pointSize.isFinite, future.pointSize > 0, future.pointSize <= 4096,
+              future.pointSize >= 18 || future.pointSize == source.pointSize else { return }
+        applyingFontChange = true
+        let valid = canvas.convertSelectedTextFonts(convert, outline: form.outlineChoice, shadow: form.shadowChoice)
+        if valid {
+            canvas.fontName = future.fontName; canvas.fontSize = future.pointSize
+            if let value = form.outlineChoice { canvas.outlined = value }
+            if let value = form.shadowChoice { canvas.shadowed = value }
+        }
+        applyingFontChange = false; syncFontPanelSelection(); fontPanelRecordedTypography = false
+    }
+    func closeFontPanel() {
+        fontPanelRefreshTimer?.invalidate(); fontPanelRefreshTimer = nil
+        fontPanel?.orderOut(nil); fontPanel?.delegate = nil; fontPanel?.accessoryView = nil
+        if NSFontManager.shared.target === self { NSFontManager.shared.target = nil }
+        fontPanel = nil; textStyleForm = nil
+    }
+    @objc func defaultTextStyle() { guard !terminationStarted else { return }; canvas.restoreDefaultTextStyle(); syncFontPanelSelection() }
     @objc func toggleTextShadow() {
-        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
+        let selected = canvas.selectedTextElements.first
         canvas.shadowed = !(selected?.shadowed ?? canvas.shadowed)
         canvas.applyTextEffectsToSelection(shadow: canvas.shadowed)
     }
     @objc func toggleOutline() {
-        let selected = canvas.document.elements.first { $0.kind == .text && canvas.selection.contains($0.id) }
+        let selected = canvas.selectedTextElements.first
         canvas.outlined = !(selected?.outlined ?? canvas.outlined)
         canvas.applyTextEffectsToSelection(outline: canvas.outlined)
     }
@@ -1044,7 +1132,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView?.layoutSubtreeIfNeeded()
         let rect = window.convertToScreen(canvas.convert(canvas.visibleRect, to: nil))
         let top = NSScreen.screens.first?.frame.maxY ?? rect.maxY
-        let evidence: [String: Any] = ["windowFrame": NSStringFromRect(window.frame), "canvasScreenRect": NSStringFromRect(rect), "canvasInputTopLeft": [rect.minX,top-rect.maxY], "screenFrame": NSStringFromRect(NSScreen.screens.first?.frame ?? .zero), "nativeBackingScale":window.backingScaleFactor, "nameFontSize":nameField.font?.pointSize ?? 0,"statusFontSize":status.font?.pointSize ?? 0]
+        var evidence: [String: Any] = ["windowFrame": NSStringFromRect(window.frame), "canvasScreenRect": NSStringFromRect(rect), "canvasInputTopLeft": [rect.minX,top-rect.maxY], "screenFrame": NSStringFromRect(NSScreen.screens.first?.frame ?? .zero), "nativeBackingScale":window.backingScaleFactor, "nameFontSize":nameField.font?.pointSize ?? 0,"statusFontSize":status.font?.pointSize ?? 0]
+        if let panel = fontPanel {
+            evidence["fontPanel"] = ["frame": NSStringFromRect(panel.frame), "visible": panel.isVisible,
+                                     "key": panel.isKeyWindow, "modeMask": validModesForFontPanel(panel).rawValue,
+                                     "typography": TextStyleForm.fontPanelTypographyEvidence(panel),
+                                     "layout": TextStyleForm.fontPanelLayoutEvidence(panel)]
+        }
         if let data = try? JSONSerialization.data(withJSONObject: evidence, options: .prettyPrinted) { try? data.write(to: URL(fileURLWithPath:folder).appendingPathComponent("layout.json"), options:.atomic) }
     }
 }

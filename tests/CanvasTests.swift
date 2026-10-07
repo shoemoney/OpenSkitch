@@ -200,6 +200,9 @@ struct CanvasTests {
             ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
             ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
             ("active text grip replaces stale selection chrome through move zoom commit and cancel", textGripSelectionChrome),
+            ("live font conversion preserves mixed sizes traits effects and validates all items", liveTextFontConversion),
+            ("live font panel changes retain typing grip recovery and combined Undo", pendingFontPanelStyle),
+            ("empty text accepts live style and cancel preserves prior history", pendingEmptyFontStyle),
             ("Control eraser, secondary mouse and recovered modifier precedence", controlEraser),
             ("Space pans snap and drawing, preserves offscreen pixels and undo", spacePan),
             ("Tab Pencil toggle and Option eyedropper only notify UI", toolAndColorGestures),
@@ -1759,6 +1762,90 @@ struct CanvasTests {
         c.cancelOperation(nil)
         try expect(c.document == before && c.selection == [text.id] && (try rendered(c)) == selected,
                    "Cancel restores original selection chrome without retaining pending editor geometry")
+    }
+    static func liveTextFontConversion() throws {
+        let c = canvas(NSSize(width: 600, height: 400))
+        var a = SketchElement(kind: .text); a.text = "Bold"; a.fontName = "Helvetica-Bold"; a.fontSize = 23
+        a.outlined = false; a.shadowed = true; a.rect = CGRect(x: 30, y: 30, width: 180, height: 70)
+        var b = a; b.id = UUID(); b.text = "Italic"; b.fontName = "Helvetica-Oblique"; b.fontSize = 42
+        b.outlined = true; b.shadowed = false; b.rect.origin.y = 150
+        let shape = rectangle(CGRect(x: 350, y: 40, width: 150, height: 100), color: .blue)
+        c.document.elements = [a,b,shape]; c.selection = [a.id,b.id,shape.id]
+        let before = c.document; let manager = NSFontManager.shared
+        try expect(c.convertSelectedTextFonts({ manager.convert($0, toFamily: "Courier") }), "Valid per-item family conversion")
+        let changed = c.document
+        for (old,new) in zip([a,b],changed.elements.prefix(2)) {
+            let font = NSFont(name: new.fontName, size: new.fontSize)!
+            let original = NSFont(name: old.fontName, size: old.fontSize)!
+            try expect(font.familyName == "Courier" && new.fontSize == old.fontSize && manager.traits(of: font).intersection([.boldFontMask, .italicFontMask]) == manager.traits(of: original).intersection([.boldFontMask, .italicFontMask]), "Family conversion keeps each distinct size and face traits")
+            try expect(new.outlined == old.outlined && new.shadowed == old.shadowed && new.color == old.color && new.rect.origin == old.rect.origin && new.rect.width == old.rect.width && new.transform == old.transform, "Mixed flags color wrap anchor and transform are retained")
+        }
+        try expect(changed.elements[2] == shape, "Font panel never restyles a selected shape")
+        c.undo(); try expect(c.document == before, "Mixed family change is one Undo"); c.redo(); try expect(c.document == changed, "Mixed conversion Redo")
+        let history = c.editingUndoManager.undoActionName, selection = c.selection
+        var notifications = 0; c.onChange = { notifications += 1 }
+        try expect(!c.convertSelectedTextFonts({ $0.pointSize == 42 ? nil : manager.convert($0, toSize: 30) }, outline: false), "A rejected later font invalidates the whole change")
+        try expect(c.document == changed && c.selection == selection && c.editingUndoManager.undoActionName == history && notifications == 0, "Rejected conversion has no partial mutation history or dirty callback")
+        try expect(c.convertSelectedTextFonts(nil, outline: true), "Effect-only conversion")
+        try expect(c.document.elements.prefix(2).allSatisfy(\.outlined) && c.document.elements[0].shadowed && !c.document.elements[1].shadowed, "Explicit outline changes without flattening mixed shadows")
+    }
+    static func pendingFontPanelStyle() throws {
+        let c = canvas(NSSize(width: 600, height: 400)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Original"; text.fontName = "Courier-Bold"; text.fontSize = 24
+        text.outlined = false; text.shadowed = false; text.rect = CGRect(x: 50, y: 50, width: 230, height: 60)
+        var other = text; other.id = UUID(); other.fontSize = 37; other.rect.origin.y = 200; other.outlined = true
+        let shape = rectangle(CGRect(x: 350, y: 80, width: 120, height: 100), color: .blue)
+        c.document.elements = [text,other,shape]; c.tool = .select; let before = c.document
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 60, y: 60), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!, typing = editor.undoManager
+        let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        editor.insertText("Typed while Fonts stays open", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let caret = editor.selectedRange(); c.selection = [text.id,other.id,shape.id]
+        try expect(c.convertSelectedTextFonts({ NSFont(name: "Helvetica-Bold", size: $0.pointSize + 10) }, shadow: true), "Live style change")
+        try expect(c.document == before && editor.superview === c && window.firstResponder === editor && editor.undoManager === typing && editor.selectedRange() == caret && !c.editingUndoManager.canUndo, "Font changes stay pending without replacing the editor caret or typing history")
+        try expect(editor.font?.fontName == "Helvetica-Bold" && editor.font?.pointSize == 34 && c.hasPendingTextChanges, "Native field reflects the staged source font immediately")
+        try expect(!editor.drawsBackground && editor.typingAttributes[.shadow] is NSShadow && editor.typingAttributes[.strokeWidth] == nil,
+                   "Live editor displays shadow without an outline or an opaque editing background")
+        editor.breakUndoCoalescing(); typing?.undo()
+        try expect(editor.string == "Original", "Native typing Undo restores the original words")
+        try expect(c.selectedTextElements[0].fontSize == 34, "Typing Undo retains the staged source font")
+        try expect(editor.font?.fontName == "Helvetica-Bold" && editor.font?.pointSize == 34,
+                   "Typing Undo must retain live displayed font; actual \(editor.font?.fontName ?? "nil") \(editor.font?.pointSize ?? 0)")
+        try expect(editor.textStorage?.attribute(.shadow, at: 0, effectiveRange: nil) is NSShadow &&
+                   editor.textStorage?.attribute(.strokeWidth, at: 0, effectiveRange: nil) == nil,
+                   "Typing Undo retains the live effects on restored glyphs")
+        typing?.redo()
+        try expect(editor.string == "Typed while Fonts stays open" && editor.font?.pointSize == 34 && window.firstResponder === editor,
+                   "Typing Redo remains usable after a live font action")
+        grip.mouseDragged(with: TextGripDragEvent(30, 20)); c.zoom = 0.5
+        try expect(editor.font?.pointSize == 18 && c.selectedTextElements[0].fontSize == 34 && c.selectedTextElements[1].fontSize == 47, "Editor readability floor and zoom do not corrupt source font sizes")
+        let pending = try SketchDocument.decode(c.snapshotDocumentData())
+        try expect(pending.elements[0].text == editor.string && pending.elements[0].transform.tx == 30 && pending.elements[0].transform.ty == 20 && pending.elements[0].fontSize == 34 && !pending.elements[0].outlined && pending.elements[0].shadowed, "Recovery includes live text font effects and grip placement")
+        try expect(pending.elements[1].fontSize == 47 && pending.elements[1].outlined && pending.elements[1].shadowed && pending.elements[2] == shape, "Other selected text styles are staged while shapes remain exact")
+        let reference = canvas(c.canvasSize); reference.document = pending; reference.document.elements.removeAll { $0.id == text.id }
+        reference.selection = [other.id,shape.id]; reference.zoom = c.zoom
+        let actualPixels = SketchRenderer.bitmap(size: c.bounds.size) { c.draw(c.bounds) }!.representation(using: .png, properties: [:])
+        let expectedPixels = SketchRenderer.bitmap(size: reference.bounds.size) { reference.draw(reference.bounds) }!.representation(using: .png, properties: [:])
+        try expect(actualPixels == expectedPixels, "Other selected fonts and their resize handles render live before the editor transaction is committed")
+        let reopened = canvas(); try reopened.loadDocument(data: c.documentData())
+        try expect(c.document == pending && reopened.document == pending && editor.superview == nil && grip.superview == nil, "Save completes and round-trips all staged text style changes")
+        c.undo(); try expect(c.document == before, "One document Undo restores the pre-editor text font and placement")
+        c.redo(); try expect(c.document == pending, "One Redo restores the combined editor transaction")
+    }
+    static func pendingEmptyFontStyle() throws {
+        let c = canvas(NSSize(width: 400, height: 250)); let window = host(c); defer { window.close() }
+        c.setBackgroundColor(.blue); c.setBackgroundColor(.green); c.undo(); let before = c.document
+        let undoName = c.editingUndoManager.undoActionName, redoName = c.editingUndoManager.redoActionName
+        c.tool = .text; c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 40, y: 40)))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        try expect(c.convertSelectedTextFonts({ _ in NSFont(name: "Courier-Bold", size: 37) }, outline: false, shadow: false), "Empty new field accepts a live font")
+        try expect(editor.font?.fontName == "Courier-Bold" && editor.font?.pointSize == 37 && editor.string.isEmpty && c.selectedTextElements[0].fontSize == 37, "New empty editor shows the requested font before typing")
+        editor.insertText("New styled text", replacementRange: NSRange(location: 0, length: 0))
+        let staged = try SketchDocument.decode(c.snapshotDocumentData())
+        try expect(staged.elements[0].fontSize == 37 && !staged.elements[0].outlined && !staged.elements[0].shadowed, "First typing retains the staged empty-field style")
+        c.cancelOperation(nil)
+        try expect(c.document == before && c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName, "Cancelling live style and new typing preserves prior Undo and Redo")
+        c.redo(); try expect(c.document.backgroundColor == SketchColor(.green), "Prior redo still executes after font-panel cancellation")
     }
     static func controlEraser() throws {
         let c = canvas(); let window = host(c); defer { window.close() }
