@@ -213,6 +213,32 @@ struct SketchDocument: Codable, Equatable {
     }
 }
 
+/// ShadowLayoutManager outlineSize (0x1a934) and drawGlyphs (0x1b537).
+/// Original i386 constants and arithmetic are Float32, including the strict
+/// brightness threshold. Alpha applies to the completed text/effect group.
+enum OriginalTextEffects {
+    static func outlineColor(_ color: SketchColor) -> NSColor {
+        let calibrated = color.nsColor.usingColorSpace(.genericRGB) ?? color.nsColor
+        let brightness = Float(calibrated.blueComponent) * Float(0.114)
+            + Float(calibrated.greenComponent) * Float(0.587)
+            + Float(calibrated.redComponent) * Float(0.299)
+        return brightness < 0.5 ? .white : .black
+    }
+    static func outlinePercentage(fontSize: CGFloat) -> CGFloat {
+        let size = Float(fontSize)
+        var percentage = max(Float(20), Float(-2) * size + Float(60))
+        if percentage * size / 100 > 8 { percentage = 800 / size }
+        return CGFloat(percentage)
+    }
+    static func shadow(scale: CGFloat = 1) -> NSShadow {
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
+        shadow.shadowBlurRadius = 3 * scale
+        shadow.shadowOffset = NSSize(width: 0, height: -scale)
+        return shadow
+    }
+}
+
 /// Shared by screen drawing and exports. Selection handles and editor chrome are never exported.
 enum SketchRenderer {
     static func bitmap(size: CGSize, draw: () -> Void) -> NSBitmapImageRep? {
@@ -278,7 +304,7 @@ enum SketchRenderer {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
         cg.concatenate(element.transform.cg)
-        if element.shadowed {
+        if element.shadowed && element.kind != .text {
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
             shadow.shadowBlurRadius = 4
@@ -297,13 +323,30 @@ enum SketchRenderer {
         case .raster:
             if let data = element.imagePNG, let image = NSImage(data: data) { drawImage(image, in: element.rect) }
         case .text:
+            cg.setLineJoin(.round)
+            cg.setAlpha(element.color.alpha)
+            cg.beginTransparencyLayer(auxiliaryInfo: nil)
+            cg.setAlpha(1)
             var attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont(name: element.fontName, size: element.fontSize) ?? NSFont.boldSystemFont(ofSize: element.fontSize),
-                .foregroundColor: element.color.nsColor,
+                .foregroundColor: element.color.nsColor.withAlphaComponent(1),
                 .paragraphStyle: textParagraphStyle
             ]
-            if element.outlined { attributes[.strokeColor] = NSColor.white; attributes[.strokeWidth] = -3 }
+            // The recovered layout manager paints a positive-width outline,
+            // then the colored fill. A combined negative-width stroke obscures
+            // glyph interiors at the original thick outline sizes.
+            if element.shadowed { OriginalTextEffects.shadow().set() }
+            cg.beginTransparencyLayer(auxiliaryInfo: nil)
+            if element.outlined {
+                attributes[.strokeColor] = OriginalTextEffects.outlineColor(element.color)
+                attributes[.strokeWidth] = OriginalTextEffects.outlinePercentage(fontSize: element.fontSize)
+                (element.text as NSString).draw(in: element.rect, withAttributes: attributes)
+                attributes.removeValue(forKey: .strokeColor)
+                attributes.removeValue(forKey: .strokeWidth)
+            }
             (element.text as NSString).draw(in: element.rect, withAttributes: attributes)
+            cg.endTransparencyLayer()
+            cg.endTransparencyLayer()
         case .brush where element.points.count == 1:
             if let point = element.points.first {
                 NSBezierPath(ovalIn: CGRect(x: point.x - element.strokeWidth / 2,

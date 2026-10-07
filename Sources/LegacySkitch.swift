@@ -336,7 +336,8 @@ enum LegacySkitch {
         var commandCount = 0
         var clipID: String?
         var clips: [String: CGRect] = [:]
-        var knownShadow = false
+        var knownShadows = Set<String>()
+        var activeShadow: String?
 
         init(requireSignature: Bool) { self.requireSignature = requireSignature }
 
@@ -389,7 +390,7 @@ enum LegacySkitch {
                 if elementName == "text" && a.keys.contains(where: { ["fill", "opacity", "font-family", "font-size", "style", "stroke"].contains($0) }) {
                     throw LegacySkitchError.unsupported("Per-line text paint overrides")
                 }
-                if let filter = a["filter"], filter != "url(#skitch-redux-shadow)" { throw LegacySkitchError.unsupported("Unknown SVG filter") }
+                if let filter = a["filter"], !["url(#skitch-redux-shadow)", "url(#skitch-redux-text-shadow)"].contains(filter) { throw LegacySkitchError.unsupported("Unknown SVG filter") }
                 if a["transform"] != nil && !["path", "g", "image"].contains(elementName) {
                     throw LegacySkitchError.unsupported("Transform on \(elementName)")
                 }
@@ -410,7 +411,7 @@ enum LegacySkitch {
                         guard allowed.contains(key) || (elementName == "svg" && key == "background-color") else {
                             throw LegacySkitchError.unsupported("SVG style \(key)")
                         }
-                        if key == "filter" && value != "url(#skitch-redux-shadow)" {
+                        if key == "filter" && !["url(#skitch-redux-shadow)", "url(#skitch-redux-text-shadow)"].contains(value) {
                             throw LegacySkitchError.unsupported("Unknown SVG filter")
                         }
                     }
@@ -484,11 +485,12 @@ enum LegacySkitch {
                         throw LegacySkitchError.unsupported("SVG definition \(elementName)")
                     }
                     if elementName == "filter" {
-                        guard a["id"] == "skitch-redux-shadow", !knownShadow else { throw LegacySkitchError.unsupported("Unknown/duplicate SVG filter") }
-                        knownShadow = true
+                        guard let id = a["id"], ["skitch-redux-shadow", "skitch-redux-text-shadow"].contains(id), knownShadows.insert(id).inserted else { throw LegacySkitchError.unsupported("Unknown/duplicate SVG filter") }
+                        activeShadow = id
                     } else if elementName == "feDropShadow" {
-                        guard try number(a, "dx") == 2, try number(a, "dy") == 3, try number(a, "stdDeviation") == 4,
-                              try number(a, "flood-opacity") == 0.38, a["flood-color"] == "black" else {
+                        let text = activeShadow == "skitch-redux-text-shadow"
+                        guard try number(a, "dx") == (text ? 0 : 2), try number(a, "dy") == (text ? 1 : 3), try number(a, "stdDeviation") == (text ? 3 : 4),
+                              try number(a, "flood-opacity") == (text ? 0.8 : 0.38), a["flood-color"] == "black" else {
                             throw LegacySkitchError.unsupported("SVG shadow metrics")
                         }
                     } else if elementName == "clipPath" {

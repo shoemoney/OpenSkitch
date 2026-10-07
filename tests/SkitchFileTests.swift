@@ -253,6 +253,25 @@ enum SkitchFileTests {
                 }
                 try rejects(changed, "conflicting hidden model")
             }),
+            ("Historical fixed text effects validate completely then save recovered effects", {
+                var document = SketchDocument(size: CGSize(width: 300, height: 160))
+                var text = SketchElement(kind: .text); text.text = "Bright"; text.fontSize = 40
+                text.rect = CGRect(x: 30, y: 30, width: 230, height: 90); text.color = SketchColor(.yellow); text.shadowed = true
+                document.elements = [text]
+                let historical = try SkitchFile(document: document).encoded(textEffects: .earlyRedux)
+                try expect(String(decoding: historical, as: UTF8.self).contains("stroke=\"white\""), "Historical writer profile must be fixed white")
+                let reopened = try SkitchFile.decode(historical)
+                try expect(reopened.document == document, "Historical SVG/state pair retains exact editable drawing")
+                let saved = try reopened.encoded()
+                let again = try SkitchFile.decode(saved)
+                try expect(String(decoding: saved, as: UTF8.self).contains("stroke=\"black\"") && again.document == document, "New save adopts recovered text rendering without losing source artwork")
+                try rejects(mutatedState(historical) { envelope in
+                    var d = envelope["document"] as! [String: Any]; var elements = d["elements"] as! [[String: Any]]
+                    elements[0]["fontSize"] = 50; d["elements"] = elements; envelope["document"] = d
+                }, "conflicting historical hidden font")
+                let edited = String(decoding: historical, as: UTF8.self).replacingOccurrences(of: "stroke=\"white\"", with: "stroke=\"black\"")
+                try rejects(Data(edited.utf8), "independently edited historical visible outline")
+            }),
             ("Unknown supplemental version and corrupt base64 are rejected", {
                 let bytes = try SkitchFile(document: SketchDocument()).encoded()
                 try rejects(mutatedState(bytes) { $0["version"] = 99 }, "unknown supplemental version")

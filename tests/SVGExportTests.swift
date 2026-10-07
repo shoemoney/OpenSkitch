@@ -441,6 +441,18 @@ fileprivate enum SVGExportTests {
                 print("WEBKIT text outline: \(result.changed) changed pixels")
                 try expect(result.ink > 100 && result.changed > 32, "Text outline metadata/attributes have no ordinary SVG pixel effect")
             }),
+            ("Recovered bright text outline and separate text shadow paint in WebKit", {
+                var plain = text("Bright"); plain.fontSize = 40; plain.color = SketchColor(.yellow)
+                var styled = plain; styled.outlined = true; styled.shadowed = true
+                let (data, root) = try exported([styled]), group = root.named("g")[0]
+                try expect(group.attributes["stroke"] == "black" && approximately(try number(group, "stroke-width"), 8), "Bright text needs the recovered black outline and capped thickness")
+                try expect(group.attributes["style"]?.contains("url(#skitch-redux-text-shadow)") == true, "Text must use its own original shadow, independent of vector shadows")
+                let xml = String(decoding: data, as: UTF8.self)
+                try expect(xml.contains("dx=\"0\" dy=\"1\" stdDeviation=\"3\"") && xml.contains("flood-opacity=\"0.8\""), "Original text shadow metrics absent from SVG")
+                let result = try renderedDifference(exported([plain]).0, data)
+                try expect(result.changed > 100, "Independent SVG renderer must visibly paint the recovered bright-text effects")
+                _ = try LegacySkitch.decode(data)
+            }),
             ("WebKit SVG text placement and wrapping match native rendered ink", {
                 var element = text("Native text wraps across lines with spacing.")
                 element.rect = CGRect(x: 20, y: 20, width: 175, height: 130)

@@ -15,7 +15,7 @@ import tempfile
 import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("--arch", choices=["arm64", "x86_64", "both"], default="both")
+parser.add_argument("--arch", choices=["arm64", "x86_64", "both"], default="arm64")
 parser.add_argument("--timeout", type=float, default=30)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent

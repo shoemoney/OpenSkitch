@@ -63,6 +63,7 @@ struct SkitchFile {
         var file = Self(document: document, metadata: envelope.metadata, canvasData: envelope.rawCanvasData)
         let regenerated = try SVGExport.encode(document, preserving: envelope.metadata, backdrop: file.validatedBackdrop())
         if try fingerprint(regenerated) != actual {
+            let originalMetadata = file.metadata
             // Early Redux version1 writers emitted these fixed defaults without
             // storing them in envelope.metadata. Recover only that known profile,
             // then require the entire regenerated SVG to agree as before.
@@ -70,19 +71,27 @@ struct SkitchFile {
                                  "skitchBrushColor": "rgb(252,12,89)", "skitchBrushColorAlpha": "1", "skitchBrushSize": "5"]
             for (key, value) in earlyDefaults where file.metadata.root[key] == nil { file.metadata.root[key] = value }
             let compatible = try SVGExport.encode(document, preserving: file.metadata, backdrop: file.validatedBackdrop())
-            guard try fingerprint(compatible) == actual else {
-                throw LegacySkitchError.invalidDocument("Redux state disagrees with the visible SVG")
+            if try fingerprint(compatible) == actual { return file }
+            // Historical Redux text used fixed white 3% outlines and the common
+            // vector shadow. Validate that complete known SVG rendering, never
+            // bypass either the visible fingerprint or hidden-model agreement.
+            for metadata in [originalMetadata, file.metadata] {
+                let historical = try SVGExport.encode(document, preserving: metadata, backdrop: file.validatedBackdrop(), textEffects: .earlyRedux)
+                if try fingerprint(historical) == actual {
+                    file.metadata = metadata; return file
+                }
             }
+            throw LegacySkitchError.invalidDocument("Redux state disagrees with the visible SVG")
         }
         return file
     }
 
-    func encoded(includeSupplementalState: Bool = true) throws -> Data {
+    func encoded(includeSupplementalState: Bool = true, textEffects: SVGExport.TextEffectProfile = .recoveredOriginal) throws -> Data {
         _ = try document.validated()
         guard Set(document.elements.map(\.id)).count == document.elements.count else {
             throw LegacySkitchError.invalidDocument("Duplicate element IDs")
         }
-        let svg = try SVGExport.encode(document, preserving: metadata, backdrop: validatedBackdrop())
+        let svg = try SVGExport.encode(document, preserving: metadata, backdrop: validatedBackdrop(), textEffects: textEffects)
         // Validate the real, supplemental-free SVG before appending editing state.
         _ = try LegacySkitch.decode(svg)
         if !includeSupplementalState { return svg }

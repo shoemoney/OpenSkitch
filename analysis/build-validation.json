@@ -1,23 +1,22 @@
 {
-  "verified_at": "2026-10-07T21:05:29.558773+00:00",
-  "checkpoint_id": "openskitch-9bae1c01fa",
-  "checkpoint_state": "renamed_build_suites_startup_and_listed_native_checks_verified",
+  "verified_at": "2026-10-07T21:35:36.132612+00:00",
+  "checkpoint_id": "text-effects-c66ecefe68",
+  "checkpoint_state": "apple_silicon_text_effects_build_suites_startup_and_listed_native_checks_verified",
   "build": {
     "architectures": [
-      "arm64",
-      "x86_64"
+      "arm64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.FfPQg8",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.uEWaTd",
     "source_sha256": {
       "App.swift": "55a249976fcaabdbe5c2f3aa65ff2a6d47d10aad689ee3b11327193da6efd6df",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
-      "Canvas.swift": "135e1d62588b43f47531f06dd8a180493c26010a07aa9938dcc4a69890813420",
+      "Canvas.swift": "9f69a7c04d2a1dbb7aababd4b809541e37108d4d54c301df1f808491103d8feb",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-      "DocumentModel.swift": "85bcef126805eb03b3ecb5830d52bcd39185efa03d82d2ceb4310527480dd25c",
+      "DocumentModel.swift": "21d8489f22ec1a71f7706e5a4464c9675d1f8357f04b0b2298afa320e6bf0c9c",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
       "HistoryBrowser.swift": "ee3c9a2dc48982721403fbf9dfb0440651c09c4b6676c69dd78bf99d31a93b3c",
@@ -27,13 +26,13 @@
       "Info.plist": "31d43e115e32aa398d9548af9da0d61cca70d35d0f6f26376108337e680dce24",
       "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
       "LegacyHistoryImporter.swift": "2add6149931fa2c418b71604af6622b8006b561c52464d49732a6a502011b08d",
-      "LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
+      "LegacySkitch.swift": "02b6a4b57151fde5fe7a981bf0866feb8fb0a5b8537d320d6f7e2d66252067be",
       "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
       "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
       "ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
-      "SVGExport.swift": "901a037ef806c6dab6479ee701dc08b6b7b4b73c69b1fd84e0237c1bd02f11ac",
-      "SkitchFile.swift": "9d59f9c1e890536249990f7cd41f90f81083789478aed0ca434e6001802506e7",
+      "SVGExport.swift": "d3f60ea58089934b4dc6c7a1f33d080910deefa1b6e82242de0913cc93ad09cd",
+      "SkitchFile.swift": "906d5624c19d41ff86c472f06b4f9495dadc26dd558664f147efb04015ae1419",
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
       "TextStyleForm.swift": "ee864cfc831d34e8e22f21b04d6e2c71b34b4ffbcc891cee4f4d5ed369f22322",
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
@@ -83,97 +82,101 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572"
+    "binary_sha256": "c66ecefe681e53602f2518a7f89157939a150e4f78726a7041e8a0930a3158e5"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "640f1b09b289eea56e93d115b77975a5ac2bdcd14d4f75c984b27ed31a11bf5d",
+  "build_manifest_sha256": "77f7d20f8d7fd4cd3a140ccf3492d90a4b1af17c67aaab48c86c3a3c2a8184ac",
   "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/rename-verification/build-audit.log",
-  "build_log_sha256": "d27170606a5af89801003331dd18156d8d58f4887a9140849fe1e48978019529",
+  "build_log_path": "build/text-effects-verification/build.log",
+  "build_log_sha256": "dd213e2fbc5186835b4b57c37f4ff859e400384b24e0e073974041fa902ab470",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.n4753y6r",
-      "log_path": "build/rename-verification/arm64.log",
-      "log_sha256": "d94044cccf20ed0d2ba66bfa00c0ba0eae4456bac0fbff4f74fbe94f8b042240",
-      "checks": 2540,
-      "suites": 24,
-      "source_drift": false,
-      "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
-    },
-    "x86_64": {
-      "passed": true,
-      "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.4zu_ynle",
-      "log_path": "build/rename-verification/x86_64.log",
-      "log_sha256": "3f496be4d87607757deb3757306a3552b52b5fa8638b492eb8e6d4f64f2df666",
-      "checks": 2540,
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.0expvxmh",
+      "log_path": "build/text-effects-verification/arm64.log",
+      "log_sha256": "3133193ed7b5b771141205b3a6b1482f13fd7efc34428510a3049caa65fbe3d2",
+      "checks": 2543,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/rename-verification/results.json",
-  "full_suite_results_sha256": "cbdf775a531612ce0c36e09e1d7ab562b702ae5772ef28972f54a58c640d4d8e",
+  "full_suite_results_path": "build/text-effects-verification/results.json",
+  "full_suite_results_sha256": "2cd8d129da1355ffa67b04567bef4572d524de80221b0b346a867d98d45606e4",
   "native_startup_smoke": {
-    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572",
-    "verified_at": "2026-10-07T21:02:51.667778+00:00",
+    "binary_sha256": "c66ecefe681e53602f2518a7f89157939a150e4f78726a7041e8a0930a3158e5",
+    "verified_at": "2026-10-07T21:31:14.026640+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
-      "png_bytes": 24807,
-      "editable_bytes": 29480,
-      "editable_sha256": "fd748fd528f14fd03c249e647cab0f82f69ec01553fd18685e10eaaa03e36d9f"
-    },
-    "x86_64": {
-      "passed": true,
-      "exit_code": 0,
-      "result": "native startup, original-format editable save/load, PNG export succeeded",
-      "png_bytes": 24394,
-      "editable_bytes": 29480,
-      "editable_sha256": "e67e99cf9bf8d5b0faf4817731758d269a7e447f4139556c90ca373ee62e784b"
+      "png_bytes": 22421,
+      "editable_bytes": 29793,
+      "editable_sha256": "299cee62f5882d46730af4e7f2630231ca1a57fe2790b8b2db9516ca97d28e57"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-9bae1c01fa/results.json",
-  "native_startup_smoke_results_sha256": "d54c785246bcb60bc28a3bf8dde5206a75d48dc7fae3e44ec8bf6f3d22b186d1",
+  "native_startup_smoke_results_path": "build/startup-smoke-c66ecefe68/results.json",
+  "native_startup_smoke_results_sha256": "9b18023080b2e7c7bc16310de308323a6876203f46b65bc4954e70e48c71aaa9",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
-    "tools/build.sh": "ed993469a866b711b94ec00b0134ddf77b343a74ae3543d4afa75d4bbb18ec98",
-    "tools/test-native-startup.py": "c0fe52feadbbe11b62c7913c5e12eaf72d62cff3d01a3239943ce73638c6f248",
+    "tools/build.sh": "5674d47adcee941cd07546dacc8c9e66cd5d1c962283fec1417c00d19abd2488",
+    "tools/test-native-startup.py": "2e5f8497cf17de5a6f90bb5aa0d984ef56e9453dd78d6e240008be05c445663a",
     "tools/test-app-safety.sh": "a33dea4e76093ca0a9bcde612d6e746128c612a93ea0c6c8f8ab2f0436ac7d04"
   },
   "current_full_suite_validation": {
-    "status": "passed_both_architectures",
-    "checks_per_architecture": 2540,
+    "status": "passed_arm64",
+    "architectures": [
+      "arm64"
+    ],
+    "checks_per_architecture": 2543,
     "suites": 24,
-    "results_path": "build/rename-verification/results.json",
-    "results_sha256": "cbdf775a531612ce0c36e09e1d7ab562b702ae5772ef28972f54a58c640d4d8e"
+    "results_path": "build/text-effects-verification/results.json",
+    "results_sha256": "2cd8d129da1355ffa67b04567bef4572d524de80221b0b346a867d98d45606e4"
   },
   "current_native_startup_validation": {
-    "status": "passed_both_architectures",
-    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572",
-    "startup_log_path": "build/rename-verification/startup.log",
-    "startup_log_sha256": "078ab3286c8615873befbd92dfa255359c254af1cc078b4349dcd1f95e3cfef5"
+    "status": "passed_arm64",
+    "binary_sha256": "c66ecefe681e53602f2518a7f89157939a150e4f78726a7041e8a0930a3158e5",
+    "startup_log_path": "build/text-effects-verification/startup.log",
+    "startup_log_sha256": "deaa2ebe4cb21f3148ca9f3c4aa9a84309b733a655f54b457bdde0914363a1c3"
   },
   "current_desktop_checks": [
     {
-      "name": "Native OpenSkitch app and window name",
+      "name": "Bright text has black outline; dark text has white outline; colored interiors remain visible",
       "passed": true,
-      "evidence": "build/rename-verification/reopened-ax.txt"
+      "evidence": "build/text-effects-verification/corrected-fixture.png"
     },
     {
-      "name": "About, Hide and Quit use OpenSkitch",
+      "name": "Pending blue recolor retains focus and switches the outline to white",
       "passed": true,
-      "evidence": "build/rename-verification/menu-ax.txt"
+      "evidence": "build/text-effects-verification/pending-blue.png"
     },
     {
-      "name": "Preserved mixed-font drawing opens and remains unchanged",
+      "name": "Typing Undo restores words while retaining staged blue color and effects",
       "passed": true,
-      "evidence": "build/rename-verification/reopened.png"
+      "evidence": "build/text-effects-verification/typing-undo.png"
+    },
+    {
+      "name": "Typing Redo and Escape commit retain the combined annotation edit",
+      "passed": true,
+      "evidence": "build/text-effects-verification/committed.png"
+    },
+    {
+      "name": "One document Undo restores original words and yellow color; Redo restores both edits",
+      "passed": true,
+      "evidence": "build/text-effects-verification/canvas-undo.png"
+    },
+    {
+      "name": "Separate native Save As and Open preserve all three font/effect styles and alpha",
+      "passed": true,
+      "evidence": "build/text-effects-verification/reopened.png"
+    },
+    {
+      "name": "Historical mixed-font file opens with both labels visible and remains byte-for-byte unchanged",
+      "passed": true,
+      "evidence": "build/text-effects-verification/corrected-historical.png"
     }
   ],
   "historical_validations": [
@@ -873,10 +876,34 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "openskitch-9bae1c01fa",
+      "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572",
+      "full_suite_results_path": "build/rename-verification/results.json",
+      "full_suite_results_sha256": "cbdf775a531612ce0c36e09e1d7ab562b702ae5772ef28972f54a58c640d4d8e",
+      "desktop_checks": [
+        {
+          "name": "Native OpenSkitch app and window name",
+          "passed": true,
+          "evidence": "build/rename-verification/reopened-ax.txt"
+        },
+        {
+          "name": "About, Hide and Quit use OpenSkitch",
+          "passed": true,
+          "evidence": "build/rename-verification/menu-ax.txt"
+        },
+        {
+          "name": "Preserved mixed-font drawing opens and remains unchanged",
+          "passed": true,
+          "evidence": "build/rename-verification/reopened.png"
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
-  "text_verification_scope": "The pre-rename drawing opens with both text styles visible. Earlier Fonts metrics remain historical exact-binary evidence.",
+  "text_verification_scope": "Exact Apple Silicon build: listed native text effects, pending input, Undo/Redo, separate Save As/reopen and preserved historical drawing. Full Fonts layout/direct choices and original i386 runtime comparison remain unverified.",
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
@@ -894,32 +921,25 @@
     "Original Original Size semantics after retained crop/pan, exact encoder/palette defaults, Drag Me destination and temporary control-collapse behavior",
     "Complete original presets/preferences/legacy service workflows",
     "Continuous spelling click returned a stale-app refresh notice; its resulting state was not established. Actual spelling panel/engine behavior remains unverified.",
-    "No physical Intel desktop; x86_64 suites/startup under Rosetta.",
     "No original 32-bit runtime comparison, tablet, capture/camera/Photos permissions or publishing.",
     "Exact original 32-bit runtime visual/behavioral comparison and full original feature parity remain unverified.",
-    "Native desktop checks are arm64 only. x86_64 regression/startup checks run under Rosetta; no physical Intel verification.",
     "Continuous spelling enabled default is verified by executed native-control tests. Desktop toggle state, spelling suggestions and spelling-panel behavior remain unverified.",
     "SkitchTextClose is present in original metadata; construction not found in inspected initializer/class references/resources, so reachability and close-widget implementation remain unresolved.",
     "Full original feature parity and exact original 32-bit runtime visual/behavioral comparison remain unverified.",
-    "Native desktop checks are arm64 only. x86_64 suites/startup run under Rosetta, without physical Intel verification.",
     "Capture/camera/Photos permissions, hardware, physical tablet behavior, legacy services and complete publication workflows were not exercised by this checkpoint.",
     "Complete current-build native font family/size/effects editing, save and combined Undo/Redo desktop workflow remains pending.",
     "Fonts toolbar screenshot/readability and foreground-focus verification remain pending on the current binary; public control metrics are not complete visual proof.",
-    "Native desktop observations are arm64 only; x86_64 startup and regression tests run through Rosetta.",
     "Original runtime equivalence, adaptive effects, original font mapping, transformed text editor geometry and close widget remain unresolved.",
     "All 340 original feature parity flags remain unverified.",
     "Full current-build floating Fonts visual/edit/save/Undo workflow remains pending; owned layout metrics do not prove the interactive workflow.",
-    "Desktop visual/input proof is arm64; Intel suites and startup run under Rosetta rather than real Intel hardware.",
     "Other accent-label contrast is checked with controlled fixtures, not a desktop appearance/theme change.",
     "Minimum-window desktop resize was attempted but did not change geometry; compact-window layout remains unverified.",
     "All340 original parity flags remain unverified; this proof covers only the listed reconstructed behavior.",
     "Full original runtime parity remains unverified for all340 features.",
     "Full Fonts family/size/effects/edit/save/Undo desktop workflow remains pending.",
     "Actual printer output, original print scaling/margins equivalence and custom paper settings were not verified.",
-    "Hide Others and Show All were not executed. Native desktop proof is arm64; Intel startup/tests run under Rosetta.",
     "This is scoped dialog/feedback and spacing verification, not complete original UI equivalence.",
     "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
-    "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta.",
     "Original floating snapshot includes native/window effects that are not established by cached owned-view rendering.",
     "Native minimum900x640 window layout was reached through the Resize workflow on the current binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified.",
     "Current drag-thumbnail desktop interaction remains unverified: no actual Finder/application delivery, hover/cancel/animated-restore proof was obtained.",
@@ -930,8 +950,15 @@
     "Native minimum900x640 window layout was reached through the Resize workflow on the prior palette/Size binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified.",
     "Current Fonts opening and zoom independence are native interaction plus live metrics only; the desktop tool did not expose the auxiliary Fonts window for visual or direct font-choice verification.",
     "Current minimum-window, color/pending-text and Close/Hide proof remains pinned to earlier exact binaries; no original-runtime equivalence claim.",
-    "Rename desktop checks cover app identity, commands and existing drawing Open; earlier detailed workflow proofs have not all been repeated on the renamed binary."
+    "Rename desktop checks cover app identity, commands and existing drawing Open; earlier detailed workflow proofs have not all been repeated on the renamed binary.",
+    "Original runtime text-effect equivalence and complete auxiliary Fonts family/face/size/mixed-selection workflows remain unverified. Listed native effects/edit/Undo/save/reopen checks passed on arm64 only."
   ],
-  "current_desktop_proof_path": "build/rename-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "c5d4d10ab895ae045feeb31cbd73fff16b7363100f758085c258682236d3dddf"
+  "current_desktop_proof_path": "build/text-effects-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "6805441ba3d7300dfab0ca85481dd51a992b8f97641e22922d102c71588c9628",
+  "architecture_policy": "Apple Silicon arm64 only; prior Intel results remain historical, with no current Intel build/test requirement.",
+  "recovered_text_effects": {
+    "path": "build/text-effects-verification/original-recovery.json",
+    "sha256": "b6ec946b07256f72dab79e68ba514734a17c97e0ade45eabc40d2069c390ab12",
+    "original_runtime_verified": false
+  }
 }

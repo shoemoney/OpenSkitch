@@ -30,12 +30,18 @@ enum SVGExport {
         }
         return lines
     }
-    static func encode(_ document: SketchDocument, preserving metadata: LegacyBridge.Metadata = .init(), backdrop: Backdrop? = nil, outputSize: CGSize? = nil) throws -> Data {
+    // The old profile is only for validating historical Redux SVG/state pairs.
+    enum TextEffectProfile { case recoveredOriginal, earlyRedux }
+    static func encode(_ document: SketchDocument, preserving metadata: LegacyBridge.Metadata = .init(), backdrop: Backdrop? = nil, outputSize: CGSize? = nil, textEffects: TextEffectProfile = .recoveredOriginal) throws -> Data {
         _ = try document.validated()
         func number(_ value: CGFloat) -> String { String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), Double(value)) }
         func escape(_ text: String) -> String { text.replacingOccurrences(of: "&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;").replacingOccurrences(of:"'",with:"&apos;") }
         func color(_ c: SketchColor) -> String { "rgb(\(Int((c.red*255).rounded())),\(Int((c.green*255).rounded())),\(Int((c.blue*255).rounded())))" }
-        func shadowStyle(_ element: SketchElement) -> String { element.shadowed ? "filter:url(#skitch-redux-shadow);" : "" }
+        func shadowStyle(_ element: SketchElement) -> String {
+            guard element.shadowed else { return "" }
+            return element.kind == .text && textEffects == .recoveredOriginal
+                ? "filter:url(#skitch-redux-text-shadow);" : "filter:url(#skitch-redux-shadow);"
+        }
         func pathString(_ path: CGPath) -> String {
             var parts: [String] = []
             var current = CGPoint.zero, origin = CGPoint.zero
@@ -107,9 +113,12 @@ enum SVGExport {
         var xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<!-- Skitch 1.0 -->",
             "<svg " + attributes(root, viewport) + ">",
             "<rect " + attributes(metadata.background, ["x": "0", "y": "0", "width": width, "height": height, "fill": color(document.backgroundColor), "opacity": number(document.backgroundColor.alpha)]) + "/>" ]
-        if document.elements.contains(where: { $0.shadowed }) {
+        if document.elements.contains(where: { $0.shadowed && ($0.kind != .text || textEffects == .earlyRedux) }) {
             // A canvas-sized user-space region avoids clipping shadows on thin strokes.
             xml.append("<defs><filter id=\"skitch-redux-shadow\" filterUnits=\"userSpaceOnUse\" x=\"-\(width)\" y=\"-\(height)\" width=\"\(number(ceil(document.size.width)*3))\" height=\"\(number(ceil(document.size.height)*3))\" color-interpolation-filters=\"sRGB\"><feDropShadow dx=\"2\" dy=\"3\" stdDeviation=\"4\" flood-color=\"black\" flood-opacity=\"0.38\"/></filter></defs>")
+        }
+        if textEffects == .recoveredOriginal && document.elements.contains(where: { $0.kind == .text && $0.shadowed }) {
+            xml.append("<defs><filter id=\"skitch-redux-text-shadow\" filterUnits=\"userSpaceOnUse\" x=\"-\(width)\" y=\"-\(height)\" width=\"\(number(ceil(document.size.width)*3))\" height=\"\(number(ceil(document.size.height)*3))\" color-interpolation-filters=\"sRGB\"><feDropShadow dx=\"0\" dy=\"1\" stdDeviation=\"3\" flood-color=\"black\" flood-opacity=\"0.8\"/></filter></defs>")
         }
         for element in document.elements where element.kind == .text {
             xml.append("<defs><clipPath id=\"skitch-redux-text-\(element.id.uuidString)\" clipPathUnits=\"userSpaceOnUse\"><rect x=\"\(number(element.rect.minX))\" y=\"\(number(element.rect.minY))\" width=\"\(number(max(0, element.rect.width)))\" height=\"\(number(max(0, element.rect.height)))\"/></clipPath></defs>")
@@ -175,7 +184,12 @@ enum SVGExport {
                 "skitchTextX": number(anchor.x), "skitchTextY": number(anchor.y), "skitchFontSize": number(element.fontSize), "skitchHasOutline": element.outlined ? "1" : "0", "skitchHasShadow": element.shadowed ? "1" : "0", "skitchGroup": "\(group(element.groupID))"]
             a["clip-path"] = "url(#skitch-redux-text-\(element.id.uuidString))"
             if !t.cg.isIdentity { a["transform"] = "matrix(\(number(t.a)) \(number(t.b)) \(number(t.c)) \(number(t.d)) \(number(t.tx)) \(number(t.ty)))" }
-            if element.outlined { a.merge(["stroke": "white", "stroke-width": number(element.fontSize*0.03), "paint-order": "stroke fill"]) { _, new in new } }
+            if element.outlined {
+                let stroke = textEffects == .earlyRedux ? "white" : (OriginalTextEffects.outlineColor(element.color) == NSColor.white ? "white" : "black")
+                let percentage = textEffects == .earlyRedux ? 3 : OriginalTextEffects.outlinePercentage(fontSize: element.fontSize)
+                a.merge(["stroke": stroke, "stroke-width": number(element.fontSize * percentage / 100), "paint-order": "stroke fill"]) { _, new in new }
+                if textEffects == .recoveredOriginal { a["stroke-linejoin"] = "round" }
+            }
             xml.append("<g " + attributes(record?.attributes ?? [:], a) + ">")
             for (index, line) in textLines(element).enumerated() {
                 let preservedLine = original.flatMap { index < $0.lines.count ? $0.lines[index] : nil }

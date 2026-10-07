@@ -2,6 +2,39 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 
+private final class SketchTextLayoutManager: NSLayoutManager {
+    var annotationAlpha: CGFloat = 1
+    var annotationOutline: CGFloat?
+    var annotationOutlineColor: NSColor = .white
+    var annotationShadowed = false
+    override func drawGlyphs(forGlyphRange glyphsToShow: NSRange, at origin: NSPoint) {
+        guard let context = NSGraphicsContext.current?.cgContext else {
+            super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin); return
+        }
+        context.saveGState()
+        context.setLineJoin(.round)
+        context.setAlpha(annotationAlpha)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        context.setAlpha(1)
+        if annotationShadowed { OriginalTextEffects.shadow().set() }
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
+        // Rendering attributes are temporary: typing history and staged style
+        // stay owned by the text storage. Both passes cast one group shadow.
+        addTemporaryAttributes([.shadow: NSShadow(), .strokeWidth: annotationOutline ?? 0,
+                                .strokeColor: annotationOutlineColor], forCharacterRange: characters)
+        if annotationOutline != nil { super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin) }
+        addTemporaryAttribute(.strokeWidth, value: CGFloat(0), forCharacterRange: characters)
+        super.drawGlyphs(forGlyphRange: glyphsToShow, at: origin)
+        for key in [NSAttributedString.Key.strokeWidth, .strokeColor, .shadow] {
+            removeTemporaryAttribute(key, forCharacterRange: characters)
+        }
+        context.endTransparencyLayer()
+        context.endTransparencyLayer()
+        context.restoreGState()
+    }
+}
+
 private final class SketchTextEditor: NSTextView {
     // Native typing history stays separate from document transactions. Committing
     // an annotation registers one canvas undo step, regardless of keystroke count.
@@ -26,21 +59,29 @@ private final class SketchTextEditor: NSTextView {
         let caret = selectedRange()
         let displayedSize = max(18, element.fontSize * scale)
         let displayedFont = NSFont(name: element.fontName, size: displayedSize) ?? .boldSystemFont(ofSize: displayedSize)
+        if !(layoutManager is SketchTextLayoutManager) {
+            textContainer?.replaceLayoutManager(SketchTextLayoutManager())
+        }
+        if let manager = layoutManager as? SketchTextLayoutManager {
+            manager.annotationAlpha = element.color.alpha
+            manager.annotationOutline = element.outlined ? OriginalTextEffects.outlinePercentage(fontSize: displayedSize) : nil
+            manager.annotationOutlineColor = OriginalTextEffects.outlineColor(element.color)
+            manager.annotationShadowed = element.shadowed
+        }
         // Native typing Undo restores attributed strings as well as words. The
         // annotation's staged style remains authoritative throughout editing.
         if font != displayedFont { font = displayedFont }
-        textColor = element.color.nsColor
+        textColor = element.color.nsColor.withAlphaComponent(1)
         var attributes: [NSAttributedString.Key: Any] = [
-            .font: displayedFont, .foregroundColor: element.color.nsColor,
+            .font: displayedFont, .foregroundColor: element.color.nsColor.withAlphaComponent(1),
             .paragraphStyle: SketchRenderer.textParagraphStyle
         ]
-        if element.outlined { attributes[.strokeColor] = NSColor.white; attributes[.strokeWidth] = -3 }
+        if element.outlined {
+            attributes[.strokeColor] = OriginalTextEffects.outlineColor(element.color)
+            attributes[.strokeWidth] = -OriginalTextEffects.outlinePercentage(fontSize: displayedSize)
+        }
         if element.shadowed {
-            let shadow = NSShadow()
-            shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
-            shadow.shadowBlurRadius = 4 * scale
-            shadow.shadowOffset = NSSize(width: 2 * scale, height: -3 * scale)
-            attributes[.shadow] = shadow
+            attributes[.shadow] = OriginalTextEffects.shadow()
         }
         let range = NSRange(location: 0, length: (string as NSString).length)
         textStorage?.beginEditing()
@@ -397,8 +438,16 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if let editor = textEditor, let id = editingTextID,
            let source = document.elements.first(where: { $0.id == id }) {
             let element = elementIncludingPendingText(source)
-            editor.frame = viewRect(element.bounds)
             editor.applyAnnotationStyle(element, scale: displayScale.height)
+            // Font/layout changes can grow NSTextView immediately. Zoom owns
+            // the transformed field geometry; its previous minimum height must
+            // not keep the grip at the larger zoom. Ordinary typing can grow it.
+            let geometry = viewRect(element.bounds)
+            let canGrow = editor.isVerticallyResizable
+            editor.isVerticallyResizable = false
+            editor.minSize = NSSize(width: 0, height: min(editor.minSize.height, geometry.height))
+            editor.frame = geometry
+            editor.isVerticallyResizable = canGrow
             textEditorGrip?.frame = SketchTextGrip.attachedFrame(editor.frame)
         }
         needsDisplay = true

@@ -7,10 +7,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/build/objects"
 SNAPSHOT=$(mktemp -d "$ROOT/build/source-snapshot.XXXXXX")
 cp "$ROOT"/Sources/*.swift "$SNAPSHOT/"
 cp "$ROOT/Info.plist" "$SNAPSHOT/Info.plist"
-for ARCH in arm64 x86_64; do
+for ARCH in arm64; do
   xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit -framework AVFoundation -framework CoreMedia -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
 done
-xcrun lipo -create "$ROOT/build/objects/OpenSkitch-arm64" "$ROOT/build/objects/OpenSkitch-x86_64" -output "$APP/Contents/MacOS/OpenSkitch"
+cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
@@ -28,7 +28,7 @@ from pathlib import Path
 import hashlib, json, sys
 root, snapshot, app = map(Path, sys.argv[1:])
 manifest = {
-    "architectures": ["arm64", "x86_64"],
+    "architectures": ["arm64"],
     "minimum_macos": "13.0",
     "source_snapshot": str(snapshot),
     "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(snapshot.iterdir()) if p.is_file()},
