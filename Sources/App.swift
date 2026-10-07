@@ -99,6 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var windowGesture: WindowGesture?
     var adjustingWindowFrame = false
     var navigatorTimer: Timer?
+    var activeResizeSession: ResizePanelSession?
     var toolButtons: [SketchTool: NSButton] = [:]
     var currentURL: URL?
     var documentGeneration = UUID()
@@ -140,7 +141,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         buildMenus(); buildWindow()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
-        canvas.onViewportEditCancelled = { [weak self] in self?.endWindowGesture(cancelled: true) }
+        canvas.onViewportEditCancelled = { [weak self] in
+            self?.endWindowGesture(cancelled: true)
+            self?.activeResizeSession?.cancel()
+        }
         canvas.onHistoryRestored = { [weak self] previous in self?.finishHistoryResize(previousOutput: previous) }
         canvas.onOpenDocument = { [weak self] url in self?.openURL(url) }
         canvas.onToolChange = { [weak self] tool in
@@ -429,7 +433,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return false
     }
-    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; followHistory(); currentArchiveID = nil; endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
+    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; activeResizeSession?.cancel(); followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
     @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if p.runModal() == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
@@ -438,7 +442,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             followHistory()
             if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) {
                 let file = try SkitchFile.read(url)
-                endWindowGesture(cancelled: true); leaveActualSize()
+                activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
                 try canvas.loadDocument(data: file.canvasData); legacyMetadata = file.metadata
                 // Bundled samples stay intact; ordinary drawings save in place.
                 currentURL = url.path.contains(".app/Contents/Resources/") ? nil : url
@@ -447,7 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
                     throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
                 }
-                endWindowGesture(cancelled: true); leaveActualSize()
+                activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
                 canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); legacyMetadata = .init(); currentURL = nil }
             currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions()
             if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) { fitCanvasToWindow() } else { adoptRasterViewport() }
@@ -455,6 +459,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } catch { self.error(error) }
     }
     func save(forceChoose: Bool = false) -> Bool {
+        if let session = activeResizeSession {
+            do { guard try session.apply() else { return false } }
+            catch { self.error(error); return false }
+        }
         endWindowGesture()
         var url = forceChoose ? nil : currentURL
         if url == nil { let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".skitch"; p.allowedContentTypes = [UTType(filenameExtension: "skitch") ?? .data, UTType(filenameExtension: "skitchredux") ?? .data]; if p.runModal() != .OK { return false }; url = p.url }
@@ -474,6 +482,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         // Queued timer work must not interpret the temporary Discard dirty flag
         // as permission to delete recovery before backend cleanup succeeds.
         guard !terminationStarted || finalizingTermination else { return }
+        guard activeResizeSession?.lastPreview == nil else { return }
         followHistory()
         let url = support.appendingPathComponent("Recovery.skitch")
         guard dirty || canvas.hasPendingTextChanges else { removeRecovery(); return }
@@ -525,6 +534,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } catch { status.stringValue = "History could not be updated: " + error.localizedDescription; return false }
     }
     func followHistory() {
+        guard activeResizeSession?.lastPreview == nil else { return }
         historyFollowTimer?.invalidate(); historyFollowTimer = nil
         guard let id = currentArchiveID else { return }
         do { try archiveStore().follow(id, snapshot: historySnapshot(), name: safeName()); refreshHistory() }
@@ -582,7 +592,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func restoreHistoryEditorState(_ state: HistoryEditorState) throws {
         _ = try CanvasView.validatedDocumentData(state.data)
         canvas.commitPendingTextEditing()
-        endWindowGesture(cancelled: true); leaveActualSize()
+        activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
         let inverse = try historyEditorState()
         followHistory(); leaveFrame()
         restoring = true
@@ -802,7 +812,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             // here so timed, camera and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
-            followHistory(); currentArchiveID = nil; endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; window.makeKeyAndOrderFront(nil); updateStatus()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {
@@ -819,7 +829,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func enterFrame(keepingAnnotations: Bool) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
-        endWindowGesture(cancelled: true); leaveActualSize()
+        activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
         canvas.commitPendingTextEditing()
         if !frameMode {
             frameWindowWasOpaque = window.isOpaque
@@ -953,20 +963,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func toggleOutline() { canvas.outlined.toggle(); canvas.applyTextStyleToSelection() }
     @objc func resize() {
-        guard !isActualSize, !frameMode else { return }
-        let generation = documentGeneration
-        let panel = ResizePanel(size: canvas.outputSize) { [weak self] size, crop, anchor in
-            guard let self, self.documentGeneration == generation else { return }
-            if crop {
-                let source = CGSize(width: size.width * self.canvas.canvasSize.width / self.canvas.outputSize.width,
-                                    height: size.height * self.canvas.canvasSize.height / self.canvas.outputSize.height)
-                if !self.canvas.cropCanvas(to: source, anchor: anchor, outputSize: size) {
-                    self.error(NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This crop exceeds the supported source dimensions. Choose smaller dimensions or restore the snap to normal size first."]))
-                }
-            } else { _ = self.canvas.resizeImage(to: size) }
-            self.updateStatus()
-        }
-        panel.show(attachedTo: window)
+        guard let session = makeResizeSession() else { return }
+        ResizePanel(session: session).show(attachedTo: window)
     }
     @objc func normalSize() { canvas.setSnapToNormalSize(); updateStatus() }
     @objc func trimSnap() { canvas.trimSnapAtCurrentEdges(); updateStatus() }

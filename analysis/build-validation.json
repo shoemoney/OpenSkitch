@@ -1,14 +1,14 @@
 {
-  "verified_at": "2026-10-07T11:00:47.408288+00:00",
+  "verified_at": "2026-10-07T11:59:28.284300+00:00",
   "checkpoint_state": "current_build_full_suites_startup_and_scoped_desktop_verified",
-  "checkpoint_id": "actual-final-e4f568549f",
+  "checkpoint_id": "presets-final-18029f7cbc",
   "architectures": {
     "arm64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
-        "Sources/AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
-        "Sources/Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+        "Sources/App.swift": "da38a3ef98b9723a986e92a4fd0fa77df994f8761b10e1560223052875fb4ba3",
+        "Sources/AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
+        "Sources/Canvas.swift": "002a228df5f90e5aa70e0ef79e26ddce26822d2f4a6a0df25218c5024f794575",
         "Sources/CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
         "Sources/CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -24,13 +24,14 @@
         "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
         "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
         "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
-        "Sources/ResizePanel.swift": "dc82ee02dbc5b0e8e4537bf8ae6c5878ae258c1fb26621349f047957cf9f67c4",
+        "Sources/ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
+        "Sources/ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
         "Sources/SVGExport.swift": "4a061e7d170cfee030809da25c18b160baa9982f79f6b64aef9ec4f84e460ccf",
         "Sources/SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
         "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
         "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
         "Sources/WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
-        "tests/AppSafetyTests.swift": "94e7e0d8cd6fd9bef8ab4f6e3ac56269db5d16ff9cee9c80270873475803fc32",
+        "tests/AppSafetyTests.swift": "c6c678192e554f3b804d0718b46e4ffb39cf737a3d49d205ea87c0642486c996",
         "tests/CanvasBorderTests.swift": "2671d327f49d32768daab0930cfec3c8d9c1d4d7edf71e6e93266ffb88dd4f9c",
         "tests/CanvasNavigatorTests.swift": "6b1d85d1cef78b046cbeaebed510cfb8021ddd381d37c01c6265e573324234c8",
         "tests/CanvasTests.swift": "925ce5a86bdda43dc4223388f406c28ec195acb3036d9d938dbf1a00bf8b4598",
@@ -45,7 +46,8 @@
         "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
         "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
         "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
-        "tests/ResizePanelTests.swift": "61461ecbb505df788c86d33b7c56734f5667db96f1a376e61e8ab71fb5f0f3f0",
+        "tests/ResizePanelTests.swift": "1aab047a992c00998f90f5edbf65538c615e70cdee72f7ac2ebcf860e521adc2",
+        "tests/ResizePresetsTests.swift": "2f090bd869c875ce533c6321832136418451c3c4a1767dee429c2bd2a847a4e5",
         "tests/SVGExportTests.swift": "e09426f11116af736a7efcd1d3114ed5a441471495f21539620f2de67b00f6d9",
         "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
         "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
@@ -54,49 +56,51 @@
       },
       "suite_results": {
         "window_sizing": 538,
-        "canvas_navigator": 212,
         "canvas_border": 127,
-        "resize_panel": 89,
         "export_accessory": 118,
-        "image_export": 14,
-        "canvas": 60,
-        "vector_geometry": 15,
-        "stroke_fitting": 20,
-        "publishing": 160,
-        "publishing_shutdown": 50,
+        "canvas_navigator": 212,
+        "resize_presets": 346,
+        "resize_panel": 122,
+        "photo_browser": 19,
         "global_hotkeys": 117,
+        "publishing": 160,
+        "legacy_history_importer": 67,
+        "stroke_fitting": 20,
+        "history_remote_deletion": 129,
+        "history_browser": 19,
+        "vector_geometry": 15,
+        "image_export": 14,
+        "publishing_shutdown": 50,
+        "capture": 154,
         "svg": 30,
         "skitch_file": 20,
-        "capture": 154,
-        "photo_browser": 19,
-        "app_safety": 57,
         "history_store": 55,
-        "history_browser": 19,
-        "history_remote_deletion": 129,
-        "legacy_history_importer": 67
+        "canvas": 60,
+        "app_safety": 61
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.jv9do7oe",
+      "snapshot": "build/test-snapshot.wmiln0bk",
       "source_manifest": {
-        "path": "build/test-snapshot.jv9do7oe/source-manifest.json",
-        "sha256": "29e411b034cff4fee6b1abb5b1470ab8fa76abe9ca4ac4c08425aad03a6c7094"
+        "path": "build/test-snapshot.wmiln0bk/source-manifest.json",
+        "sha256": "383ecad3df00ccfbf5f615f7ed7fe6ccb9a2369b4ee2b2b4b05bb52b806f87b5"
       },
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.cuBFvS",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.ZKPe0o",
       "native_appkit_idle_termination": {
         "passed": true,
-        "evidence_path": "build/actual-verification/arm64.log"
+        "evidence_path": "build/presets-verification/arm64.log"
       },
-      "raw_log": "build/actual-verification/arm64.log",
-      "raw_log_sha256": "0791023b5c2bad9e5239561986e34ee1f2246ee80d5c2a0ca5b20f1d7863ce16",
-      "snapshot_scope": "actual-final-e4f568549f",
-      "output_capture": "Complete redirected stdout/stderr retained, all summaries and runner success present."
+      "raw_log": "build/presets-verification/arm64.log",
+      "raw_log_sha256": "001e894e4a4b363444c5ca4174774eb0fe1c970e63d15579795082cb7a98458b",
+      "snapshot_scope": "presets-final-18029f7cbc",
+      "checkpoint_scope": "current_exact18029f7cbc",
+      "output_capture": "Complete redirected stdout/stderr retained; all suite summaries, native idle termination and final runner success present."
     },
     "x86_64": {
       "passed": true,
       "source_sha256": {
-        "Sources/App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
-        "Sources/AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
-        "Sources/Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+        "Sources/App.swift": "da38a3ef98b9723a986e92a4fd0fa77df994f8761b10e1560223052875fb4ba3",
+        "Sources/AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
+        "Sources/Canvas.swift": "002a228df5f90e5aa70e0ef79e26ddce26822d2f4a6a0df25218c5024f794575",
         "Sources/CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
         "Sources/CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
         "Sources/Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -112,13 +116,14 @@
         "Sources/LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
         "Sources/PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
         "Sources/Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
-        "Sources/ResizePanel.swift": "dc82ee02dbc5b0e8e4537bf8ae6c5878ae258c1fb26621349f047957cf9f67c4",
+        "Sources/ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
+        "Sources/ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
         "Sources/SVGExport.swift": "4a061e7d170cfee030809da25c18b160baa9982f79f6b64aef9ec4f84e460ccf",
         "Sources/SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
         "Sources/StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
         "Sources/VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
         "Sources/WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7",
-        "tests/AppSafetyTests.swift": "94e7e0d8cd6fd9bef8ab4f6e3ac56269db5d16ff9cee9c80270873475803fc32",
+        "tests/AppSafetyTests.swift": "c6c678192e554f3b804d0718b46e4ffb39cf737a3d49d205ea87c0642486c996",
         "tests/CanvasBorderTests.swift": "2671d327f49d32768daab0930cfec3c8d9c1d4d7edf71e6e93266ffb88dd4f9c",
         "tests/CanvasNavigatorTests.swift": "6b1d85d1cef78b046cbeaebed510cfb8021ddd381d37c01c6265e573324234c8",
         "tests/CanvasTests.swift": "925ce5a86bdda43dc4223388f406c28ec195acb3036d9d938dbf1a00bf8b4598",
@@ -133,7 +138,8 @@
         "tests/PhotoBrowserTests.swift": "957394f0f1632de7e20493f2b8c3ca1d495684e10171755e9e3735a7bdfe86e6",
         "tests/PublishingShutdownTests.swift": "974980b647c47675363aa2d0e73b0f9d0a67bca937c74f92d6a5aa84a902f80b",
         "tests/PublishingTests.swift": "4182177c28a2ff3d310b21c33c32e497d142b3e4d3a80150da52168777719960",
-        "tests/ResizePanelTests.swift": "61461ecbb505df788c86d33b7c56734f5667db96f1a376e61e8ab71fb5f0f3f0",
+        "tests/ResizePanelTests.swift": "1aab047a992c00998f90f5edbf65538c615e70cdee72f7ac2ebcf860e521adc2",
+        "tests/ResizePresetsTests.swift": "2f090bd869c875ce533c6321832136418451c3c4a1767dee429c2bd2a847a4e5",
         "tests/SVGExportTests.swift": "e09426f11116af736a7efcd1d3114ed5a441471495f21539620f2de67b00f6d9",
         "tests/SkitchFileTests.swift": "f6d3859e7c69341c604cd7cba7ffc58c6867575890e0226d299d5d1e36b6af94",
         "tests/StrokeFittingTests.swift": "7dcdfff427850a7510a5e579bc3703c81690fca08e240c26452b7f273f241f19",
@@ -142,42 +148,44 @@
       },
       "suite_results": {
         "window_sizing": 538,
-        "canvas_navigator": 212,
         "canvas_border": 127,
-        "resize_panel": 89,
         "export_accessory": 118,
-        "image_export": 14,
-        "canvas": 60,
-        "vector_geometry": 15,
-        "stroke_fitting": 20,
-        "publishing": 160,
-        "publishing_shutdown": 50,
+        "canvas_navigator": 212,
+        "resize_presets": 346,
+        "resize_panel": 122,
+        "photo_browser": 19,
         "global_hotkeys": 117,
+        "publishing": 160,
+        "legacy_history_importer": 67,
+        "stroke_fitting": 20,
+        "history_remote_deletion": 129,
+        "history_browser": 19,
+        "vector_geometry": 15,
+        "image_export": 14,
+        "publishing_shutdown": 50,
+        "capture": 154,
         "svg": 30,
         "skitch_file": 20,
-        "capture": 154,
-        "photo_browser": 19,
-        "app_safety": 57,
         "history_store": 55,
-        "history_browser": 19,
-        "history_remote_deletion": 129,
-        "legacy_history_importer": 67
+        "canvas": 60,
+        "app_safety": 61
       },
       "source_drift": [],
-      "snapshot": "build/test-snapshot.i52s_nrh",
+      "snapshot": "build/test-snapshot.bz8w47nt",
       "source_manifest": {
-        "path": "build/test-snapshot.i52s_nrh/source-manifest.json",
-        "sha256": "29e411b034cff4fee6b1abb5b1470ab8fa76abe9ca4ac4c08425aad03a6c7094"
+        "path": "build/test-snapshot.bz8w47nt/source-manifest.json",
+        "sha256": "383ecad3df00ccfbf5f615f7ed7fe6ccb9a2369b4ee2b2b4b05bb52b806f87b5"
       },
-      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.xw0np3",
+      "app_safety_evidence": "/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.ZBXeos",
       "native_appkit_idle_termination": {
         "passed": true,
-        "evidence_path": "build/actual-verification/x86_64.log"
+        "evidence_path": "build/presets-verification/x86_64.log"
       },
-      "raw_log": "build/actual-verification/x86_64.log",
-      "raw_log_sha256": "9b5d48d7cb7232781bd10765f5b81a06f467b406f41dfd3f73713851592152cb",
-      "snapshot_scope": "actual-final-e4f568549f",
-      "output_capture": "Complete redirected stdout/stderr retained, all summaries and runner success present."
+      "raw_log": "build/presets-verification/x86_64.log",
+      "raw_log_sha256": "29ce68e8bd206c02f8da8f3546db649bb8b43e4eb955e09d8e489b2fe139f2e7",
+      "snapshot_scope": "presets-final-18029f7cbc",
+      "checkpoint_scope": "current_exact18029f7cbc",
+      "output_capture": "Complete redirected stdout/stderr retained; all suite summaries, native idle termination and final runner success present."
     }
   },
   "build": {
@@ -186,11 +194,11 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.BBVUqf",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.zYEvP1",
     "source_sha256": {
-      "App.swift": "444c7fbe27e149ea6bc7a47c811670339666d024108a06555c7af03391e89bcb",
-      "AppViewport.swift": "7f098c90c32919299619ef3878a2cc6dcc832bbcc74ab009431aebb6671f8af2",
-      "Canvas.swift": "9919f38d94dbe04bab475b04c948bc8c2baa1c993685d8be59a3f61b8e9d95dd",
+      "App.swift": "da38a3ef98b9723a986e92a4fd0fa77df994f8761b10e1560223052875fb4ba3",
+      "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
+      "Canvas.swift": "002a228df5f90e5aa70e0ef79e26ddce26822d2f4a6a0df25218c5024f794575",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
@@ -207,32 +215,33 @@
       "LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
       "PhotoBrowser.swift": "9663deaa4c367082c5835dff7ab5e3d957096777296e43d4f1cea54f76ab75b6",
       "Publishing.swift": "19b8f8672bdc7af19022d2bacc742305191cb4da8727ba9e7209c7ce0e1a820d",
-      "ResizePanel.swift": "dc82ee02dbc5b0e8e4537bf8ae6c5878ae258c1fb26621349f047957cf9f67c4",
+      "ResizePanel.swift": "46740d70d1905bfe51cbd125f9528c8151b5363ac307e463eef4b295d5821cec",
+      "ResizePresets.swift": "9a37a8cc80e807b7868129bee4eaa98880d66da1b463553c7fc215a64cb88c50",
       "SVGExport.swift": "4a061e7d170cfee030809da25c18b160baa9982f79f6b64aef9ec4f84e460ccf",
       "SkitchFile.swift": "d0a2c5e72334b4b93f61ca442ecc922e5f8c8d5594965720ac0150baeeeb3821",
       "StrokeFitting.swift": "c1e073107dffa0acf577acd06c85ecc0a7ca2cd5006af622d90b1ff1c4a254c3",
       "VectorGeometry.swift": "f936a87bf6cbc1441c1225d836c8ca2f4182f22b48501f8edeeea72fd591b521",
       "WindowSizing.swift": "5bded22e93dfc82567672bec4fa073930ec1feedb608fd047a28450717a462c7"
     },
-    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10"
+    "binary_sha256": "18029f7cbc0a5b2c09737109171c5646f839570c4977501f6c02c48eac040dde"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "b120a82d6a2d2ecb9a88fefb9b873b7058f96dfa88232cb86ffbf981e1f56faa",
+  "build_manifest_sha256": "af0f90949cd7669b1014e3e10ef3eee239f3223a8e22beea705d0b1812a7cb9f",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "full_suite_results_path": "build/actual-verification/results.json",
-  "full_suite_results_sha256": "0a2636d46350b5a4dd17880130043de043fb1b03c3802c20191b67f9f12aa4c3",
+  "full_suite_results_path": "build/presets-verification/results.json",
+  "full_suite_results_sha256": "3549e1bfe8f7fd8158fa484b75ebe37b2953054e64794960151c8dfe3a442c18",
   "native_startup_smoke": {
-    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
-    "verified_at": "2026-10-07T10:47:12.429702+00:00",
+    "binary_sha256": "18029f7cbc0a5b2c09737109171c5646f839570c4977501f6c02c48eac040dde",
+    "verified_at": "2026-10-07T11:39:38.785105+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "531c15ec5da45ea523bb326a9c0895574ded90788ef1dfad0fcb60d33d677c98"
+      "editable_sha256": "ba9f49c2f2f809fc712c33731095988925776eebab33efa7654f1b76d48c147b"
     },
     "x86_64": {
       "passed": true,
@@ -240,11 +249,11 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "6046558b3cca6117f59eaf9e2e0a0387b6c84ba3ec7d0873cc66788509cf1a86"
+      "editable_sha256": "85079ab2caac1d7b54a5d106bd1415587788acc7535e53abfc65c5fbe00bb33e"
     }
   },
   "validation_tools_sha256": {
-    "tools/test.py": "1db3a8cbaaafce660aa8eb7d93ef0c36e339d62d15a161667e6a36fa64c46497",
+    "tools/test.py": "2a64a0e81f31eb421347eb3471428cc00dcd91ccec1ecea78ef979e421331623",
     "tools/build.sh": "fda09ceef759dd80d504d813bd0119e793cafd28e681cc339d866df359155640",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9"
   },
@@ -454,108 +463,26 @@
   ],
   "current_desktop_checks": [
     {
-      "id": "native-actual-border-final",
-      "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
+      "id": "native-resize-presets-final",
+      "binary_sha256": "18029f7cbc0a5b2c09737109171c5646f839570c4977501f6c02c48eac040dde",
       "architecture": "arm64",
       "passed": true,
-      "evidence_path": "build/actual-desktop-proof.json",
-      "evidence_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
-      "checkpoint_scope": "current_exact_e4_listed_native_checks_only",
+      "evidence_path": "build/presets-desktop-proof.json",
+      "evidence_sha256": "0068da2117568dcdd16b6f60fd37a7e618c3025bcc18ef3e7473c2220c04ec9c",
+      "checkpoint_scope": "current_exact18029f7cbc_listed_native_checks_only",
       "checks": [
-        "Imported 3000x2000 synthetic PNG fitted normal output to 1356x904.",
-        "Corner drag changed output to 1276x851; keyboard Undo restored 1356x904 and full window canvas with gold border handles and no scrollbars; Redo restored 1276x851; Undo restored normal output.",
-        "Left border crop changed output to 1336x904; native Save retained full 3000x2000 pan source with negative horizontal offset. Undo restored full source.",
-        "Drew arrow and saved normal document at 1356x904.",
-        "Actual Size showed 3000x2000, disabled zoom and Resize controls, exposed both scroll axes, and hid normal border handles.",
-        "Scroll Right and Scroll Down accessibility actions changed horizontal and vertical scroll values from zero to 0.8220597196831201 and 0.8206770356816102.",
-        "Saved native file during Actual Size at full 3000x2000 output.",
-        "Normal View restored 1356x904 and displayed Unsaved changes after full-size save.",
-        "Saved separate final normal file; reopened through native Open dialog; output 1356x904 and arrow visible.",
-        "Reopened file entered Actual Size at 3000x2000, returned to normal without dirty state; Select click on arrow displayed editable selection handles."
+        "Opened 3000x2000 source document with 1356x904 output and editable arrow in final binary.",
+        "Resize panel and all thirteen recovered built-in preset names reviewed visually; body and controls use 20pt, heading 26pt; no clipped controls.",
+        "Ad: Thumbnail selected 100x100 with proportions unlocked; Apply left sheet open; Cancel restored saved 1356x904 artwork. Decoded cancelled save exactly equals baseline raw canvas including source bytes and vectors.",
+        "Added Redux Test Square 100x100 unlocked custom preset; Cancel retained preset while restoring artwork. Reopened sheet loaded custom dimensions and enabled edit controls.",
+        "OK applied square output100x100 with source viewport3000x3000 and centered500px vertical padding; grid and white circle remained proportional. Original full raster bytes retained in pan source and arrow translated500px without distortion.",
+        "One keyboard Undo restored1356x904; Redo restored100x100; Undo restored baseline again.",
+        "Limit longest side600 produced600x400; saved full3000x2000 source and exact baseline vector geometry.",
+        "Clean Quit and fresh launch retained Redux Test Square in preset menu; selecting it loaded100x100 unlocked fields.",
+        "Reopened Preset-limit-native.skitch after restart at600x400; Actual Size showed3000x2000; Normal View restored600x400 Saved.",
+        "Select click on reopened arrow displayed editable bounding box and handles."
       ],
       "artifacts": [
-        {
-          "path": "build/Actual-crop-native.skitch",
-          "sha256": "ca55f79bc709c655c925699f3303bd7f7faf9770298ab303fdb49e446c31af74",
-          "bytes": 900201,
-          "source_size": [
-            2955.7522123893805,
-            2000
-          ],
-          "output_size": [
-            1336,
-            904
-          ],
-          "element_count": 0,
-          "background": {
-            "sha256": "0459568ec07c8423d752a601e7b08e82378a337fd719019476e6f1993d39ed38",
-            "pixels": [
-              2956,
-              2000
-            ]
-          },
-          "pan_background": {
-            "source_size": [
-              3000,
-              2000
-            ],
-            "offset": [
-              -44.24778761061947,
-              0
-            ],
-            "source": {
-              "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
-              "pixels": [
-                3000,
-                2000
-              ]
-            }
-          }
-        },
-        {
-          "path": "build/Actual-normal-native.skitch",
-          "sha256": "343018ca57f6dad821e0f68ce9fac96624a794df4fbf7c7adf7c15b941d4f846",
-          "bytes": 634157,
-          "source_size": [
-            3000,
-            2000
-          ],
-          "output_size": [
-            1356,
-            904
-          ],
-          "element_count": 1,
-          "background": {
-            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
-            "pixels": [
-              3000,
-              2000
-            ]
-          },
-          "pan_background": null
-        },
-        {
-          "path": "build/Actual-full-native.skitch",
-          "sha256": "c255894bac722fab4b10848effbe0e4c92b2dff15c6dec19396a350b22a130ac",
-          "bytes": 634081,
-          "source_size": [
-            3000,
-            2000
-          ],
-          "output_size": [
-            3000,
-            2000
-          ],
-          "element_count": 1,
-          "background": {
-            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
-            "pixels": [
-              3000,
-              2000
-            ]
-          },
-          "pan_background": null
-        },
         {
           "path": "build/Actual-final-normal.skitch",
           "sha256": "343018ca57f6dad821e0f68ce9fac96624a794df4fbf7c7adf7c15b941d4f846",
@@ -577,24 +504,119 @@
             ]
           },
           "pan_background": null
+        },
+        {
+          "path": "build/Preset-cancel-native.skitch",
+          "sha256": "343018ca57f6dad821e0f68ce9fac96624a794df4fbf7c7adf7c15b941d4f846",
+          "bytes": 634157,
+          "source_size": [
+            3000,
+            2000
+          ],
+          "output_size": [
+            1356,
+            904
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+            "pixels": [
+              3000,
+              2000
+            ]
+          },
+          "pan_background": null
+        },
+        {
+          "path": "build/Preset-square-native.skitch",
+          "sha256": "93c9e7020e474eb5b524f6d3481249c2e0f08639435fa4125a52465138f961f6",
+          "bytes": 1124137,
+          "source_size": [
+            3000,
+            3000
+          ],
+          "output_size": [
+            100,
+            100
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "1bc1331a437fc8e5e11274feed7b595e8e40ffe911912184b40861705f3c0ff7",
+            "pixels": [
+              3000,
+              3000
+            ]
+          },
+          "pan_background": {
+            "source_size": [
+              3000,
+              2000
+            ],
+            "offset": [
+              0,
+              500
+            ],
+            "source": {
+              "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+              "pixels": [
+                3000,
+                2000
+              ]
+            }
+          }
+        },
+        {
+          "path": "build/Preset-limit-native.skitch",
+          "sha256": "5eb4c6f716a024c7f606079c4484f6ff124f65658619d85d6d052a9e07dced65",
+          "bytes": 634157,
+          "source_size": [
+            3000,
+            2000
+          ],
+          "output_size": [
+            600,
+            400
+          ],
+          "element_count": 1,
+          "background": {
+            "sha256": "3e05ce85735498abe133a287d14f9b40d6ed9a89af8b8954f24b3796979ea4b5",
+            "pixels": [
+              3000,
+              2000
+            ]
+          },
+          "pan_background": null
         }
       ],
+      "verified_saved_state": {
+        "cancel_equals_baseline_raw": true,
+        "limit_changes_only_output_size": true,
+        "square_original_png_retained": true,
+        "square_centered_padding": [
+          0,
+          500
+        ],
+        "square_annotation_changes_only_translation": true
+      },
       "limits": [
-        "Navigator non-key child window was not exposed in CUA main-window screenshot/accessibility capture; its native visual and desktop interaction remain unverified.",
+        "Custom preset removal was covered only with isolated store tests; its desktop action was not invoked.",
         "No physical Intel desktop testing; x86_64 suites and startup run under Rosetta.",
-        "No original 32-bit app runtime comparison, capture/camera/Photos permission changes or publishing performed in this desktop check."
+        "No original 32-bit runtime comparison, capture/camera/Photos permissions or publishing performed.",
+        "Original preferences domain migration is not automatic; store understands original SKPresetResizes dictionaries imported into the Redux preferences domain."
       ],
-      "screenshots": "Actual native CUA screenshots displayed inline; no filesystem screenshot or native navigator visual verification claimed.",
+      "screenshots": "Actual native CUA screenshots reviewed inline; no filesystem desktop screenshot claimed.",
+      "native_custom_remove_verified": false,
+      "new_sftp_upload_claimed": false,
       "original_parity": "unverified",
-      "full_original_parity": false,
-      "new_sftp_upload_claimed": false
+      "full_original_parity": false
     }
   ],
   "desktop_checkpoint": {
     "status": "verified_listed_native_checks",
-    "build_binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
-    "proof_path": "build/actual-desktop-proof.json",
-    "proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
+    "build_binary_sha256": "18029f7cbc0a5b2c09737109171c5646f839570c4977501f6c02c48eac040dde",
+    "proof_path": "build/presets-desktop-proof.json",
+    "proof_sha256": "0068da2117568dcdd16b6f60fd37a7e618c3025bcc18ef3e7473c2220c04ec9c",
+    "native_custom_remove_verified": false,
     "native_navigator_visual_verified": false,
     "original_parity": "unverified",
     "full_original_parity": false
@@ -758,6 +780,22 @@
       "build_manifest_path": "build/actual-before-window-undo-verification/build-manifest.json",
       "build_manifest_sha256": "c230956d4e1a45301acd1641b4e6d9e0501bde626d331aaacb772a786b69b757",
       "native_window_Undo_final_pass_claimed": false
+    },
+    {
+      "id": "actual-final-e4f568549f",
+      "scope": "historical_exact_e4_build_suites_startup_and_listed_desktop",
+      "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10",
+      "validation_sha256_when_current": "c7ab6ac08817964822a24d537810e3b8cca4768df122b8f74897bf471099ef51",
+      "build_manifest_sha256_when_current": "b120a82d6a2d2ecb9a88fefb9b873b7058f96dfa88232cb86ffbf981e1f56faa",
+      "full_suite_results_path": "build/actual-verification/results.json",
+      "full_suite_results_sha256": "0a2636d46350b5a4dd17880130043de043fb1b03c3802c20191b67f9f12aa4c3",
+      "native_startup_smoke_results_path": "build/startup-smoke-e4f568549f/results.json",
+      "native_startup_smoke_results_sha256": "802839d14eb2dd0a224f6efbb8691ead5d26dedddbd7f5a9e103b840816ec69b",
+      "desktop_proof_path": "build/actual-desktop-proof.json",
+      "desktop_proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
+      "checks_per_architecture": 2070,
+      "suites_per_architecture": 21,
+      "full_original_parity": false
     }
   ],
   "superseded_validation": {
@@ -778,7 +816,7 @@
     "browser_checks": 19,
     "remote_deletion_fake_checks": 129,
     "legacy_importer_synthetic_checks": 67,
-    "app_safety_checks": 57,
+    "app_safety_checks": 61,
     "real_legacy_index_available": false,
     "remote_deletion_available_current_host": false,
     "remote_destination_binding_present": false,
@@ -807,16 +845,16 @@
     "Native History drag destination/drop, Copy destination paste, local Trash, remote deletion and Share service completion",
     "History original date popup labels and NSCalendarDate/DST equivalence",
     "Remote deletion unavailable on this host: publication destination binding absent because SSH Include is outside supported configuration tree",
-    "Original interactive window-border/corner output gestures, Actual mode and original auto-fit",
-    "Native testing of all nine crop anchors; original Limit modes, preset/default preference schemas and Apply/OK/Cancel preview-revert behavior",
+    "Original runtime fidelity of window-border/corner gestures, Actual mode, navigator and auto-fit",
+    "Native all-nine-anchor coverage, Limit width/height/enlargement and custom Remove; original rounding, preview lifecycle equivalence and preferences-domain migration",
     "Original Original Size semantics after retained crop/pan, exact encoder/palette defaults, Drag Me destination and temporary control-collapse behavior",
     "Complete original presets/preferences/legacy service workflows"
   ],
-  "current_source_validation_status": "current_frozen_source_test_tools_build_and_both_full_suites_verified",
-  "full_suite_results_status": "complete_logs_and_authoritative_results_verified_current_source_test_tool_hashes_match",
-  "native_startup_smoke_evidence": "build/startup-smoke-e4f568549f",
-  "native_startup_smoke_results_path": "build/startup-smoke-e4f568549f/results.json",
-  "native_startup_smoke_results_sha256": "802839d14eb2dd0a224f6efbb8691ead5d26dedddbd7f5a9e103b840816ec69b",
+  "current_source_validation_status": "current_source_test_tool_build_and_snapshot_hashes_verified",
+  "full_suite_results_status": "passed_both_current_snapshots",
+  "native_startup_smoke_evidence": "build/startup-smoke-18029f7cbc",
+  "native_startup_smoke_results_path": "build/startup-smoke-18029f7cbc/results.json",
+  "native_startup_smoke_results_sha256": "d01403c42129d7f751636ee1ac1acaf2e30e20bd58e96976eaa7e5ed459f2d2a",
   "unchanged_core_source_sha256_since_sizing_before_repaint": {
     "Sources/App.swift": "39bfc6b59248e95666304649c8a78bbb427b2fbec5ff0669ca86dc6086a85086",
     "Sources/Canvas.swift": "9fe32eeb979b68707be6bf231cccddc2d2472084a62f75e5912103ceed1318a9",
@@ -858,20 +896,22 @@
     "full_original_parity": false,
     "checkpoint_scope": "historical_exact_65aa7979_sizing_checkpoint"
   },
-  "build_checkpoint_scope": "current_e4_build_and_tests_verified",
-  "native_startup_smoke_scope": "current_exact_e4_binary_both_architectures",
-  "build_log_path": "build/actual-verification/build.log",
+  "build_checkpoint_scope": "current_exact18029f7cbc",
+  "native_startup_smoke_scope": "current_exact18029f7cbc; reconstruction save/load/PNG, no original i386 runtime comparison",
+  "build_log_path": "build/presets-verification/build.log",
   "build_log_sha256": "c1ba3dee90ff2e799101e07e2ebd2a1c5d5f561b5b05774006b767ee4330aa41",
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2070,
-    "suites": 21,
-    "results_path": "build/actual-verification/results.json",
-    "results_sha256": "0a2636d46350b5a4dd17880130043de043fb1b03c3802c20191b67f9f12aa4c3"
+    "checks_per_architecture": 2453,
+    "suites": 22,
+    "results_path": "build/presets-verification/results.json",
+    "results_sha256": "3549e1bfe8f7fd8158fa484b75ebe37b2953054e64794960151c8dfe3a442c18"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "e4f568549fac358a6b5e689dd44b50ad9cd6dd270fd72f0f9d82f7486e76ef10"
+    "binary_sha256": "18029f7cbc0a5b2c09737109171c5646f839570c4977501f6c02c48eac040dde",
+    "startup_log_path": "build/presets-verification/startup.log",
+    "startup_log_sha256": "3c322aa195dbec04df8018d16fba9972c29a180c119ba0a651a96775297bbaac"
   },
   "actual_border_fidelity_notes": [
     "Undo/Redo inside Actual presentation is intended to preserve functional normal-output history; literal entry-output restoration after history changes must not be asserted. Original runtime semantics remain unverified.",
@@ -891,6 +931,40 @@
     "Undo_contract": "Current normal output history survives Actual Undo/exit/Redo; literal entry-output restore after history changes is not claimed. Original runtime Undo semantics unverified.",
     "native_window_Undo_defect": "Historical2db output Undo left window too small. Current e4 native keyboard Undo restores1356x904 with full window, gold crop border and no scrollbars; Redo1276x851 and Undo1356x904 verified. Original runtime equivalence unverified.",
     "native_desktop_proof_path": "build/actual-desktop-proof.json",
-    "native_desktop_proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f"
+    "native_desktop_proof_sha256": "7c3f41c6300c3a2fef069816cbb2a77a0fadcea25ec7b60e25f5c4945f6ea05f",
+    "checkpoint_scope": "historical_exact_e4; final replacement proof pending"
+  },
+  "resize_presets_verification_scope": {
+    "status": "verified_exact_current_suites_and_listed_native_checks",
+    "original_contract_evidence": {
+      "path": "analysis/disassembly.txt",
+      "sha256": "ee96d3143394be6554a76f56163e1c844d158339c927ce476e4c5e518ae11aaf",
+      "lines": {
+        "setNeedsApply": 124151,
+        "apply": 124196,
+        "cancel": 124244,
+        "ok": 124291,
+        "show": 123993,
+        "undoMarker": 15226,
+        "applyResize": 14727,
+        "proportionalScale": 15009,
+        "limitScale": 15084,
+        "presetInitSettings": 121478,
+        "presetSettings": 121731,
+        "catalog": 123017,
+        "savePresets": 123921
+      }
+    },
+    "nib_scope": "Supplied original Resize.nib scout:715objects/42bindings, limitMode popup object479; no format selector. Runtime reachability/format consumer unresolved.",
+    "preset_format_scope": "Opaque signed32-bit field preserved; no resize format-change behavior asserted.",
+    "original_parity": "unverified",
+    "full_original_parity": false,
+    "resize_presets_checks": 346,
+    "resize_panel_checks": 122,
+    "app_safety_checks": 61,
+    "desktop_proof_path": "build/presets-desktop-proof.json",
+    "desktop_proof_sha256": "0068da2117568dcdd16b6f60fd37a7e618c3025bcc18ef3e7473c2220c04ec9c",
+    "native_custom_removal_verified": false,
+    "preferences_domain_migration": "Not automatic; original dictionaries supported when imported into Redux defaults domain."
   }
 }

@@ -147,6 +147,83 @@ private enum ResizePanelTests {
             precondition((try? reentrant.apply()) == false, "Reentrant callback cannot apply twice")
         }
         try expect(try reentrant.apply(), "Reentrant delivery guarded")
+        var previews: [ResizePanelSubmission] = []
+        var finishes: [Bool] = []
+        let previewSession = ResizePanelSession(size: CGSize(width: 800, height: 600),
+            onPreview: { previews.append($0) }, onFinish: { finishes.append($0) })
+        previewSession.state.edit(.width, text: "400")
+        try expect(try previewSession.preview(), "Apply previews without closing")
+        try expect(!previewSession.isFinished && previews.count == 1 && finishes.isEmpty,
+                   "Preview leaves session open and uncommitted")
+        try expect(try previewSession.preview() && previews.count == 1, "Duplicate Apply does not repeat crop")
+        previewSession.state.edit(.width, text: "0")
+        try rejects { _ = try previewSession.preview() }
+        try expect(previews.count == 1 && !previewSession.isFinished, "Invalid preview preserves previous preview")
+        previewSession.state.edit(.width, text: "200")
+        var sheetEnded = false
+        try expect(try previewSession.apply { sheetEnded = true }, "OK previews last edit then commits")
+        try expect(sheetEnded && previews.map(\.size) == [CGSize(width: 400, height: 300), CGSize(width: 200, height: 150)]
+                   && finishes == [false], "OK delivers current dimensions and one commit")
+        previewSession.cancel()
+        try expect(try !previewSession.preview() && finishes == [false], "Sheet cleanup cannot cancel accepted changes")
+        let cancelledPreview = ResizePanelSession(size: CGSize(width: 800, height: 600),
+            onPreview: { previews.append($0) }, onFinish: { finishes.append($0) })
+        cancelledPreview.state.edit(.width, text: "320")
+        _ = try cancelledPreview.preview()
+        cancelledPreview.cancel(); cancelledPreview.cancel()
+        try expect(finishes == [false, true] && cancelledPreview.isFinished, "Cancel rolls back exactly once after Apply")
+        struct PreviewFailure: Error {}
+        let failedPreview = ResizePanelSession(size: CGSize(width: 800, height: 600),
+            onPreview: { _ in throw PreviewFailure() }, onFinish: { finishes.append($0) })
+        do { _ = try failedPreview.apply(); throw Failure(description: "Failed shell preview committed") }
+        catch is PreviewFailure {}
+        try expect(!failedPreview.isFinished && failedPreview.lastPreview == nil && finishes == [false, true],
+                   "Failed shell crop leaves sheet open and does not commit")
+        failedPreview.cancel()
+        var nestedPreview: ResizePanelSession!
+        nestedPreview = ResizePanelSession(size: CGSize(width: 100, height: 50), onPreview: { _ in
+            precondition((try? nestedPreview.preview()) == false)
+            precondition((try? nestedPreview.apply()) == false)
+        }, onFinish: { _ in })
+        try expect(try nestedPreview.preview(), "Reentrant previews and commits are suppressed")
+        nestedPreview.cancel()
+        var limitState = ResizePanelState(size: CGSize(width: 800, height: 600))
+        limitState.setMode(.limit); limitState.limitText = "400"
+        try expect(try limitState.submission().size == CGSize(width: 400, height: 300), "Limit longest side shrinks proportionally")
+        limitState.limitMode = .height
+        try expect(try limitState.submission().size == CGSize(width: 533, height: 400), "Height limit uses current output aspect")
+        limitState.limitMode = .width; limitState.limitText = "1600"
+        try expect(try limitState.submission().size == CGSize(width: 1600, height: 1200), "Limit allows enlargement")
+        limitState.limitText = "0"
+        try rejects { _ = try limitState.submission() }
+        limitState.limitText = "16384"
+        try rejects { _ = try limitState.submission() }
+        let unlocked = ResizePanelSubmission(size: CGSize(width: 800, height: 100), isCrop: false, anchor: .zero, constrainProportions: false)
+        let expanded = try ResizePanelGeometry.preview(source: CGSize(width: 300, height: 180), output: CGSize(width: 150, height: 90), request: unlocked)
+        let expandedRect = expanded.rect ?? .zero
+        try expect(expanded.output == unlocked.size && abs(expandedRect.minX + 570) < 0.00001 && abs(expandedRect.minY) < 0.00001
+                   && abs(expandedRect.width - 1440) < 0.00001 && abs(expandedRect.height - 180) < 0.00001,
+                   "Unlocked Scale fits proportionally then expands centered source; it never stretches")
+        let constrained = try ResizePanelGeometry.preview(source: CGSize(width: 300, height: 180), output: CGSize(width: 150, height: 90),
+            request: ResizePanelSubmission(size: CGSize(width: 800, height: 100), isCrop: false, anchor: .zero))
+        try expect(constrained.rect == nil && constrained.output == CGSize(width: 167, height: 100), "Constrained Scale fits inside both limits")
+        let anchored = try ResizePanelGeometry.preview(source: CGSize(width: 300, height: 180), output: CGSize(width: 150, height: 90),
+            request: ResizePanelSubmission(size: CGSize(width: 80, height: 60), isCrop: true, anchor: CGPoint(x: 1, y: 1)))
+        try expect(anchored.rect == CGRect(x: 140, y: 60, width: 160, height: 120) && anchored.output == CGSize(width: 80, height: 60),
+                   "Crop anchor uses initial source/output relationship")
+        for preset in ResizePreset.builtins {
+            var presetState = ResizePanelState(size: CGSize(width: 800, height: 600))
+            presetState.selectPreset(preset)
+            let selected = try presetState.submission()
+            try expect(selected.size == preset.size && !selected.isCrop && selected.constrainProportions == preset.proportions,
+                       "Built-in target dimensions/constraint flags survive UI selection: \(preset.name)")
+        }
+        var customState = ResizePanelState(size: CGSize(width: 800, height: 600))
+        let custom = ResizePreset(id: "custom-geometry", name: "Custom", width: 640, height: 400, mode: .crop,
+                                  format: 19, anchor: 8, proportions: false, limitSize: 1000, limitMode: .height)
+        customState.selectPreset(custom)
+        try expect(try customState.preset(id: custom.id, name: custom.name, format: custom.format) == custom,
+                   "UI preserves all custom preset fields and opaque format metadata")
         print("ResizePanelTests: \(checks) checks passed (pure state; no desktop input)")
     }
 }

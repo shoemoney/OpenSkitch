@@ -1,7 +1,14 @@
 import AppKit
 
 enum ResizePanelMode: Int {
-    case resize, crop
+    case resize, crop, limit
+}
+
+enum ResizePanelLimitMode: Int, CaseIterable {
+    case greatest, width, height
+    var title: String {
+        switch self { case .greatest: return "Longest side"; case .width: return "Width"; case .height: return "Height" }
+    }
 }
 
 enum ResizePanelAnchor: Int, CaseIterable {
@@ -82,6 +89,28 @@ struct ResizePanelSubmission: Equatable {
     let size: CGSize
     let isCrop: Bool
     let anchor: CGPoint
+    var constrainProportions = true
+}
+
+enum ResizePanelGeometry {
+    /// Original Scale first fits proportionally; an unconstrained request then
+    /// expands/crops the centered viewport to the requested output dimensions.
+    static func preview(source: CGSize, output: CGSize, request: ResizePanelSubmission) throws -> (rect: CGRect?, output: CGSize) {
+        guard source.width.isFinite, source.height.isFinite, output.width.isFinite, output.height.isFinite,
+              source.width > 0, source.height > 0, output.width > 0, output.height > 0 else { throw ResizePanelValidation.Failure.dimension }
+        let target = try ResizePanelValidation.validate(request.size)
+        if request.isCrop {
+            let size = CGSize(width: target.width * source.width / output.width, height: target.height * source.height / output.height)
+            return (CGRect(x: (source.width-size.width)*request.anchor.x, y: (source.height-size.height)*request.anchor.y,
+                           width: size.width, height: size.height), target)
+        }
+        let factor = min(target.width / output.width, target.height / output.height)
+        let fitted = CGSize(width: max(1, (output.width * factor).rounded()), height: max(1, (output.height * factor).rounded()))
+        if request.constrainProportions { return (nil, try ResizePanelValidation.validate(fitted)) }
+        let size = CGSize(width: target.width * source.width / (output.width * factor),
+                          height: target.height * source.height / (output.height * factor))
+        return (CGRect(x: (source.width-size.width)/2, y: (source.height-size.height)/2, width: size.width, height: size.height), target)
+    }
 }
 
 /// Pure edit state used by the sheet and by tests without AppKit controls.
@@ -93,10 +122,15 @@ struct ResizePanelState {
     private(set) var widthText: String
     private(set) var heightText: String
     var anchor: ResizePanelAnchor = .center
+    var limitMode: ResizePanelLimitMode = .greatest
+    var limitText: String
+    private let originalSize: CGSize
     private let originalRatio: CGFloat?
     private var lastEdited: Dimension = .width
 
     init(size: CGSize) {
+        originalSize = size
+        limitText = ResizePanelValidation.text(for: max(size.width, size.height))
         widthText = ResizePanelValidation.text(for: size.width)
         heightText = ResizePanelValidation.text(for: size.height)
         originalRatio = (try? ResizePanelValidation.validate(size)) == nil ? nil : size.width / size.height
@@ -125,9 +159,40 @@ struct ResizePanelState {
         synchronizeProportions()
     }
 
+    mutating func selectPreset(_ preset: ResizePreset) {
+        switch preset.mode { case .scale: mode = .resize; case .crop: mode = .crop; case .limit: mode = .limit }
+        widthText = String(preset.width); heightText = String(preset.height)
+        preserveRatio = preset.proportions && originalRatio != nil
+        anchor = ResizePanelAnchor(rawValue: preset.anchor) ?? .center
+        limitMode = ResizePanelLimitMode(rawValue: preset.limitMode.rawValue) ?? .greatest
+        limitText = String(preset.limitSize)
+    }
+
+    func preset(id: String = UUID().uuidString, name: String, format: Int = 0) throws -> ResizePreset {
+        let dimensions = try ResizePanelValidation.size(width: widthText, height: heightText)
+        let resizeMode: PresetResizeMode
+        switch mode { case .resize: resizeMode = .scale; case .crop: resizeMode = .crop; case .limit: resizeMode = .limit }
+        let preset = ResizePreset(id: id, name: name, width: Int(dimensions.width), height: Int(dimensions.height),
+            mode: resizeMode, format: format, anchor: anchor.rawValue, proportions: preserveRatio,
+            limitSize: Int(try ResizePanelValidation.dimension(from: limitText)),
+            limitMode: ResizeLimitMode(rawValue: limitMode.rawValue) ?? .greatest)
+        try preset.validate()
+        return preset
+    }
+
     func submission() throws -> ResizePanelSubmission {
-        ResizePanelSubmission(size: try ResizePanelValidation.size(width: widthText, height: heightText),
-                              isCrop: mode == .crop, anchor: anchor.point)
+        if mode == .limit {
+            let limit = try ResizePanelValidation.dimension(from: limitText)
+            let reference: CGFloat
+            switch limitMode { case .greatest: reference = max(originalSize.width, originalSize.height)
+            case .width: reference = originalSize.width; case .height: reference = originalSize.height }
+            guard reference.isFinite, reference > 0 else { throw ResizePanelValidation.Failure.dimension }
+            let factor = limit / reference
+            let size = CGSize(width: max(1, (originalSize.width * factor).rounded()), height: max(1, (originalSize.height * factor).rounded()))
+            return ResizePanelSubmission(size: try ResizePanelValidation.validate(size), isCrop: false, anchor: anchor.point)
+        }
+        return ResizePanelSubmission(size: try ResizePanelValidation.size(width: widthText, height: heightText),
+                              isCrop: mode == .crop, anchor: anchor.point, constrainProportions: preserveRatio)
     }
 
     private mutating func synchronizeProportions() {
@@ -160,27 +225,68 @@ final class ResizePanelSession {
     var state: ResizePanelState
     private(set) var isFinished = false
     private var onApply: ((CGSize, Bool, CGPoint) -> Void)?
+    private var onPreview: ((ResizePanelSubmission) throws -> Void)?
+    private var onFinish: ((Bool) -> Void)?
+    private var isDelivering = false
+    private(set) var lastPreview: ResizePanelSubmission?
+    var onCompletion: ((Bool) -> Void)?
 
     init(size: CGSize, onApply: @escaping (CGSize, Bool, CGPoint) -> Void) {
         state = ResizePanelState(size: size)
         self.onApply = onApply
     }
 
+    init(size: CGSize, onPreview: @escaping (ResizePanelSubmission) throws -> Void,
+         onFinish: @escaping (Bool) -> Void) {
+        state = ResizePanelState(size: size)
+        self.onPreview = onPreview
+        self.onFinish = onFinish
+    }
+
+    @discardableResult
+    func preview(force: Bool = false) throws -> Bool {
+        guard !isFinished, !isDelivering, let callback = onPreview else { return false }
+        let submission = try state.submission()
+        guard force || submission != lastPreview else { return true }
+        isDelivering = true
+        defer { isDelivering = false }
+        try callback(submission)
+        guard !isFinished else { return false }
+        lastPreview = submission
+        return true
+    }
+
     @discardableResult
     func apply(beforeDelivery: () -> Void = {}) throws -> Bool {
-        guard !isFinished else { return false }
+        guard !isFinished, !isDelivering else { return false }
         let submission = try state.submission()
+        if onPreview != nil, try !preview(force: true) { return false }
         let callback = onApply
+        let finish = onFinish
+        let completion = onCompletion
         isFinished = true
         onApply = nil
+        onPreview = nil
+        onFinish = nil
+        onCompletion = nil
         beforeDelivery()
         callback?(submission.size, submission.isCrop, submission.anchor)
+        finish?(false)
+        completion?(false)
         return true
     }
 
     func cancel() {
+        guard !isFinished else { return }
+        let finish = onFinish
+        let completion = onCompletion
         isFinished = true
         onApply = nil
+        onPreview = nil
+        onFinish = nil
+        onCompletion = nil
+        finish?(true)
+        completion?(true)
     }
 }
 
@@ -196,9 +302,34 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     private var anchorRow: NSStackView?
     private var errorLabel: NSTextField?
     private var helpLabel: NSTextField?
+    private var dimensionGrid: NSGridView?
+    private var limitRow: NSStackView?
+    private var limitField: NSTextField?
+    private var limitPopup: NSPopUpButton?
+    private var previewTimer: Timer?
+    private let presets: ResizePresetStore
+    private var selectedPresetID: String?
+    private var presetPopup: NSPopUpButton?
+    private var presetName: NSTextField?
+    private var savePresetButton: NSButton?
+    private var removePresetButton: NSButton?
 
     init(size: CGSize, onApply: @escaping (CGSize, Bool, CGPoint) -> Void) {
         session = ResizePanelSession(size: size, onApply: onApply)
+        presets = ResizePresetStore()
+        super.init()
+    }
+
+    init(session: ResizePanelSession, presets: ResizePresetStore = ResizePresetStore()) {
+        self.session = session
+        self.presets = presets
+        super.init()
+    }
+
+    init(size: CGSize, onPreview: @escaping (ResizePanelSubmission) throws -> Void,
+         onFinish: @escaping (Bool) -> Void) {
+        session = ResizePanelSession(size: size, onPreview: onPreview, onFinish: onFinish)
+        presets = ResizePresetStore()
         super.init()
     }
 
@@ -210,6 +341,11 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.delegate = self
         self.panel = panel
+        session.onCompletion = { [weak self] cancelled in
+            self?.persistSelectedPreset()
+            self?.previewTimer?.invalidate(); self?.previewTimer = nil
+            self?.endSheet(cancelled ? .cancel : .OK)
+        }
         buildContent(in: panel)
         // Retain the controller until sheet completion, even for a temporary caller.
         parent.beginSheet(panel) { [self] _ in
@@ -224,7 +360,21 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         let content = NSView()
         panel.contentView = content
         let heading = label("Resize or Crop", size: 26, weight: .semibold)
-        let mode = NSSegmentedControl(labels: ["Resize", "Crop"], trackingMode: .selectOne,
+        let presetChoice = NSPopUpButton(frame: .zero, pullsDown: false)
+        presetChoice.font = .systemFont(ofSize: 20)
+        presetChoice.target = self; presetChoice.action = #selector(selectPreset(_:))
+        presetChoice.setAccessibilityLabel("Size preset")
+        presetPopup = presetChoice
+        let presetTitle = dimensionField(value: "New Size", name: "Preset name")
+        presetName = presetTitle
+        let addPreset = button("Add Preset", action: #selector(addPreset(_:)))
+        let savePreset = button("Save Preset", action: #selector(savePreset(_:)))
+        let removePreset = button("Remove", action: #selector(removePreset(_:)))
+        savePresetButton = savePreset; removePresetButton = removePreset
+        let presetActions = NSStackView(views: [addPreset, savePreset, removePreset])
+        presetActions.orientation = .horizontal; presetActions.spacing = 16
+        reloadPresets()
+        let mode = NSSegmentedControl(labels: ["Resize", "Crop", "Limit"], trackingMode: .selectOne,
                                       target: self, action: #selector(changeMode(_:)))
         mode.font = .systemFont(ofSize: 20)
         mode.selectedSegment = session.state.mode.rawValue
@@ -244,6 +394,18 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         grid.rowSpacing = 14
         grid.rowAlignment = .firstBaseline
         grid.column(at: 1).width = 240
+        dimensionGrid = grid
+        let limit = dimensionField(value: session.state.limitText, name: "Size limit in pixels")
+        limitField = limit
+        let limitChoice = NSPopUpButton(frame: .zero, pullsDown: false)
+        limitChoice.font = .systemFont(ofSize: 20)
+        limitChoice.addItems(withTitles: ResizePanelLimitMode.allCases.map(\.title))
+        limitChoice.target = self; limitChoice.action = #selector(changeLimit(_:))
+        limitChoice.setAccessibilityLabel("Limit by")
+        limitPopup = limitChoice
+        let limitControls = NSStackView(views: [limitChoice, limit])
+        limitControls.orientation = .horizontal; limitControls.spacing = 20
+        limitRow = limitControls
 
         let ratio = NSButton(checkboxWithTitle: "Lock proportions", target: self,
                              action: #selector(changeRatio(_:)))
@@ -272,17 +434,18 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         errorLabel = error
         let cancel = button("Cancel", action: #selector(cancelSheet(_:)))
         cancel.keyEquivalent = "\u{1b}"
-        let apply = button("Apply", action: #selector(applySheet(_:)))
-        apply.keyEquivalent = "\r"
-        panel.defaultButtonCell = apply.cell as? NSButtonCell
-        let buttons = NSStackView(views: [cancel, apply])
+        let apply = button("Apply", action: #selector(previewSheet(_:)))
+        let ok = button("OK", action: #selector(applySheet(_:)))
+        ok.keyEquivalent = "\r"
+        panel.defaultButtonCell = ok.cell as? NSButtonCell
+        let buttons = NSStackView(views: [cancel, apply, ok])
         buttons.orientation = .horizontal
         buttons.spacing = 16
 
-        let stack = NSStackView(views: [heading, mode, help, grid, ratio, anchor, error, buttons])
+        let stack = NSStackView(views: [heading, presetChoice, presetTitle, presetActions, mode, help, grid, ratio, anchor, limitControls, error, buttons])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 18
+        stack.spacing = 14
         stack.detachesHiddenViews = true
         stack.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(stack)
@@ -291,6 +454,10 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -28),
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 28),
             help.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            presetChoice.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            presetChoice.heightAnchor.constraint(greaterThanOrEqualToConstant: 38),
+            presetTitle.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            presetTitle.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
             error.widthAnchor.constraint(equalTo: stack.widthAnchor),
             error.heightAnchor.constraint(greaterThanOrEqualToConstant: 62),
             width.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
@@ -299,11 +466,16 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
             popup.widthAnchor.constraint(greaterThanOrEqualToConstant: 280),
             popup.heightAnchor.constraint(greaterThanOrEqualToConstant: 38),
             ratio.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
+            limit.heightAnchor.constraint(greaterThanOrEqualToConstant: 36),
+            limit.widthAnchor.constraint(equalToConstant: 190),
+            limitChoice.heightAnchor.constraint(greaterThanOrEqualToConstant: 38),
             anchor.heightAnchor.constraint(greaterThanOrEqualToConstant: 44),
             cancel.heightAnchor.constraint(greaterThanOrEqualToConstant: 38),
-            apply.heightAnchor.constraint(greaterThanOrEqualToConstant: 38)
+            apply.heightAnchor.constraint(greaterThanOrEqualToConstant: 38),
+            ok.heightAnchor.constraint(greaterThanOrEqualToConstant: 38)
         ])
         renderState()
+        if presets.hasMalformedData { errorLabel?.stringValue = ResizePresetError.malformedDefaults.localizedDescription }
         panel.setContentSize(NSSize(width: 600, height: max(500, stack.fittingSize.height + 56)))
         // Measure before pinning the bottom so the initial frame cannot compress
         // the controls. Both mode-specific rows reserve the same readable height.
@@ -313,7 +485,8 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         ratio.nextKeyView = popup
         popup.nextKeyView = cancel
         cancel.nextKeyView = apply
-        apply.nextKeyView = mode
+        apply.nextKeyView = ok
+        ok.nextKeyView = mode
         mode.nextKeyView = width
     }
 
@@ -340,15 +513,22 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
     }
 
     private func renderState(editing field: NSTextField? = nil) {
+        modeControl?.selectedSegment = session.state.mode.rawValue
         if field !== widthField { widthField?.stringValue = session.state.widthText }
         if field !== heightField { heightField?.stringValue = session.state.heightText }
         let crop = session.state.mode == .crop
-        ratioButton?.isHidden = crop
+        let limit = session.state.mode == .limit
+        if field !== limitField { limitField?.stringValue = session.state.limitText }
+        limitPopup?.selectItem(at: session.state.limitMode.rawValue)
+        dimensionGrid?.isHidden = limit
+        limitRow?.isHidden = !limit
+        ratioButton?.isHidden = crop || limit
         ratioButton?.state = session.state.preserveRatio ? .on : .off
         anchorRow?.isHidden = !crop
         anchorPopup?.selectItem(at: session.state.anchor.rawValue)
         helpLabel?.stringValue = crop ? "Choose crop dimensions and the part of the image to keep."
-            : "Set the image size in pixels. Lock proportions to keep its original shape."
+            : limit ? "Set the width, height, or longest side. Larger limits enlarge the image."
+            : "Fit the image to these dimensions. Unlock proportions to add space around it without stretching."
         errorLabel?.stringValue = ""
     }
 
@@ -356,8 +536,11 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         guard let field = notification.object as? NSTextField else { return }
         if field === widthField { session.state.edit(.width, text: field.stringValue) }
         else if field === heightField { session.state.edit(.height, text: field.stringValue) }
+        else if field === limitField { session.state.limitText = field.stringValue }
+        else if field === presetName { return }
         else { return }
         renderState(editing: field)
+        schedulePreview()
     }
 
     @objc private func changeMode(_ sender: NSSegmentedControl) {
@@ -367,20 +550,102 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         renderState()
         panel?.contentView?.layoutSubtreeIfNeeded()
         panel?.display()
+        schedulePreview()
     }
 
     @objc private func changeRatio(_ sender: NSButton) {
         panel?.makeFirstResponder(nil)
         session.state.setPreserveRatio(sender.state == .on)
         renderState()
+        schedulePreview()
     }
 
     @objc private func changeAnchor(_ sender: NSPopUpButton) {
         guard let anchor = ResizePanelAnchor(rawValue: sender.indexOfSelectedItem) else { return }
         session.state.anchor = anchor
+        schedulePreview()
+    }
+
+    @objc private func changeLimit(_ sender: NSPopUpButton) {
+        guard let mode = ResizePanelLimitMode(rawValue: sender.indexOfSelectedItem) else { return }
+        session.state.limitMode = mode
+        schedulePreview()
+    }
+
+    private func schedulePreview() {
+        previewTimer?.invalidate()
+        guard !session.isFinished else { return }
+        let timer = Timer(timeInterval: 0.5, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.previewTimer = nil
+                self.persistSelectedPreset()
+                do { _ = try self.session.preview() }
+                catch { self.errorLabel?.stringValue = error.localizedDescription }
+            }
+        }
+        previewTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+        RunLoop.main.add(timer, forMode: .modalPanel)
+    }
+
+    private func reloadPresets() {
+        guard let popup = presetPopup else { return }
+        popup.removeAllItems(); popup.addItem(withTitle: "Custom size")
+        for preset in presets.presets {
+            popup.addItem(withTitle: preset.name); popup.lastItem?.representedObject = preset.id
+        }
+        for item in popup.itemArray {
+            item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)])
+        }
+        if let id = selectedPresetID, let item = popup.itemArray.first(where: { ($0.representedObject as? String) == id }) { popup.select(item) }
+        else { popup.selectItem(at: 0) }
+        let selected = presets.presets.first(where: { $0.id == selectedPresetID })
+        presetName?.stringValue = selected?.name ?? "New Size"
+        presetName?.isEnabled = selected == nil || selected?.editable == true
+        savePresetButton?.isEnabled = selected?.editable == true && !presets.hasMalformedData
+        removePresetButton?.isEnabled = selected?.editable == true && !presets.hasMalformedData
+    }
+
+    @objc private func selectPreset(_ sender: NSPopUpButton) {
+        persistSelectedPreset()
+        selectedPresetID = sender.selectedItem?.representedObject as? String
+        if let preset = presets.presets.first(where: { $0.id == selectedPresetID }) { session.state.selectPreset(preset) }
+        reloadPresets(); renderState(); schedulePreview()
+    }
+
+    @objc private func addPreset(_ sender: Any?) {
+        panel?.makeFirstResponder(nil)
+        do {
+            let selected = presets.presets.first(where: { $0.id == selectedPresetID })
+            let name = selected?.editable == false ? (selected?.name ?? "New Size") + " Copy" : (presetName?.stringValue ?? "New Size")
+            let preset = try session.state.preset(name: name, format: selected?.format ?? 0)
+            try presets.add(preset); selectedPresetID = preset.id
+            reloadPresets(); errorLabel?.stringValue = ""
+        } catch { errorLabel?.stringValue = error.localizedDescription }
+    }
+
+    @objc private func savePreset(_ sender: Any?) {
+        panel?.makeFirstResponder(nil)
+        persistSelectedPreset(); reloadPresets()
+    }
+
+    private func persistSelectedPreset() {
+        guard let selected = presets.presets.first(where: { $0.id == selectedPresetID }), selected.editable else { return }
+        do {
+            let replacement = try session.state.preset(id: selected.id, name: presetName?.stringValue ?? selected.name, format: selected.format)
+            if replacement != selected { try presets.update(replacement) }
+        } catch { errorLabel?.stringValue = error.localizedDescription }
+    }
+
+    @objc private func removePreset(_ sender: Any?) {
+        guard let id = selectedPresetID else { return }
+        do { try presets.remove(id: id); selectedPresetID = nil; reloadPresets(); errorLabel?.stringValue = "" }
+        catch { errorLabel?.stringValue = error.localizedDescription }
     }
 
     @objc private func applySheet(_ sender: Any?) {
+        previewTimer?.invalidate(); previewTimer = nil
         panel?.makeFirstResponder(nil)
         do {
             try session.apply(beforeDelivery: { self.endSheet(.OK) })
@@ -390,7 +655,15 @@ final class ResizePanel: NSObject, NSTextFieldDelegate, NSWindowDelegate {
         }
     }
 
+    @objc private func previewSheet(_ sender: Any?) {
+        previewTimer?.invalidate(); previewTimer = nil
+        panel?.makeFirstResponder(nil)
+        do { _ = try session.preview() }
+        catch { errorLabel?.stringValue = error.localizedDescription }
+    }
+
     @objc private func cancelSheet(_ sender: Any?) {
+        previewTimer?.invalidate(); previewTimer = nil
         session.cancel()
         endSheet(.cancel)
     }

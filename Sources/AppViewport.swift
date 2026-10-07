@@ -6,6 +6,55 @@ final class ActualNavigatorPanel: NSPanel {
 }
 
 extension AppDelegate {
+    func makeResizeSession() -> ResizePanelSession? {
+        guard !terminationStarted, !isActualSize, !frameMode, windowGesture == nil,
+              window.attachedSheet == nil, activeResizeSession == nil else { return nil }
+        let generation = documentGeneration
+        var baseline: (output: CGSize, source: CGSize, frame: CGRect, zoom: CGFloat, dirty: Bool)?
+        let session = ResizePanelSession(size: canvas.outputSize, onPreview: { [weak self] request in
+            guard let self, !self.terminationStarted, self.documentGeneration == generation else {
+                throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image has changed. Close Resize and try again."])
+            }
+            if baseline == nil {
+                self.canvas.commitPendingTextEditing()
+                // Preserve the first-Apply baseline in recovery/history before
+                // the transient preview begins. Timer saves leave it intact.
+                self.saveRecovery()
+                let first = (output: self.canvas.outputSize, source: self.canvas.canvasSize,
+                             frame: self.window.frame, zoom: self.canvas.zoom, dirty: self.dirty)
+                guard self.canvas.beginViewportEdit(name: "Resize") else {
+                    throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "Finish the current edit before resizing."])
+                }
+                baseline = first
+            }
+            guard let baseline else { return }
+            let preview = try ResizePanelGeometry.preview(source: baseline.source, output: baseline.output, request: request)
+            let accepted: Bool
+            if let rect = preview.rect { accepted = self.canvas.previewViewportCrop(to: rect, outputSize: preview.output) }
+            else { accepted = self.canvas.previewViewportResize(to: preview.output) }
+            guard accepted else {
+                throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This size exceeds the supported source dimensions. Choose smaller dimensions or restore the image to normal size first."])
+            }
+            self.sizeNormalWindowToCanvas(centered: false)
+            self.updateStatus()
+        }, onFinish: { [weak self] cancelled in
+            guard let self else { return }
+            self.activeResizeSession = nil
+            guard self.documentGeneration == generation else { return }
+            guard let baseline else { return }
+            self.canvas.endViewportEdit(cancelled: cancelled)
+            if cancelled {
+                self.canvas.setZoom(baseline.zoom)
+                self.setWindowFrame(baseline.frame)
+                self.dirty = baseline.dirty
+                self.window.isDocumentEdited = baseline.dirty
+            }
+            self.updateStatus()
+        })
+        activeResizeSession = session
+        return session
+    }
+
     var canToggleActualSize: Bool {
         !terminationStarted && !frameMode && windowGesture == nil &&
         (isActualSize || WindowSizingPolicy.actualEligible(source: canvas.fullResolutionOutputSize,

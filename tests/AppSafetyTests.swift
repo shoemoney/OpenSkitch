@@ -1766,6 +1766,141 @@ enum AppSafetyTests {
         app.redo()
         try expect(app.canvas.document == document && history.canRedo, "Roundtrip preserves the existing Redo chain")
     }
+    static func resizeSheetPreviewLifecycle() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        let before = try app.canvas.snapshotDocumentData(), selection = app.canvas.selection
+        let frame = app.window.frame, zoom = app.canvas.zoom
+        let history = app.canvas.editingUndoManager
+        guard let session = app.makeResizeSession() else { throw Failure(description: "Resize session admission") }
+        try expect(app.makeResizeSession() == nil, "A second Resize cannot replace the current preview transaction")
+        session.state.edit(.width, text: "75")
+        _ = try session.preview()
+        try expect(app.canvas.outputSize == CGSize(width: 75, height: 45) && !session.isFinished && !history.canUndo,
+                   "Apply previews proportional output without closing or registering Undo")
+        session.state.setMode(.crop)
+        session.state.edit(.width, text: "80"); session.state.edit(.height, text: "60")
+        session.state.anchor = .bottomRight
+        _ = try session.preview()
+        try expect(app.canvas.canvasSize == CGSize(width: 160, height: 120) && app.canvas.outputSize == CGSize(width: 80, height: 60),
+                   "Crop preview uses the original source/output scale, not the earlier resize preview")
+        let cropPreview = try app.canvas.snapshotDocumentData()
+        session.state.edit(.width, text: "8000"); session.state.edit(.height, text: "4000")
+        do { _ = try session.preview(); throw Failure(description: "Oversized crop accepted") }
+        catch let failure as Failure { throw failure }
+        catch {}
+        try expect(try app.canvas.snapshotDocumentData() == cropPreview && !history.canUndo,
+                   "Rejected source crop retains the last valid preview and open transaction")
+        session.cancel()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.canvas.selection == selection &&
+                   app.window.frame == frame && app.canvas.zoom == zoom && !app.dirty && !history.canUndo,
+                   "Cancel after mixed Apply previews restores exact hidden pixels, selection, window, clean state and Undo")
+        guard let accepted = app.makeResizeSession() else { throw Failure(description: "Resize after Cancel") }
+        accepted.state.setMode(.crop)
+        accepted.state.edit(.width, text: "80"); accepted.state.edit(.height, text: "60")
+        accepted.state.anchor = .center
+        _ = try accepted.preview()
+        accepted.state.edit(.width, text: "60"); accepted.state.edit(.height, text: "30")
+        _ = try accepted.apply()
+        let final = try app.canvas.snapshotDocumentData()
+        try expect(app.canvas.canvasSize == CGSize(width: 120, height: 60) && app.canvas.outputSize == CGSize(width: 60, height: 30)
+                   && app.dirty && history.canUndo, "OK applies the latest size from the original crop baseline and records one edit")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == before && !history.canUndo && history.canRedo,
+                   "One Undo restores all previews at once including retained source pixels")
+        app.redo()
+        try expect(try app.canvas.snapshotDocumentData() == final, "Redo restores the accepted final crop only")
+    }
+    static func resizePreviewInterruptionAndSave() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        guard let unopened = app.makeResizeSession() else { throw Failure(description: "Resize without preview") }
+        app.canvas.setBackgroundColor(.yellow)
+        let editedBeforeApply = try app.canvas.snapshotDocumentData()
+        unopened.cancel()
+        try expect(try app.canvas.snapshotDocumentData() == editedBeforeApply && app.activeResizeSession == nil,
+                   "Cancel without Apply does not revert edits made after panel opening")
+        guard let session = app.makeResizeSession() else { throw Failure(description: "Resize save session") }
+        session.state.edit(.width, text: "75"); _ = try session.preview()
+        session.state.edit(.width, text: "90")
+        app.currentURL = fixture.file("resize-preview-save").deletingPathExtension().appendingPathExtension("skitch")
+        try expect(app.save() && session.isFinished && app.activeResizeSession == nil && app.canvas.outputSize == CGSize(width: 90, height: 54),
+                   "Native Save accepts the latest Resize field values, commits the preview and finishes the session")
+        let saved = try app.canvas.snapshotDocumentData()
+        session.cancel()
+        try expect(try app.canvas.snapshotDocumentData() == saved && !app.dirty,
+                   "Cancel after Save cannot restore older preview state with a false clean flag")
+        try expect(try SkitchFile.decode(Data(contentsOf: app.currentURL!)).canvasData == saved,
+                   "Saved native state matches the committed resize after late Cancel")
+        guard let interrupted = app.makeResizeSession() else { throw Failure(description: "Interrupted Resize") }
+        interrupted.state.edit(.width, text: "45"); _ = try interrupted.preview()
+        app.canvas.setBackgroundColor(.green)
+        try expect(interrupted.isFinished && app.activeResizeSession == nil && app.canvas.outputSize == CGSize(width: 90, height: 54),
+                   "An independent edit cancels the resize preview before recording its own change")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == saved,
+                   "Undo of an interruption restores the accepted resize, never a transient preview")
+    }
+    static func resizePreviewRecoveryAndHistory() throws {
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        try viewportFixture(app); app.canvas.setBackgroundColor(.yellow)
+        app.saveHistory(); app.saveRecovery()
+        guard let id = app.currentArchiveID else { throw Failure(description: "Resize baseline History") }
+        let baseline = try app.canvas.snapshotDocumentData()
+        let recovered = try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))
+        let entry = store.entry(id), archive = try store.read(id).canvasData
+        guard let session = app.makeResizeSession() else { throw Failure(description: "Resize recovery preview") }
+        session.state.setMode(.crop); session.state.edit(.width, text: "60"); session.state.edit(.height, text: "40")
+        _ = try session.preview()
+        try expect(try app.canvas.snapshotDocumentData() != baseline, "Recovery test must have a real preview")
+        app.saveRecovery(); app.followHistory()
+        try expect(try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch")) == recovered
+                   && store.entry(id) == entry && store.read(id).canvasData == archive,
+                   "Timer recovery and History follow cannot persist an unaccepted Resize preview")
+        session.cancel()
+        try expect(try app.canvas.snapshotDocumentData() == baseline && SkitchFile.decode(recovered).canvasData == baseline,
+                   "Cancel and crash recovery both retain the first-Apply baseline")
+        guard let next = app.makeResizeSession() else { throw Failure(description: "Resize before History Open") }
+        next.state.edit(.width, text: "75"); _ = try next.preview()
+        let target = try SkitchFile.decode(historyDrawing("Replacement").native)
+        try app.restoreHistoryEditorState(.init(data: target.canvasData, metadata: target.metadata, name: "Replacement",
+                                               url: nil, archiveID: nil, dirty: false))
+        try expect(next.isFinished && app.activeResizeSession == nil, "History Open cancels Resize before inverse capture")
+        app.undo()
+        try expect(try app.canvas.snapshotDocumentData() == baseline,
+                   "Undo History Open restores accepted baseline artwork rather than cancelled preview pixels")
+    }
+    static func resizePreviewGeometryInterruptions() throws {
+        for command in ["flatten", "rotate", "flip", "normal"] {
+            let fixture = try Fixture(), app = fixture.app
+            try viewportFixture(app)
+            let baseline = try app.canvas.snapshotDocumentData()
+            guard let session = app.makeResizeSession() else { throw Failure(description: "Resize \(command)") }
+            session.state.setMode(.crop); session.state.edit(.width, text: "60"); session.state.edit(.height, text: "40")
+            _ = try session.preview()
+            switch command { case "flatten": app.canvas.flatten()
+            case "rotate": app.canvas.rotate(clockwise: true)
+            case "normal": app.canvas.setSnapToNormalSize()
+            default: app.canvas.flip(horizontal: true) }
+            try expect(session.isFinished && app.activeResizeSession == nil, "\(command) cancels Resize before computing geometry")
+            let expected = command == "rotate" ? CGSize(width: 180, height: 300) : CGSize(width: 300, height: 180)
+            try expect(app.canvas.canvasSize == expected, "\(command) operates on original source size")
+            if command == "flatten" {
+                let pixels = app.canvas.document.backgroundImage?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+                try expect(pixels?.width == 300 && pixels?.height == 180, "Flatten renders baseline pixels before cancelling transient crop")
+            }
+            app.undo()
+            try expect(try app.canvas.snapshotDocumentData() == baseline, "\(command) Undo restores baseline source, annotations and output")
+        }
+        let fixture = try Fixture(), app = fixture.app
+        try viewportFixture(app)
+        guard let session = app.makeResizeSession() else { throw Failure(description: "Resize before New") }
+        app.newFile()
+        try expect(session.isFinished && app.activeResizeSession == nil && app.canvas.canvasSize == CGSize(width: 1000, height: 700),
+                   "New before first Apply clears the stale Resize session")
+        app.currentURL = fixture.file("new-before-preview-save").deletingPathExtension().appendingPathExtension("skitch")
+        try expect(app.save(), "New before first Apply cannot leave Save blocked by an old generation")
+    }
     static func actualSaveThenNormal() throws {
         let fixture = try Fixture(), app = fixture.app
         try viewportFixture(app)
@@ -2233,6 +2368,10 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("Resize Apply previews from one baseline; Cancel restores all state; OK commits one crop Undo", resizeSheetPreviewLifecycle),
+            ("Resize first-Apply baseline, native Save and independent edits prevent stale preview rollback", resizePreviewInterruptionAndSave),
+            ("Resize previews cannot overwrite recovery/History or enter Open History Undo", resizePreviewRecoveryAndHistory),
+            ("Flatten/Rotate/Flip and New interrupt Resize before reading source geometry", resizePreviewGeometryInterruptions),
             ("Actual mode preserves raw source, geometry, selection and existing Undo/Redo without ordering a navigator", actualViewportHistory),
             ("Actual Save then Normal restores output and marks the unsaved size difference dirty", actualSaveThenNormal),
             ("cancelled/invalid Open and capture preserve Actual; numeric Resize is denied", actualRejectedReplacement),

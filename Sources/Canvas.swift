@@ -371,6 +371,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         return true
     }
     func setSnapToNormalSize() {
+        endViewportEdit(cancelled: true)
         guard document.backgroundPNG != nil else { return }
         _ = resizeImage(to: document.size)
     }
@@ -440,6 +441,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         edit("Clear Annotations") { document.elements.removeAll(); selection.removeAll() }
     }
     func flatten() {
+        endViewportEdit(cancelled: true)
         finishTextEditing()
         guard let png = SketchRenderer.bitmap(document: document)?.representation(using: .png, properties: [:]) else { return }
         edit("Flatten") {
@@ -634,12 +636,14 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
 
     func rotate(clockwise: Bool) {
+        endViewportEdit(cancelled: true)
         let oldSize = canvasSize
         let matrix = clockwise ? SketchTransform(a: 0, b: 1, c: -1, d: 0, tx: oldSize.height, ty: 0) :
             SketchTransform(a: 0, b: -1, c: 1, d: 0, tx: 0, ty: oldSize.width)
         transformDocument(matrix, size: NSSize(width: oldSize.height, height: oldSize.width), name: "Rotate")
     }
     func flip(horizontal: Bool) {
+        endViewportEdit(cancelled: true)
         let matrix = horizontal ? SketchTransform(a: -1, d: 1, tx: canvasSize.width) :
             SketchTransform(a: 1, d: -1, ty: canvasSize.height)
         transformDocument(matrix, size: canvasSize, name: "Flip")
@@ -756,6 +760,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                                  width: size.width, height: size.height), outputSize: outputSize)
     }
     func cropSelection() {
+        endViewportEdit(cancelled: true)
         guard let rect = cropRect ?? selectionBounds else { return }
         crop(to: rect)
     }
@@ -763,6 +768,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     /// Original "Crop Snap at Current Edges" permanently trims only the photo.
     /// Hidden annotations stay editable and can reappear when borders expand.
     func trimSnapAtCurrentEdges() {
+        endViewportEdit(cancelled: true)
         guard panBackground != nil, document.backgroundPNG != nil else { return }
         edit("Crop Snap at Current Edges") { panBackground = nil }
     }
