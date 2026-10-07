@@ -27,6 +27,96 @@ private final class SketchTextEditor: NSTextView {
     }
 }
 
+/// Recovered SkitchTextGrip geometry and drag contract. The exposed left pill
+/// sits behind the field editor, so its contents retain normal native text input.
+private final class SketchTextGrip: NSView {
+    var onMove: ((CGSize) -> Void)?
+    var color: NSColor = .systemRed
+    private var previousCursor: NSCursor?
+    private var lastDragLocation: CGPoint?
+    private var frameObserver: NSObjectProtocol?
+    func attach(to editor: NSTextView) {
+        if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) }
+        editor.postsFrameChangedNotifications = true
+        frame = Self.attachedFrame(editor.frame)
+        frameObserver = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification,
+            object: editor, queue: nil) { [weak self, weak editor] _ in
+                guard let self, let editor else { return }
+                self.frame = Self.attachedFrame(editor.frame); self.needsDisplay = true
+            }
+    }
+    deinit { if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) } }
+    private static let moveCursor: NSCursor = {
+        if let url = Bundle.main.url(forResource: "CursorMove", withExtension: "png"),
+           let image = NSImage(contentsOf: url) {
+            return NSCursor(image: image, hotSpot: CGPoint(x: 1, y: 1))
+        }
+        return .closedHand
+    }()
+    override var isFlipped: Bool { true }
+    override var acceptsFirstResponder: Bool { false }
+    override var canBecomeKeyView: Bool { false }
+    static func attachedFrame(_ rect: CGRect) -> CGRect {
+        // Renderer_frameRectForTextRect: x-11, y-3, w+15, h+6,
+        // rounded outwards, then SkitchTextGrip adds five points on each side.
+        CGRect(x: rect.minX - 11, y: rect.minY - 3,
+               width: rect.width + 15, height: rect.height + 6).integral.insetBy(dx: -5, dy: -5)
+    }
+    override func draw(_ dirtyRect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        defer { NSGraphicsContext.restoreGraphicsState() }
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
+        shadow.shadowOffset = CGSize(width: 0, height: -1); shadow.shadowBlurRadius = 3
+        shadow.set()
+        let inner = bounds.insetBy(dx: 5, dy: 5)
+        let border = inner.insetBy(dx: 0.5, dy: 0.5)
+        color.withAlphaComponent(1).setStroke()
+        let framePath = NSBezierPath(roundedRect: border, xRadius: 5, yRadius: 5)
+        framePath.lineWidth = 1; framePath.stroke()
+        let pill = NSBezierPath(roundedRect: CGRect(x: border.minX, y: border.minY,
+                                                  width: 10, height: border.height), xRadius: 5, yRadius: 5)
+        color.withAlphaComponent(1).setFill(); pill.fill()
+        NSColor.black.setStroke(); pill.lineWidth = 1; pill.stroke()
+        var y = (inner.minY + 9).rounded(.towardZero) - 0.5
+        while y < inner.maxY - 8.5 {
+            for (offset, ink) in [(CGFloat(0), NSColor.black.withAlphaComponent(0.8)),
+                                  (CGFloat(1), NSColor.white.withAlphaComponent(0.5))] {
+                let line = NSBezierPath()
+                line.move(to: CGPoint(x: inner.minX + 2.5, y: y + offset))
+                line.line(to: CGPoint(x: inner.minX + 8.5, y: y + offset))
+                ink.setStroke(); line.lineWidth = 1; line.stroke()
+            }
+            y += 3
+        }
+    }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: Self.moveCursor) }
+    override func mouseDown(with event: NSEvent) {
+        if previousCursor == nil { previousCursor = NSCursor.current }
+        lastDragLocation = superview?.convert(event.locationInWindow, from: nil)
+        Self.moveCursor.set()
+    }
+    override func mouseDragged(with event: NSEvent) {
+        let location = superview?.convert(event.locationInWindow, from: nil)
+        var delta = CGSize(width: event.deltaX, height: event.deltaY)
+        guard delta.width.isFinite, delta.height.isFinite else { return }
+        // Modern event sources can deliver changed pointer locations with zero
+        // deltas. Preserve the recovered delta contract and handle those events
+        // in the fixed parent coordinate space, never the moving grip's space.
+        if delta == .zero, let location, let previous = lastDragLocation {
+            delta = CGSize(width: location.x - previous.x, height: location.y - previous.y)
+        }
+        lastDragLocation = location
+        onMove?(delta)
+    }
+    override func mouseUp(with event: NSEvent) { restoreCursor() }
+    func restoreCursor() { previousCursor?.set(); previousCursor = nil; lastDragLocation = nil }
+    override func viewWillMove(toSuperview newSuperview: NSView?) {
+        if newSuperview == nil { restoreCursor() }
+        super.viewWillMove(toSuperview: newSuperview)
+    }
+}
+
 /// Native AppKit canvas. All model geometry stays in top-left document pixels.
 /// Assign as NSScrollView.documentView; frame/intrinsic size follow output size * display zoom.
 final class CanvasView: NSView, NSTextViewDelegate {
@@ -153,6 +243,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var drawingPencil = false
     private var tabletEraser = false
     private var textEditor: NSTextView?
+    private var textEditorGrip: SketchTextGrip?
+    private var textEditorOffset: CGPoint = .zero
     private var editingTextID: UUID?
     private var textBeforeEditing: EditorState?
     private var isFinishingText = false
@@ -236,7 +328,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         invalidateIntrinsicContentSize()
         if let editor = textEditor, let id = editingTextID,
            let element = document.elements.first(where: { $0.id == id }) {
-            editor.frame = viewRect(element.bounds)
+            editor.frame = viewRect(element.bounds).offsetBy(dx: textEditorOffset.x * displayScale.width,
+                                                            dy: textEditorOffset.y * displayScale.height)
+            textEditorGrip?.frame = SketchTextGrip.attachedFrame(editor.frame)
         }
         needsDisplay = true
     }
@@ -1450,9 +1544,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
               let index = snapshot.elements.firstIndex(where: { $0.id == id }) else { return snapshot }
         if editor.string.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             snapshot.elements.remove(at: index)
-        } else if snapshot.elements[index].text != editor.string {
-            snapshot.elements[index].text = editor.string
-            snapshot.elements[index].rect.size.height = textHeight(for: snapshot.elements[index])
+        } else {
+            snapshot.elements[index].translate(x: textEditorOffset.x, y: textEditorOffset.y)
+            if snapshot.elements[index].text != editor.string {
+                snapshot.elements[index].text = editor.string
+                snapshot.elements[index].rect.size.height = textHeight(for: snapshot.elements[index])
+            }
         }
         return snapshot
     }
@@ -1461,9 +1558,11 @@ final class CanvasView: NSView, NSTextViewDelegate {
         textBeforeEditing = before ?? state
         resetGesture()
         editingTextID = id
+        textEditorOffset = .zero
         let editor = SketchTextEditor(frame: viewRect(element.bounds))
         editor.isRichText = false; editor.isEditable = true; editor.isSelectable = true
-        editor.allowsUndo = true; editor.drawsBackground = true
+        editor.allowsUndo = true; editor.isContinuousSpellCheckingEnabled = true
+        editor.drawsBackground = true
         editor.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.96)
         editor.font = NSFont(name: element.fontName, size: max(18, element.fontSize * displayScale.height)) ??
             NSFont.boldSystemFont(ofSize: max(18, element.fontSize * displayScale.height))
@@ -1473,9 +1572,35 @@ final class CanvasView: NSView, NSTextViewDelegate {
         editor.delegate = self
         editor.setAccessibilityLabel("Annotation text")
         textEditor = editor; addSubview(editor)
+        let grip = SketchTextGrip(frame: SketchTextGrip.attachedFrame(editor.frame))
+        grip.color = element.color.nsColor
+        grip.attach(to: editor)
+        grip.setAccessibilityIdentifier("text-grip")
+        grip.setAccessibilityLabel("Move annotation text")
+        grip.onMove = { [weak self] delta in self?.movePendingText(by: delta) }
+        textEditorGrip = grip
+        addSubview(grip, positioned: .below, relativeTo: editor)
         window?.makeFirstResponder(editor)
         editor.selectAll(nil)
         needsDisplay = true
+    }
+    private func movePendingText(by delta: CGSize) {
+        guard !isFinishingText, let editor = textEditor, let id = editingTextID,
+              let element = document.elements.first(where: { $0.id == id }),
+              delta.width.isFinite, delta.height.isFinite,
+              delta.width != 0 || delta.height != 0 else { return }
+        let offset = CGPoint(x: textEditorOffset.x + delta.width / displayScale.width,
+                             y: textEditorOffset.y + delta.height / displayScale.height)
+        let translation = CGPoint(x: element.transform.tx + offset.x, y: element.transform.ty + offset.y)
+        guard translation.x.isFinite, translation.y.isFinite,
+              abs(translation.x) <= 1_000_000, abs(translation.y) <= 1_000_000 else { return }
+        textEditorOffset = offset
+        // Original grip only changes the attached editor's origin. Preserve its
+        // live text-container height, including multiline growth while typing.
+        editor.setFrameOrigin(CGPoint(x: element.bounds.minX * displayScale.width + offset.x * displayScale.width,
+                                      y: element.bounds.minY * displayScale.height + offset.y * displayScale.height))
+        needsDisplay = true
+        onChange?()
     }
     func textDidChange(_ notification: Notification) {
         guard !isFinishingText, let editor = textEditor, notification.object as? NSTextView === editor else { return }
@@ -1501,15 +1626,19 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let hadPendingChanges = hasPendingTextChanges
         isFinishingText = true
         let before = textBeforeEditing
+        let pending = documentIncludingPendingText()
+        textEditorOffset = .zero
         if cancel, let before {
             restoreEditorState(before)
         } else {
-            document = documentIncludingPendingText()
+            document = pending
             if !document.elements.contains(where: { $0.id == id }) { selection.remove(id) }
         }
         reapplyActualPresentation()
         let returnFocusToCanvas = window?.firstResponder === editor
         editor.delegate = nil
+        textEditorGrip?.onMove = nil
+        textEditorGrip?.removeFromSuperview(); textEditorGrip = nil
         textEditor = nil; editingTextID = nil; textBeforeEditing = nil
         editor.removeFromSuperview()
         if returnFocusToCanvas { window?.makeFirstResponder(self) }

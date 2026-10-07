@@ -12,6 +12,7 @@ for ARCH in arm64 x86_64; do
 done
 xcrun lipo -create "$ROOT/build/objects/SkitchRedux-arm64" "$ROOT/build/objects/SkitchRedux-x86_64" -output "$APP/Contents/MacOS/SkitchRedux"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$APP/Contents/Resources/"
+cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"

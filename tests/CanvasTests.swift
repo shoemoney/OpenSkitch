@@ -42,6 +42,15 @@ private final class CanvasTabletEvent: NSEvent {
     override var pointingDeviceType: NSEvent.PointingDeviceType { eraser ? .eraser : .pen }
 }
 
+private final class TextGripDragEvent: NSEvent {
+    let movement: CGSize
+    init(_ x: CGFloat, _ y: CGFloat) { movement = CGSize(width: x, height: y); super.init() }
+    required init?(coder: NSCoder) { fatalError("Not an archived event") }
+    override var type: NSEvent.EventType { .leftMouseDragged }
+    override var deltaX: CGFloat { movement.width }
+    override var deltaY: CGFloat { movement.height }
+}
+
 private final class CanvasTestDrag: NSObject, NSDraggingInfo {
     var draggingDestinationWindow: NSWindow?
     var draggingSourceOperationMask: NSDragOperation = .copy
@@ -187,6 +196,9 @@ struct CanvasTests {
             ("text style shadow changes preserve non-text artwork and separate typing Undo", textShadowStyle),
             ("Default Skitch Style restores face and effects while preserving mixed sizes", defaultTextStyle),
             ("text context routes Font without disrupting Control eraser", textContextStyle),
+            ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
+            ("text grip retains transformed geometry through zoom snapshots and reopening", textGripGeometry),
+            ("text grip cancel invalid deltas and new annotation preserve history", textGripCancellation),
             ("Control eraser, secondary mouse and recovered modifier precedence", controlEraser),
             ("Space pans snap and drawing, preserves offscreen pixels and undo", spacePan),
             ("Tab Pencil toggle and Option eyedropper only notify UI", toolAndColorGestures),
@@ -1584,6 +1596,124 @@ struct CanvasTests {
         try expect(NSApp.sendAction(menu.items[0].action!, to: menu.items[0].target, from: menu.items[0]) && requests == 1, "Font context callback")
         try expect(c.menu(for: try mouse(c, .rightMouseDown, CGPoint(x: 20, y: 20), flags: [.control])) == nil, "Control secondary gesture remains eraser")
         try expect(c.menu(for: try mouse(c, .rightMouseDown, CGPoint(x: 220, y: 150))) == nil, "Blank canvas has no text context menu")
+    }
+    static func textGripEditing() throws {
+        let c = canvas(NSSize(width: 600, height: 400)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Before grip"; text.color = SketchColor(.blue)
+        text.rect = CGRect(x: 80, y: 60, width: 250, height: 70)
+        c.document.elements = [text]; c.tool = .select
+        let before = c.document
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 90, y: 70), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        try expect(editor.isContinuousSpellCheckingEnabled, "Recovered original starts continuous spelling enabled")
+        try expect(!grip.acceptsFirstResponder && !grip.canBecomeKeyView && grip.isFlipped,
+                   "Grip cannot replace native typing focus")
+        let editorIndex = c.subviews.firstIndex(of: editor)!, gripIndex = c.subviews.firstIndex(of: grip)!
+        try expect(gripIndex < editorIndex && grip.frame == CGRect(x: 64, y: 52, width: 275, height: 86),
+                   "Original integral frame and exposed left pill are below the editor")
+        try expect(c.hitTest(CGPoint(x: 71, y: 80)) === grip && c.hitTest(CGPoint(x: 100, y: 80)) === editor,
+                   "Exposed pill receives mouse input while text retains interior selection")
+        editor.insertText("After grip", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let selection = editor.selectedRange(), typing = c.activeEditorUndoManager
+        var changes = 0; c.onChange = { changes += 1 }
+        grip.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 71, y: 80)))
+        grip.mouseDragged(with: TextGripDragEvent(30, -12))
+        grip.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 101, y: 68)))
+        try expect(c.document == before && c.hasPendingTextChanges && !c.editingUndoManager.canUndo && changes == 1,
+                   "Move stays pending with dirty notification, without a separate document history entry")
+        try expect(window.firstResponder === editor && c.activeEditorUndoManager === typing && editor.selectedRange() == selection,
+                   "Dragging preserves active editor, typing Undo and insertion range")
+        let snapshot = try SketchDocument.decode(c.snapshotDocumentData())
+        try expect(snapshot.elements[0].text == "After grip" && snapshot.elements[0].transform.tx == 30 && snapshot.elements[0].transform.ty == -12,
+                   "Recovery snapshot includes pending text and movement together")
+        editor.keyDown(with: try key(c, 53))
+        try expect(editor.superview == nil && grip.superview == nil && window.firstResponder === c && !c.hasPendingTextChanges,
+                   "Escape completes original field editor and removes its grip")
+        try expect(c.document == snapshot, "Completion preserves pending snapshot exactly")
+        c.undo(); try expect(c.document == before && !c.editingUndoManager.canUndo, "One Undo restores text and placement together")
+        c.redo(); try expect(c.document == snapshot, "Redo restores text and placement")
+    }
+    static func textGripGeometry() throws {
+        let c = canvas(NSSize(width: 600, height: 400)); let window = host(c); defer { window.close() }
+        var text = SketchElement(kind: .text); text.text = "Transformed annotation"
+        text.rect = CGRect(x: 60.25, y: 50.75, width: 210.5, height: 70.25)
+        text.transform = SketchTransform(a: 0.8, b: 0.6, c: -0.6, d: 0.8, tx: 90, ty: 20)
+        text.groupID = UUID(); text.fontName = "Courier-Bold"; text.fontSize = 37
+        text.shadowed = true; text.outlined = false; text.color = SketchColor(.blue)
+        c.document.elements = [text]; c.document.renderSize = CGSize(width: 900, height: 200); c.zoom = 2; c.tool = .select
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: text.bounds.midX, y: text.bounds.midY), clicks: 2))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        let expandedFrame = editor.frame
+        editor.frame = CGRect(origin: expandedFrame.origin, size: CGSize(width: expandedFrame.width, height: expandedFrame.height + 40))
+        let observedFrame = CGRect(x: editor.frame.minX - 11, y: editor.frame.minY - 3,
+                                   width: editor.frame.width + 15, height: editor.frame.height + 6).integral.insetBy(dx: -5, dy: -5)
+        try expect(grip.frame == observedFrame, "Native text-container frame changes immediately resize the attached grip")
+        let baseFrame = editor.frame
+        grip.mouseDragged(with: TextGripDragEvent(45, 20))
+        var expected = text; expected.translate(x: 15, y: 20)
+        try expect(editor.frame == baseFrame.offsetBy(dx: 45, dy: 20), "Nonuniform display scale converts each delta independently while preserving grown editor height")
+        let snapshot = try SketchDocument.decode(c.snapshotDocumentData())
+        try expect(snapshot.elements[0] == expected && c.document.elements[0] == text,
+                   "World translation preserves rotation, local wrap bounds, group, color and effects")
+        c.zoom = 0.5
+        let frame = CGRect(x: expected.bounds.minX * c.displayScale.width, y: expected.bounds.minY * c.displayScale.height,
+                           width: expected.bounds.width * c.displayScale.width, height: expected.bounds.height * c.displayScale.height)
+        try expect(abs(editor.frame.minX - frame.minX) < 0.00001 && abs(editor.frame.minY - frame.minY) < 0.00001,
+                   "Zoom retains source-space pending placement rather than jumping back")
+        let expectedGrip = CGRect(x: frame.minX - 11, y: frame.minY - 3, width: frame.width + 15, height: frame.height + 6)
+            .integral.insetBy(dx: -5, dy: -5)
+        try expect(grip.frame == expectedGrip, "Fractional editor frames round grip outwards after zoom")
+        let start = CGPoint(x: expected.bounds.minX - 5, y: expected.bounds.midY)
+        grip.mouseDown(with: try mouse(c, .leftMouseDown, start))
+        let end = CGPoint(x: start.x + 20, y: start.y + 12)
+        grip.mouseDragged(with: try mouse(c, .leftMouseDragged, end))
+        expected.translate(x: 20, y: 12)
+        grip.mouseDragged(with: try mouse(c, .leftMouseDragged, end))
+        grip.mouseUp(with: try mouse(c, .leftMouseUp, end))
+        try expect((try SketchDocument.decode(c.snapshotDocumentData())).elements[0] == expected,
+                   "Location-only native events move in fixed parent space exactly once")
+        let data = try c.documentData()
+        let reopened = canvas(); try reopened.loadDocument(data: data)
+        try expect(reopened.document.elements[0] == expected && reopened.document.outputSize == CGSize(width: 900, height: 200),
+                   "Save and reopen preserve transformed editable placement and normal output")
+        c.undo(); try expect(c.document.elements[0] == text, "Movement undo leaves rotated original exact")
+    }
+    static func textGripCancellation() throws {
+        let c = canvas(NSSize(width: 500, height: 300)); let window = host(c); defer { window.close() }
+        c.tool = .text
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 80, y: 70)))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 80, y: 70)))
+        let editor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        let grip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        editor.insertText("New and moved", replacementRange: NSRange(location: 0, length: (editor.string as NSString).length))
+        let frame = editor.frame, data = try c.snapshotDocumentData()
+        var changes = 0; c.onChange = { changes += 1 }
+        for delta in [TextGripDragEvent(0, 0), TextGripDragEvent(.nan, 4), TextGripDragEvent(2, .infinity), TextGripDragEvent(2_000_000, 0)] {
+            grip.mouseDragged(with: delta)
+        }
+        try expect(editor.frame == frame && (try c.snapshotDocumentData()) == data && changes == 0,
+                   "Zero, nonfinite and unrepresentable moves do not dirty or corrupt pending editor")
+        grip.mouseDragged(with: TextGripDragEvent(-14, 22))
+        try expect(changes == 1 && c.hasPendingTextChanges, "New annotation also supports grip movement")
+        c.cancelOperation(nil)
+        try expect(c.document.elements.isEmpty && editor.superview == nil && grip.superview == nil && !c.editingUndoManager.canUndo && changes == 2,
+                   "Explicit cancel abandons newly created text and position without a phantom Undo")
+        var existing = SketchElement(kind: .text); existing.text = "Existing"
+        existing.rect = CGRect(x: 60, y: 60, width: 200, height: 60)
+        c.document.elements = [existing]; c.tool = .select
+        c.setBackgroundColor(.blue); c.setBackgroundColor(.green); c.undo()
+        let original = c.document, undoName = c.editingUndoManager.undoActionName, redoName = c.editingUndoManager.redoActionName
+        c.mouseDown(with: try mouse(c, .leftMouseDown, CGPoint(x: 70, y: 70), clicks: 2))
+        let secondEditor = c.subviews.compactMap { $0 as? NSTextView }.first!
+        let secondGrip = c.subviews.first { $0.accessibilityIdentifier() == "text-grip" }!
+        secondEditor.isContinuousSpellCheckingEnabled = false
+        secondGrip.mouseDragged(with: TextGripDragEvent(20, 30))
+        c.cancelOperation(nil)
+        try expect(c.document == original && c.editingUndoManager.undoActionName == undoName && c.editingUndoManager.redoActionName == redoName,
+                   "Existing annotation cancel leaves prior Undo and Redo unchanged")
+        c.redo(); try expect(c.document.backgroundColor == SketchColor(.green), "Prior redo remains usable after grip cancel")
     }
     static func controlEraser() throws {
         let c = canvas(); let window = host(c); defer { window.close() }
