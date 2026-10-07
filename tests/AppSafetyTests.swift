@@ -68,6 +68,9 @@ final class AppSafetyFilePanel {
         var url: URL? = nil
     }
     static var answers: [Answer] = []
+    var title = ""
+    var nameFieldLabel = ""
+    var prompt = ""
     var accessoryView: NSView?
     var firstResponder: NSResponder?
     @discardableResult
@@ -92,6 +95,15 @@ final class AppSafetyFilePanel {
 }
 typealias AppSafetySavePanel = AppSafetyFilePanel
 typealias AppSafetyOpenPanel = AppSafetyFilePanel
+
+final class AppSafetyPageLayout {
+    static var response: NSApplication.ModalResponse = .cancel
+    static var update: ((NSPrintInfo) -> Void)?
+    func runModal(with settings: NSPrintInfo) -> Int {
+        Self.update?(settings)
+        return Self.response.rawValue
+    }
+}
 
 final class AppSafetyAlert: NSAlert {
     convenience init(error: Error) {
@@ -2524,6 +2536,24 @@ enum AppSafetyTests {
             ("successful Save archives exported native state; failed Save archives nothing", historySaveOutcomes),
             ("asynchronous old-generation archive preserves immutable output and current document identity", historyStaleArchiveCompletion),
             ("blank Save, cancelled Save As and cancelled capture cannot archive empty/cancelled outputs", historyEmptyAndCancelledOutputs),
+            ("Page Setup Cancel preserves settings; OK retains orientation and margins for printing", {
+                let fixture = try Fixture(), app = fixture.app
+                let previous = NSPrintInfo.shared
+                defer { NSPrintInfo.shared = previous; AppSafetyPageLayout.update = nil; AppSafetyPageLayout.response = .cancel }
+                let baseline = previous.copy() as! NSPrintInfo
+                baseline.orientation = .portrait; baseline.leftMargin = 37
+                NSPrintInfo.shared = baseline
+                AppSafetyPageLayout.update = { $0.orientation = .landscape; $0.leftMargin = 54 }
+                AppSafetyPageLayout.response = .cancel
+                app.pageSetup()
+                try expect(NSPrintInfo.shared === baseline && baseline.orientation == .portrait && baseline.leftMargin == 37,
+                           "Cancelled Page Setup must not leak preview settings")
+                AppSafetyPageLayout.response = .OK
+                app.pageSetup()
+                try expect(NSPrintInfo.shared !== baseline && NSPrintInfo.shared.orientation == .landscape && NSPrintInfo.shared.leftMargin == 54,
+                           "Accepted Page Setup must retain the chosen settings without changing the prior object")
+                try expect(baseline.orientation == .portrait && baseline.leftMargin == 37, "Page Setup edits a copy")
+            }),
             ("selected tool labels remain readable on bright and dark accent colors", {
                 let colors: [NSColor] = [.yellow, .white, .black, .blue, .red, .green,
                     NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1),

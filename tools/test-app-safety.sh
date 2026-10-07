@@ -69,6 +69,9 @@ for name, (path, data) in snapshot.items():
         # Optional for older counterfactual App inputs. Never construct a live
         # manager: even an apparently safe default can come from saved settings.
         text = text.replace('GlobalHotkeyManager()', 'AppSafetyHotkeyManager()')
+        text = text.replace('NSPageLayout()', 'AppSafetyPageLayout()')
+        if 'NSPageLayout(' in text:
+            raise SystemExit('Unrecognized live Page Setup construction; refusing to run.')
         text = text.replace('NSApp.reply(toApplicationShouldTerminate: approved)', 'AppSafetyTermination.reply(approved)')
         if re.search(r'\bGlobalHotkeyManager\b', text):
             raise SystemExit('Unrecognized live hotkey-manager construction; refusing to run.')

@@ -18,7 +18,7 @@ final class ToolButton: NSButton {
         if contentTintColor != foreground { contentTintColor = foreground }
         background.setFill()
         shape.fill()
-        super.draw(dirtyRect)
+        cell?.draw(withFrame: bounds.insetBy(dx: 10, dy: 0), in: self)
     }
 }
 
@@ -347,7 +347,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func buildMenus() {
         let bar = NSMenu()
         let appMenu = menu("Skitch Redux", items: [("About Skitch Redux", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit Skitch Redux", #selector(quit), "q")])
+        let quitIndex = appMenu.numberOfItems - 1
+        let hideOthers = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
+        hideOthers.keyEquivalentModifierMask = [.command, .option]
+        let showAll = NSMenuItem(title: "Show All", action: #selector(NSApplication.unhideAllApplications(_:)), keyEquivalent: "")
+        for (offset, item) in [hideOthers, showAll, NSMenuItem.separator()].enumerated() {
+            item.target = nil; appMenu.insertItem(item, at: quitIndex + offset)
+        }
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
+        let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
+        setup.target = self; file.insertItem(setup, at: file.numberOfItems - 1)
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
         let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Skitch Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
@@ -367,7 +376,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let smoothingItem = NSMenuItem(title: "Pencil Smoothing", action: nil, keyEquivalent: "")
         smoothingItem.submenu = smoothing; drawing.addItem(smoothingItem)
-        for m in [appMenu, file, edit, image, drawing, text, snap] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }; NSApp.mainMenu = bar
+        let windows = menu("Window", items: [("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), "")])
+        for item in windows.items { item.target = nil }
+        for m in [appMenu, file, edit, image, drawing, text, snap, windows] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }
+        NSApp.mainMenu = bar; NSApp.windowsMenu = windows
     }
     @objc func changeSmoothing(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let mode = StrokeSmoothing(rawValue: raw) else { return }
@@ -523,6 +535,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot)
             try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: url)
             canvas.commitPendingTextEditing(); currentURL = url; dirty = false; window.isDocumentEdited = false; updateStatus()
+            status.stringValue = "Saved " + url.lastPathComponent
             if isActualSize { actualView?.savedWhileActive = true }
             archive(try HistoryStore.Snapshot(canvasData: snapshot, metadata: legacyMetadata, preview: canvas.imageData(format: "png")), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
             return true
@@ -755,6 +768,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func exportFile() {
         let panel = NSSavePanel()
+        panel.title = "Export"; panel.nameFieldLabel = "Export As:"; panel.prompt = "Export"
         let options = ExportAccessory(format: UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
             originalSize: UserDefaults.standard.bool(forKey: "ExportOriginalSize"),
             jpegQuality: UserDefaults.standard.object(forKey: "ExportQuality") as? Double ?? 0.7)
@@ -786,6 +800,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             status.stringValue = "Exported " + url.lastPathComponent
             archive(try historySnapshot(), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
         } catch { self.error(error) }
+    }
+    @objc func pageSetup() {
+        let settings = NSPrintInfo.shared.copy() as! NSPrintInfo
+        if NSPageLayout().runModal(with: settings) == NSApplication.ModalResponse.OK.rawValue { NSPrintInfo.shared = settings }
+        writeLayoutEvidence()
     }
     @objc func printImage() { let view = NSImageView(frame: NSRect(origin: .zero,size: canvas.outputSize)); view.image = canvas.renderedImage(); view.imageScaling = .scaleProportionallyUpOrDown; let p = NSPrintInfo.shared.copy() as! NSPrintInfo; p.horizontalPagination = .fit; p.verticalPagination = .fit; NSPrintOperation(view: view, printInfo: p).run() }
     @objc func share(_ sender: NSButton) {
@@ -1167,6 +1186,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let rect = window.convertToScreen(canvas.convert(canvas.visibleRect, to: nil))
         let top = NSScreen.screens.first?.frame.maxY ?? rect.maxY
         var evidence: [String: Any] = ["windowFrame": NSStringFromRect(window.frame), "canvasScreenRect": NSStringFromRect(rect), "canvasInputTopLeft": [rect.minX,top-rect.maxY], "screenFrame": NSStringFromRect(NSScreen.screens.first?.frame ?? .zero), "nativeBackingScale":window.backingScaleFactor, "nameFontSize":nameField.font?.pointSize ?? 0,"statusFontSize":status.font?.pointSize ?? 0]
+        evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
+            guard let button = toolButtons[tool] else { return nil }
+            return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,
+                    "frame": NSStringFromRect(button.frame), "selected": button.state == .on]
+        }
+        let printInfo = NSPrintInfo.shared
+        evidence["printInfo"] = ["paperSize": NSStringFromSize(printInfo.paperSize),
+                                "orientation": printInfo.orientation == .portrait ? "portrait" : "landscape",
+                                "margins": [printInfo.leftMargin, printInfo.rightMargin, printInfo.topMargin, printInfo.bottomMargin]]
         if let panel = fontPanel {
             evidence["fontPanel"] = ["frame": NSStringFromRect(panel.frame), "visible": panel.isVisible,
                                      "key": panel.isKeyWindow, "modeMask": validModesForFontPanel(panel).rawValue,
