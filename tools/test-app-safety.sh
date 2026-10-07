@@ -53,6 +53,10 @@ for name, (path, data) in snapshot.items():
         if not entry:
             raise SystemExit('Cannot safely locate and remove the production @main entry.')
         text = text[:entry.start()]
+        if text.count('        installMenuPresence()\n') != 1:
+            raise SystemExit('Missing menu-bar installation safety boundary.')
+        text = text.replace('        installMenuPresence()\n', '')
+        text = text.replace('NSApp.isActive', 'AppSafetyActivation.isActive')
         replacements = {
             'NSAlert(': 'AppSafetyAlert(',
             'NSWindow(': 'AppSafetyWindow(',

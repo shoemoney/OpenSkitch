@@ -1,16 +1,16 @@
 {
-  "verified_at": "2026-10-07T16:56:55.588718+00:00",
-  "checkpoint_id": "native-shell-138ce0637c",
-  "checkpoint_state": "current_build_suites_startup_and_listed_native_export_page_setup_shell_verified",
+  "verified_at": "2026-10-07T17:19:41.627336+00:00",
+  "checkpoint_id": "visibility-ee914f076f",
+  "checkpoint_state": "current_build_suites_startup_and_listed_native_close_reopen_undo_verified",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.grxbUq",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.iGtGjs",
     "source_sha256": {
-      "App.swift": "b990adb797b4e387011cd5725202e1462f4059a33780d19bca0572dacb6a4a0c",
+      "App.swift": "ca84e8d0b601204ae0b90b832a98fbbd7e06da8d95c401b30dfd366f9c10c31b",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
@@ -58,25 +58,27 @@
       "ToolOnFill.png": "4e92b684fd4b167d7399731dc7944be268ab766c7f169d403d9e8d73359bb4e2",
       "ToolOnLine.png": "00e4a35c63aff7abdbf4bd94c99887dd00a5fe6b89530e252d97c5afc2b23ca2",
       "ToolOnRect.png": "66e2a5074659bf0cccd9d899551f8f6e91dd59c1ba377b045abe6a6182debb81",
-      "ToolOnText.png": "3f24e2c186acb004666476881e73a7980a19d4be43d342e065d314715182c499"
+      "ToolOnText.png": "3f24e2c186acb004666476881e73a7980a19d4be43d342e065d314715182c499",
+      "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
+      "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52"
     },
-    "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472"
+    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "e760827d5085bffde6494ed871d96844d8bdeaea41934857fd9ed6d81460b654",
+  "build_manifest_sha256": "d92df260311a9253ddc3bb9016036e9e4d91466fcd1f379ae51da5f13afe9022",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/native-shell-verification/build.log",
-  "build_log_sha256": "fd11e5dbe77869586b82226a1a7abb25f6beca82202dcea3eabc72771eb31912",
+  "build_log_path": "build/visibility-verification/build.log",
+  "build_log_sha256": "27be169be90afbc7ce4cbfab76c791ee62df49d7a6c087d4e6f239ac469f14e7",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.a_ktgh2x",
-      "log_path": "build/native-shell-verification/arm64.log",
-      "log_sha256": "f4de1669b5dfcf9dffb43e88fcdc9c934f6b0d206a599315afdf22d17dfe7d23",
-      "checks": 2486,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.gq5sfr8b",
+      "log_path": "build/visibility-verification/arm64.log",
+      "log_sha256": "439292ee8e43a141a0cf1e76b5d75f5a99020046d935297144b9ab26e334e45d",
+      "checks": 2487,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -84,27 +86,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.11lixzqm",
-      "log_path": "build/native-shell-verification/x86_64.log",
-      "log_sha256": "fc22599583e9054b068917613cb5ba6c575c29d287dfbd945b80d34f18e89fda",
-      "checks": 2486,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.cj3ecaaw",
+      "log_path": "build/visibility-verification/x86_64.log",
+      "log_sha256": "a8de96c6881a53b5e553d6c160f5c84d2cae01c1e12a666b20cbc2463da7f5b2",
+      "checks": 2487,
       "suites": 23,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/native-shell-verification/results.json",
-  "full_suite_results_sha256": "7eee4ffeff9548545febe2c3a22a239d9ab8331ca2389bf7644b3b0e6b87f5dc",
+  "full_suite_results_path": "build/visibility-verification/results.json",
+  "full_suite_results_sha256": "04a66be18779ed2ec4dabcad55d9ce49fdec84bf0fefefe88787b03769d8bf9c",
   "native_startup_smoke": {
-    "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472",
-    "verified_at": "2026-10-07T16:46:24.644156+00:00",
+    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
+    "verified_at": "2026-10-07T17:04:56.065827+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "6d1ebdc7170e766fdb28cc23d72e885ff105b5bde53e28ee64f628a93bab75b2"
+      "editable_sha256": "2ada983b56c74453a21767144db4e990628d9ccb0d68b41b34469fb5f626b38a"
     },
     "x86_64": {
       "passed": true,
@@ -112,46 +114,47 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "1da82538e0f41bc40c06de076e20f76639b4a21386c3f96d378fce2f8f8ab66b"
+      "editable_sha256": "b54fa3b8bc91470123de7bb783efefa2fabeb96908659a99e23c5842c94fb979"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-138ce0637c/results.json",
-  "native_startup_smoke_results_sha256": "7a69bd31afa9637578eb258114ae583eacb576c09198fe2545b26fa141d99e40",
+  "native_startup_smoke_results_path": "build/startup-smoke-ee914f076f/results.json",
+  "native_startup_smoke_results_sha256": "6768cb77626fe784ee56796078371476a8ec8bffe9c08be04499e0fd1028d3ef",
   "validation_tools_sha256": {
     "tools/test.py": "6af94957d08019ddcb30ed63bd5ce09f93f5efd9133c8052b093f2b9acedfe39",
-    "tools/build.sh": "ab5152b1fac37017e35b48d2aad7546a660ee1e5ffeed0ef41b04429111ba61e",
+    "tools/build.sh": "8b0e4b0b85f40d0ce7009927386dfa43e6eba22864070e90656593c15e9d96c2",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "2489fdcdf9fc1a89e02247d443e1c9af29b3b3dd6f8bc433a2824015ef7d22b7"
+    "tools/test-app-safety.sh": "6b1ec831ae13f5a3ed38f572eb7c6d761609bbb262c55609f4e4bf3eb60496d8"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2486,
+    "checks_per_architecture": 2487,
     "suites": 23,
-    "results_path": "build/native-shell-verification/results.json",
-    "results_sha256": "7eee4ffeff9548545febe2c3a22a239d9ab8331ca2389bf7644b3b0e6b87f5dc"
+    "results_path": "build/visibility-verification/results.json",
+    "results_sha256": "04a66be18779ed2ec4dabcad55d9ce49fdec84bf0fefefe88787b03769d8bf9c"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472",
-    "startup_log_path": "build/native-shell-verification/startup.log",
-    "startup_log_sha256": "b619b40c56586bc548c26c0ea3a0b5e33e9151712733ecaab12fb2d410e0f19e"
+    "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
+    "startup_log_path": "build/visibility-verification/startup.log",
+    "startup_log_sha256": "ee43a70f910d6faadd8a7b0e3cbdc45a8560d020dc980aaaefbe477b830c9fcc"
   },
   "current_desktop_checks": [
     {
-      "id": "native-export-page-setup-shell",
-      "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472",
+      "id": "native-close-reopen-undo",
+      "binary_sha256": "ee914f076fdac9491ddb43150803bfc48e5f04b7aa4be21e18d1e98350a0834f",
       "architecture": "arm64",
       "passed": true,
       "verification_kind": "native_input_accessibility_and_visual_review",
-      "evidence_path": "build/native-shell-verification/desktop-proof.json",
-      "evidence_sha256": "894d1b79981cd2a9c99c5a2af08a8637de539d6142333c025fcf2ecca3e66847",
-      "checkpoint_scope": "current_exact138ce0637c_listed_export_page_setup_and_shell_only",
+      "evidence_path": "build/visibility-verification/desktop-proof.json",
+      "evidence_sha256": "2735d48d15606e957682261406ea71f375b07ceb3ada9af30be301d3f2eecba0",
+      "checkpoint_scope": "current_exactee914f076f_listed_close_reopen_undo_only",
       "checks": [
-        "Native Page Setup opened with Command-Shift-P. Landscape preview followed by Cancel preserved original portrait paper and margins. OK retained landscape across reopen. Portrait was restored through the native dialog.",
-        "Export labels match recovered Export/Export As. PNG-to-JPEG updates the filename extension, enables JPEG quality and changes the encoded preview from24807 to10976bytes. Export wrote a10976-byte580x420JPEG.",
-        "Save As wrote a new editable SVG-native skitch copy and showed its actual filename. Native Open reopened the copy at580x420 with the retained artwork; supplemental editable elements were parsed independently.",
-        "Window menu exposes native Bring All to Front and the active document; Bring All to Front returned to the canvas. Hide Others/Show All were observed in the application menu and source wiring only; neither was executed.",
-        "Crop and Arrow spacing/selected-label contrast were visually reviewed. Owned control metrics record20-point tools/name and18-point status."
+        "Command-W after a native title-bar focus click hid the editor without Dock miniaturization. Owned layout recorded visible=false; reopening the existing app restored the same window frame and drawing.",
+        "A Visibility proof annotation was typed through the native editor, remained after Hide/reopen, and was removed/restored through native Edit-menu Undo/Redo. The text editor itself ended across that desktop transition; controlled tests preserve staged typing but no complete native editor-continuity claim is made.",
+        "Save As wrote an independently decoded editable verification copy containing the annotation. The preceding native saved baseline remains byte-identical.",
+        "The original menu-bar images match the package and build manifest. Owned state confirms the status item is installed. Direct menu-icon click was not exercised.",
+        "Close, Hide and Minimize menus expose their recovered actions. A later native Minimize attempt returned an unexpected Untitled canvas; that desktop contract is not verified.",
+        "The next native file-open observation timed out repeatedly. The owned app process remained running and its one-second stack sample was idle in the normal AppKit event loop; an application hang was not established."
       ]
     }
   ],
@@ -623,6 +626,32 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "native-shell-138ce0637c",
+      "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472",
+      "full_suite_results_path": "build/native-shell-verification/results.json",
+      "full_suite_results_sha256": "7eee4ffeff9548545febe2c3a22a239d9ab8331ca2389bf7644b3b0e6b87f5dc",
+      "desktop_checks": [
+        {
+          "id": "native-export-page-setup-shell",
+          "binary_sha256": "138ce0637cbd720e3a49bb194ae8087d070193d780195506b1224830e1d67472",
+          "architecture": "arm64",
+          "passed": true,
+          "verification_kind": "native_input_accessibility_and_visual_review",
+          "evidence_path": "build/native-shell-verification/desktop-proof.json",
+          "evidence_sha256": "894d1b79981cd2a9c99c5a2af08a8637de539d6142333c025fcf2ecca3e66847",
+          "checkpoint_scope": "current_exact138ce0637c_listed_export_page_setup_and_shell_only",
+          "checks": [
+            "Native Page Setup opened with Command-Shift-P. Landscape preview followed by Cancel preserved original portrait paper and margins. OK retained landscape across reopen. Portrait was restored through the native dialog.",
+            "Export labels match recovered Export/Export As. PNG-to-JPEG updates the filename extension, enables JPEG quality and changes the encoded preview from24807 to10976bytes. Export wrote a10976-byte580x420JPEG.",
+            "Save As wrote a new editable SVG-native skitch copy and showed its actual filename. Native Open reopened the copy at580x420 with the retained artwork; supplemental editable elements were parsed independently.",
+            "Window menu exposes native Bring All to Front and the active document; Bring All to Front returned to the canvas. Hide Others/Show All were observed in the application menu and source wiring only; neither was executed.",
+            "Crop and Arrow spacing/selected-label contrast were visually reviewed. Owned control metrics record20-point tools/name and18-point status."
+          ]
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -665,10 +694,13 @@
     "Iconless Crop label padding, other panel spacing, save/export feedback and full original runtime visual equivalence remain unfinished.",
     "All340 original parity flags remain unverified; this proof covers only the listed reconstructed behavior.",
     "Full original runtime parity remains unverified for all340 features.",
-    "Original custom thumbnail minimize/restore and Close/Hide toggleVisible semantics remain unimplemented; no generic substitute is claimed.",
     "Full Fonts family/size/effects/edit/save/Undo desktop workflow remains pending.",
     "Actual printer output, original print scaling/margins equivalence and custom paper settings were not verified.",
     "Hide Others and Show All were not executed. Native desktop proof is arm64; Intel startup/tests run under Rosetta.",
-    "This is scoped dialog/feedback and spacing verification, not complete original UI equivalence."
+    "This is scoped dialog/feedback and spacing verification, not complete original UI equivalence.",
+    "Original custom zoom/corner animation, statusMenu=1 Dock suppression, preference UI, drag thumbnail/iconify/restore and previous-app frontmost restoration remain incomplete.",
+    "Native Minimize behavior, menu-icon click, auxiliary-window visibility details and native pending-text editor continuity remain unverified.",
+    "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
+    "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta."
   ]
 }

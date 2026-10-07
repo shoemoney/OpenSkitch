@@ -138,6 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var shutdownPending: Set<String> = []
     var shutdownError: Error?
     var timer: Timer?
+    var statusItem: NSStatusItem?
     var historyBrowser: HistoryBrowser?
     var historyWindow: NSWindow? { historyBrowser?.window }
     var historyStore: HistoryStore?
@@ -165,6 +166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenus(); buildWindow()
+        installMenuPresence()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
@@ -201,7 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runSmokeTest() }
         }
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationStarted { return shutdownPending.isEmpty ? .terminateNow : .terminateLater }
         saveRecovery()
@@ -235,15 +237,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard sender === window else { return true }
-        // The editor owns this single-document session. A History window must
-        // not keep a discarded editor alive with termination-only state.
-        NSApp.terminate(nil)
+        vanish()
+        return false
+    }
+    func installMenuPresence() {
+        guard UserDefaults.standard.integer(forKey: "statusMenu") != 2 else { return }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem = item
+        if let button = item.button {
+            button.image = NSImage(named: "menu")
+            button.alternateImage = NSImage(named: "menu-sel")
+            button.toolTip = "Click to show/hide Skitch"
+            button.setAccessibilityLabel("Show or hide Skitch Redux")
+            button.target = self; button.action = #selector(showHide)
+        }
+    }
+    @objc func showHide() {
+        if NSApp.currentEvent?.modifierFlags.contains(.option) == true { quit(); return }
+        guard UserDefaults.standard.integer(forKey: "statusMenu") != 2 else { return }
+        toggleVisible()
+    }
+    @objc func vanish() {
+        guard window.isVisible else { return }
+        toggleVisible()
+    }
+    @objc func toggleVisible() {
+        guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
+        if !window.isVisible || window.isMiniaturized || !NSApp.isActive {
+            makeVisible()
+        } else {
+            saveRecovery()
+            timer?.fireDate = .distantFuture
+            fontPanel?.orderOut(nil); navigatorWindow?.orderOut(nil)
+            if UserDefaults.standard.integer(forKey: "statusMenu") == 2 { window.miniaturize(nil) }
+            else { window.orderOut(nil) }
+            writeLayoutEvidence()
+        }
+    }
+    @objc func makeVisible() {
+        guard !terminationStarted else { return }
+        NSApp.activate(ignoringOtherApps: true)
+        if window.isMiniaturized { window.deminiaturize(nil) }
+        window.makeKeyAndOrderFront(nil)
+        timer?.fireDate = Date(timeIntervalSinceNow: 15)
+        updateViewportChrome(); writeLayoutEvidence()
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !window.isVisible && window.attachedSheet == nil { makeVisible() }
         return false
     }
     func applicationWillTerminate(_ notification: Notification) {
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
         timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
+        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -347,6 +394,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func buildMenus() {
         let bar = NSMenu()
         let appMenu = menu("Skitch Redux", items: [("About Skitch Redux", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit Skitch Redux", #selector(quit), "q")])
+        appMenu.insertItem(NSMenuItem(title: "Hide Skitch Redux", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
+        appMenu.item(at: appMenu.numberOfItems - 2)?.target = self
         let quitIndex = appMenu.numberOfItems - 1
         let hideOthers = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
         hideOthers.keyEquivalentModifierMask = [.command, .option]
@@ -355,6 +404,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             item.target = nil; appMenu.insertItem(item, at: quitIndex + offset)
         }
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
+        let close = NSMenuItem(title: "Close", action: #selector(toggleVisible), keyEquivalent: "w")
+        close.target = self; file.insertItem(close, at: 3)
         let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
         setup.target = self; file.insertItem(setup, at: file.numberOfItems - 1)
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
@@ -378,6 +429,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         smoothingItem.submenu = smoothing; drawing.addItem(smoothingItem)
         let windows = menu("Window", items: [("Bring All to Front", #selector(NSApplication.arrangeInFront(_:)), "")])
         for item in windows.items { item.target = nil }
+        let minimize = NSMenuItem(title: "Minimize", action: #selector(vanish), keyEquivalent: "m")
+        minimize.target = self; windows.insertItem(minimize, at: 0)
         for m in [appMenu, file, edit, image, drawing, text, snap, windows] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }
         NSApp.mainMenu = bar; NSApp.windowsMenu = windows
     }
@@ -1186,6 +1239,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let rect = window.convertToScreen(canvas.convert(canvas.visibleRect, to: nil))
         let top = NSScreen.screens.first?.frame.maxY ?? rect.maxY
         var evidence: [String: Any] = ["windowFrame": NSStringFromRect(window.frame), "canvasScreenRect": NSStringFromRect(rect), "canvasInputTopLeft": [rect.minX,top-rect.maxY], "screenFrame": NSStringFromRect(NSScreen.screens.first?.frame ?? .zero), "nativeBackingScale":window.backingScaleFactor, "nameFontSize":nameField.font?.pointSize ?? 0,"statusFontSize":status.font?.pointSize ?? 0]
+        evidence["shell"] = ["visible": window.isVisible, "miniaturized": window.isMiniaturized,
+                             "statusMenu": UserDefaults.standard.integer(forKey: "statusMenu"), "menuIconInstalled": statusItem != nil]
         evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,

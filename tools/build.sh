@@ -14,6 +14,7 @@ xcrun lipo -create "$ROOT/build/objects/SkitchRedux-arm64" "$ROOT/build/objects/
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchMac.icns" "$APP/Contents/Resources/"
+cp "$ROOT/original/Skitch.app/Contents/Resources/menu.png" "$ROOT/original/Skitch.app/Contents/Resources/menu-sel.png" "$APP/Contents/Resources/"
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 file "$APP/Contents/MacOS/SkitchRedux"

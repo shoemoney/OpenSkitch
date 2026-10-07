@@ -13,9 +13,17 @@ private extension NSPasteboard {
 
 final class AppSafetyWindow: NSWindow {
     var simulatedSheet: NSWindow?
+    var simulatesVisibility = false
+    var shown = false
+    var minimized = false
+    override var isVisible: Bool { simulatesVisibility && shown }
+    override var isMiniaturized: Bool { minimized }
     override var attachedSheet: NSWindow? { simulatedSheet ?? super.attachedSheet }
-    override func makeKeyAndOrderFront(_ sender: Any?) {}
-    override func orderFront(_ sender: Any?) {}
+    override func makeKeyAndOrderFront(_ sender: Any?) { if simulatesVisibility { shown = true } }
+    override func orderFront(_ sender: Any?) { if simulatesVisibility { shown = true } }
+    override func orderOut(_ sender: Any?) { shown = false }
+    override func miniaturize(_ sender: Any?) { minimized = true; shown = false }
+    override func deminiaturize(_ sender: Any?) { minimized = false; shown = true }
     override func orderBack(_ sender: Any?) {}
 }
 
@@ -31,6 +39,7 @@ final class AppSafetyFontPanel: NSFontPanel {
 }
 
 enum AppSafetyActivation {
+    static var isActive = true
     static func suppress() {}
 }
 
@@ -821,13 +830,14 @@ enum AppSafetyTests {
         let prompts = AppSafetyAlert.seen.count
         answer(.alertThirdButtonReturn)
         if windowClose {
+            (app.window as! AppSafetyWindow).simulatesVisibility = true
+            (app.window as! AppSafetyWindow).shown = true
             app.showHistory()
             guard let history = app.historyWindow else { throw Failure(description: "Real app History window creation") }
             try expect(history is AppSafetyWindow && !(history is NSPanel), "History must be an isolated ordinary window")
             let requests = AppSafetyTermination.requests
-            // The adapter records forwarding without asking AppKit to terminate.
-            try expect(!app.windowShouldClose(app.window), "Main Close must defer closing to application termination even while History remains alive")
-            try expect(AppSafetyTermination.requests == requests + 1, "Main Close must forward exactly one termination request")
+            try expect(!app.windowShouldClose(app.window), "Main Close hides the editor while retaining the session")
+            try expect(AppSafetyTermination.requests == requests, "Main Close must never request termination")
             try expect(AppSafetyAlert.seen.count == prompts && AppSafetyAlert.answers.count == 1,
                        "Main Close must not consume the application's pending Discard answer")
             try expect(app.dirty && app.canvas.document == before && text.superview === app.canvas &&
@@ -849,13 +859,14 @@ enum AppSafetyTests {
         try expect(text.superview === app.canvas && app.canvas.hasPendingTextChanges, "Recovery removal must be explicit even while pending text still exists")
     }
     static func mainCloseLifecycle() throws {
-        // Retain the previous Window Close + Discard coverage, then independently
-        // exercise the continuing-app branch that a forced termination masks.
+        // Close hides. Explicit Quit retains its independent Cancel/Discard policy.
         try autoreleasepool { try terminationDiscard(windowClose: true) }
         AppSafetyAlert.seen = []
         let fixture = try Fixture(), app = fixture.app
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         let text = try editor(app, text: "Keep draft when main Close is cancelled")
+        (app.window as! AppSafetyWindow).simulatesVisibility = true
+        (app.window as! AppSafetyWindow).shown = true
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
         let recovery = app.support.appendingPathComponent("Recovery.skitch")
         app.saveRecovery()
@@ -865,8 +876,8 @@ enum AppSafetyTests {
         try expect(history is AppSafetyWindow && !(history is NSPanel), "History must use the actual app's ordinary-window path")
         let requests = AppSafetyTermination.requests
         answer(.alertSecondButtonReturn)
-        try expect(!app.windowShouldClose(app.window) && AppSafetyTermination.requests == requests + 1,
-                   "Main Close must request termination and decline immediate close while History is alive")
+        try expect(!app.windowShouldClose(app.window) && AppSafetyTermination.requests == requests && !app.window.isVisible,
+                   "Main Close hides without requesting termination while History is alive")
         try expect(AppSafetyAlert.seen.isEmpty && AppSafetyAlert.answers.count == 1 && app.dirty,
                    "Close forwarding must not prompt, mark the draft discarded or consume the queued Cancel")
         try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "Cancel at the application boundary must leave the app running")
@@ -910,7 +921,7 @@ enum AppSafetyTests {
 
         // Closing History itself while the editor remains must not request Quit.
         let prompts = AppSafetyAlert.seen.count
-        try expect(app.windowShouldClose(history) && AppSafetyTermination.requests == requests + 1,
+        try expect(app.windowShouldClose(history) && AppSafetyTermination.requests == requests,
                    "History Close must be allowed without forwarding another termination request")
         try expect(AppSafetyAlert.seen.count == prompts && app.dirty && reopenedText.superview === app.canvas,
                    "History Close must not ask to discard or mutate the live editor")
@@ -2512,7 +2523,48 @@ enum AppSafetyTests {
             ("failed open after Discard preserves edits, history, destination and recovery", failedOpenAfterDiscard),
             ("oversized capture rejects before discard and preserves pending editor in normal/Frame/Resnap", rejectedCaptureSize),
             ("Quit Discard removes pending recovery without a second prompt", { try terminationDiscard(windowClose: false) }),
-            ("main Close forwards with History alive; Discard cleanup and Cancel protect later edits", mainCloseLifecycle),
+            ("main Close hides with History alive; explicit Quit Discard and Cancel protect later edits", mainCloseLifecycle),
+            ("Close Hide and Minimize preserve pending typing; reopen and inactive toggle restore the same session", {
+                let fixture = try Fixture(), app = fixture.app
+                (app.window as! AppSafetyWindow).simulatesVisibility = true
+                (app.window as! AppSafetyWindow).shown = true
+                let key = "statusMenu", previous = UserDefaults.standard.object(forKey: key)
+                defer { if let previous { UserDefaults.standard.set(previous, forKey: key) } else { UserDefaults.standard.removeObject(forKey: key) }; AppSafetyActivation.isActive = true }
+                UserDefaults.standard.set(0, forKey: key)
+                app.timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { _ in }
+                let destination = try fixture.saveA(), saved = try Data(contentsOf: destination)
+                let editor = try editor(app, text: "Keep this pending draft while hidden")
+                let pending = try app.canvas.snapshotDocumentData(), generation = app.documentGeneration
+                let frame = app.window.frame, undo = editor.undoManager, caret = editor.selectedRange()
+                app.toggleVisible()
+                try expect(!app.window.isVisible && !app.window.isMiniaturized && !app.terminationStarted && app.dirty && app.currentURL == destination,
+                           "Default presence hides the editor without miniaturizing, discarding or terminating")
+                try expect(app.timer!.fireDate.timeIntervalSinceNow > 1_000 && AppSafetyAlert.seen.isEmpty && AppSafetyTermination.requests == 0,
+                           "Hidden document timer is paused and no Quit decision is reached")
+                try expect(!app.applicationShouldTerminateAfterLastWindowClosed(NSApp), "A hidden editor must keep the app alive")
+                _ = app.applicationShouldHandleReopen(NSApp, hasVisibleWindows: true)
+                try expect(app.window.isVisible && !app.window.isMiniaturized && app.window.frame == frame && app.timer!.fireDate.timeIntervalSinceNow <= 15,
+                           "Dock reopen restores the editor even while an auxiliary window is visible")
+                try expect(try app.canvas.snapshotDocumentData() == pending && app.documentGeneration == generation && editor.superview === app.canvas && editor.undoManager === undo && editor.selectedRange() == caret && Data(contentsOf: destination) == saved,
+                           "Hide/reopen preserves pending typing, Undo, selection, generation, geometry and saved bytes")
+                AppSafetyActivation.isActive = false; app.toggleVisible()
+                try expect(app.window.isVisible, "Inactive toggle activates the existing editor instead of hiding it")
+                AppSafetyActivation.isActive = true
+                app.vanish(); app.vanish()
+                try expect(!app.window.isVisible, "Minimize on an already hidden editor cannot reopen it")
+                app.makeVisible()
+                let sheet = AppSafetyWindow(contentRect: .zero, styleMask: [], backing: .buffered, defer: false)
+                (app.window as! AppSafetyWindow).simulatedSheet = sheet
+                app.toggleVisible(); try expect(app.window.isVisible, "A live modal sheet prevents hiding the editor")
+                (app.window as! AppSafetyWindow).simulatedSheet = nil
+                UserDefaults.standard.set(2, forKey: key); app.toggleVisible()
+                try expect(app.window.isMiniaturized && !app.window.isVisible, "Dock-only presence follows original native miniaturization branch")
+                app.makeVisible()
+                try expect(app.window.isVisible && !app.window.isMiniaturized, "Dock-only restore deminiaturizes the same editor")
+                app.terminationStarted = true; app.toggleVisible(); app.makeVisible()
+                try expect(app.window.isVisible, "Termination blocks late visibility mutations")
+                app.terminationStarted = false
+            }),
             ("Quit Save persists pending text and clears recovery", quitSave),
             ("deferred shutdown waits, deduplicates Quit and replies once before final cleanup", deferredShutdownSuccess),
             ("asynchronous shutdown failure retains recovery and permits protected Quit retry", deferredShutdownFailureRetry),
