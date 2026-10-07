@@ -2837,6 +2837,55 @@ enum AppSafetyTests {
                            "Accepted Page Setup must retain the chosen settings without changing the prior object")
                 try expect(baseline.orientation == .portrait && baseline.leftMargin == 37, "Page Setup edits a copy")
             }),
+            ("Recovered bezel keeps readable reachable controls and existing menu actions at default and minimum sizes", {
+                let fixture = try Fixture(), app = fixture.app
+                guard let content = app.window.contentView else { throw Failure(description: "Bezel content") }
+                var controls: [NSControl] = []
+                func collect(_ view: NSView) {
+                    guard view !== app.canvas else { return }
+                    if let control = view as? NSControl, control is NSButton || control is NSTextField { controls.append(control) }
+                    for child in view.subviews { collect(child) }
+                }
+                collect(content)
+                guard let toolbox = controls.compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Toolbox" }), let choices = toolbox.menu else { throw Failure(description: "Recovered Toolbox") }
+                for title in ["File", "Image", "Drawing", "Text", "Capture"] {
+                    try expect(choices.items.contains { $0.title == title && $0.submenu != nil }, "Toolbox retains the \(title) entry point")
+                }
+                let source = NSApp.mainMenu!.items.first { $0.submenu?.title == "Image" }!.submenu!
+                let copy = choices.items.first { $0.title == "Image" }!.submenu!
+                try expect(source !== copy && source.items.map(\.action) == copy.items.map(\.action), "Bezel menu copies preserve real image actions without stealing the menu-bar submenu")
+                for size in [app.window.frame.size, app.window.minSize] {
+                    app.window.setFrame(NSRect(origin: app.window.frame.origin, size: size), display: false)
+                    content.layoutSubtreeIfNeeded()
+                    for control in controls where !control.isHiddenOrHasHiddenAncestor {
+                        try expect((control.font?.pointSize ?? 0) >= 18, "Every readable bezel control retains at least18-point type")
+                        let rect = control.convert(control.bounds, to: content)
+                        try expect(rect.width > 0 && rect.height > 0 && content.bounds.insetBy(dx: -1, dy: -1).contains(rect), "Every bezel control has a nonzero frame inside the window")
+                        var ancestor = control.superview
+                        while let parent = ancestor {
+                            if parent is NSClipView {
+                                try expect(parent.convert(parent.bounds, to: content).insetBy(dx: -1, dy: -1).contains(rect), "Tool and capture controls remain reachable without scrolling at minimum size")
+                            }
+                            ancestor = parent.superview
+                        }
+                    }
+                    let view = app.canvas.enclosingScrollView!
+                    let viewport = view.convert(view.bounds, to: content)
+                    let tools = controls.compactMap { $0 as? NSTextField }.first { $0.stringValue == "Tools" }!
+                    try expect(abs(tools.convert(tools.bounds, to: content).maxY - viewport.maxY) < 1 && abs(app.snapButton.convert(app.snapButton.bounds, to: content).maxY - viewport.maxY) < 1,
+                               "Tool and capture groups begin beside the top of the canvas rather than sinking to the bottom")
+                    for control in controls where !control.isHiddenOrHasHiddenAncestor {
+                        try expect(!viewport.intersects(control.convert(control.bounds, to: content)), "Bezel controls cannot cover the drawing viewport")
+                    }
+                }
+                let fill = choices.items.first { $0.action == #selector(AppDelegate.toggleBezelFill(_:)) }!
+                let shadow = choices.items.first { $0.action == #selector(AppDelegate.toggleBezelShadow(_:)) }!
+                let initialFill = app.canvas.filled, initialShadow = app.canvas.shadowed
+                app.toggleBezelFill(fill); app.toggleBezelShadow(shadow)
+                try expect(app.canvas.filled != initialFill && app.canvas.shadowed != initialShadow && app.validateMenuItem(fill) && app.validateMenuItem(shadow), "Toolbox style actions still change the drawing defaults")
+                try expect(fill.state == (app.canvas.filled ? .on : .off) && shadow.state == (app.canvas.shadowed ? .on : .off), "Toolbox style checks reflect their actual state")
+                app.toggleBezelFill(fill); app.toggleBezelShadow(shadow)
+            }),
             ("selected tool labels remain readable on bright and dark accent colors", {
                 let colors: [NSColor] = [.yellow, .white, .black, .blue, .red, .green,
                     NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1),

@@ -18,7 +18,7 @@ final class ToolButton: NSButton {
         if contentTintColor != foreground { contentTintColor = foreground }
         background.setFill()
         shape.fill()
-        cell?.draw(withFrame: bounds.insetBy(dx: 10, dy: 0), in: self)
+        cell?.draw(withFrame: bounds.insetBy(dx: imagePosition == .imageOnly || bounds.width < 64 ? 2 : 10, dy: 0), in: self)
     }
 }
 
@@ -26,6 +26,14 @@ final class ToolButton: NSButton {
 /// opaque backdrop so their adaptive label colors remain readable.
 final class FrameChromeView: NSView {
     weak var canvasScrollView: NSScrollView?
+    var usesRecoveredBezel = false
+    private lazy var bezelImages: [String: NSImage] = {
+        var images: [String: NSImage] = [:]
+        for name in ["TopLeft", "TopRight", "BottomLeft", "BottomRight", "Top", "Bottom", "Left", "Right"] {
+            if let url = Bundle.main.url(forResource: "docWin_" + name, withExtension: "png"), let image = NSImage(contentsOf: url) { images[name] = image }
+        }
+        return images
+    }()
     var showsCanvasHole = false { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
         let chrome = NSBezierPath(rect: bounds)
@@ -36,8 +44,28 @@ final class FrameChromeView: NSView {
             chrome.windingRule = .evenOdd
         }
         NSColor.windowBackgroundColor.setFill(); chrome.fill()
+        if usesRecoveredBezel {
+            NSGraphicsContext.saveGraphicsState()
+            chrome.addClip()
+            NSGradient(starting: NSColor(white: 0.91, alpha: 1), ending: NSColor(white: 0.78, alpha: 1))?.draw(in: bounds, angle: -90)
+            let opening = canvasScrollView.map { $0.convert($0.bounds, to: self) } ?? bounds.insetBy(dx: 37, dy: 33)
+            let left = max(0, opening.minX), right = max(0, bounds.maxX-opening.maxX)
+            let top = max(0, bounds.maxY-opening.maxY), bottom = max(0, opening.minY)
+            let pieces: [(String, NSRect)] = [
+                ("TopLeft", NSRect(x: 0, y: opening.maxY, width: left, height: top)),
+                ("TopRight", NSRect(x: opening.maxX, y: opening.maxY, width: right, height: top)),
+                ("BottomLeft", NSRect(x: 0, y: 0, width: left, height: bottom)),
+                ("BottomRight", NSRect(x: opening.maxX, y: 0, width: right, height: bottom)),
+                ("Top", NSRect(x: opening.minX, y: opening.maxY, width: opening.width, height: top)),
+                ("Bottom", NSRect(x: opening.minX, y: 0, width: opening.width, height: bottom)),
+                ("Left", NSRect(x: 0, y: opening.minY, width: left, height: opening.height)),
+                ("Right", NSRect(x: opening.maxX, y: opening.minY, width: right, height: opening.height))
+            ]
+            for (name, rect) in pieces { bezelImages[name]?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1) }
+            NSGraphicsContext.restoreGraphicsState()
+        }
     }
-    override func layout() { super.layout(); if showsCanvasHole { needsDisplay = true } }
+    override func layout() { super.layout(); if showsCanvasHole || usesRecoveredBezel { needsDisplay = true } }
 }
 
 final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
@@ -504,44 +532,86 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func stack(_ views: [NSView], horizontal: Bool = false) -> NSStackView {
         let s = NSStackView(views: views); s.orientation = horizontal ? .horizontal : .vertical; s.spacing = 12; s.alignment = horizontal ? .centerY : .leading; return s
     }
+    func recoveredImage(_ name: String) -> NSImage? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
+        return NSImage(contentsOf: url)
+    }
+    func bezelToolbox() -> NSPopUpButton {
+        let control = NSPopUpButton(frame: .zero, pullsDown: true)
+        control.font = .systemFont(ofSize: 20)
+        let choices = NSMenu(title: "Toolbox"); choices.font = .systemFont(ofSize: 20)
+        choices.addItem(withTitle: "Toolbox", action: nil, keyEquivalent: "")
+        for title in ["File", "Image", "Drawing", "Text", "Capture"] {
+            guard let existing = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == title })?.submenu,
+                  let copied = existing.copy() as? NSMenu else { continue }
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = copied; choices.addItem(item)
+        }
+        choices.addItem(.separator())
+        for (title, action) in [("Filled Shapes", #selector(toggleBezelFill(_:))), ("Shadow", #selector(toggleBezelShadow(_:))),
+                                ("Sharing Settings…", #selector(sharingSettings)), ("Capture Shortcuts…", #selector(shortcutSettings))] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; choices.addItem(item)
+        }
+        control.menu = choices; control.setAccessibilityLabel("Toolbox"); control.toolTip = "Image, drawing, text, capture and sharing controls"
+        return control
+    }
     func buildWindow() {
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 900), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Skitch Redux"; window.delegate = self; window.minSize = NSSize(width: 1040, height: 740)
+        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1024, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        window.title = "Skitch Redux"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
         window.contentView = FrameChromeView(frame: window.contentView?.bounds ?? .zero)
         guard let content = window.contentView else { return }
-        snapButton = button("Screen Snap", #selector(screenSnap))
+        content.appearance = NSAppearance(named: .aqua)
+        (content as? FrameChromeView)?.usesRecoveredBezel = true
+        let toolbox = bezelToolbox()
+        let photos = button("Photos", #selector(showPhotos))
+        let title = NSImageView(); title.image = recoveredImage("SkitchTitle"); title.imageScaling = .scaleNone
+        title.setAccessibilityLabel("Skitch"); title.widthAnchor.constraint(equalToConstant: 97).isActive = true
+        let beforeTitle = NSView(), afterTitle = NSView()
+        let top = stack([toolbox, photos, beforeTitle, title, afterTitle, button("Save", #selector(saveHistory)), button("History", #selector(showHistory))], horizontal: true)
+        beforeTitle.widthAnchor.constraint(equalTo: afterTitle.widthAnchor).isActive = true
+        top.spacing = 8
+        snapButton = button("Snap", #selector(screenSnap)); snapButton.toolTip = "Crosshair snapshot; capture modes are in Toolbox and the Capture menu"
         frameButton = button("Frame", #selector(frameSnap))
-        cancelFrameButton = button("Cancel Frame", #selector(cancelFrame)); cancelFrameButton.isHidden = true
-        let top = stack([snapButton, frameButton, cancelFrameButton, button("Full Screen", #selector(fullscreenSnap)), button("Window", #selector(windowSnap)), button("Camera", #selector(cameraSnap)), button("Web Snap", #selector(webSnap)), button("Open…", #selector(openFile)), button("History", #selector(showHistory))], horizontal: true)
-        top.distribution = .fillProportionally
+        cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
         var sidebarViews: [NSView] = [label("Tools")]
         for tool in SketchTool.allCases {
-            let b = ToolButton(title: tool.rawValue.capitalized, target: self, action: #selector(chooseTool(_:)))
-            b.isBordered = false
+            let b = ToolButton(title: tool == .crop ? "Crop" : "", target: self, action: #selector(chooseTool(_:)))
+            b.isBordered = false; b.font = .systemFont(ofSize: 18)
             b.identifier = NSUserInterfaceItemIdentifier(tool.rawValue); b.setButtonType(.toggle)
             let assets: [String: String] = ["select":"Cursor", "arrow":"Arrow", "line":"Line", "rectangle":"Rect", "ellipse":"Circle", "brush":"Brush", "text":"Text", "fill":"Fill", "eraser":"Eraser"]
-            if let asset = assets[tool.rawValue], let url = Bundle.main.url(forResource: "ToolOff"+asset, withExtension: "png"), let image = NSImage(contentsOf: url) {
-                image.size = NSSize(width: 30, height: 30); b.image = image; b.imagePosition = .imageLeading
-                if let activeURL = Bundle.main.url(forResource: "ToolOn"+asset, withExtension: "png"), let activeImage = NSImage(contentsOf: activeURL) {
-                    activeImage.size = image.size; b.alternateImage = activeImage
-                }
+            if let asset = assets[tool.rawValue], let image = recoveredImage("ToolOff"+asset) {
+                b.image = image; b.alternateImage = recoveredImage("ToolOn"+asset); b.imagePosition = .imageOnly; b.imageScaling = .scaleNone
             }
-            b.font = .systemFont(ofSize: 20); b.alignment = .left; b.widthAnchor.constraint(equalToConstant: 172).isActive = true; b.heightAnchor.constraint(equalToConstant: 38).isActive = true
+            b.setAccessibilityLabel(tool.rawValue.capitalized); b.toolTip = tool.rawValue.capitalized + " tool"
+            b.widthAnchor.constraint(equalToConstant: 54).isActive = true; b.heightAnchor.constraint(equalToConstant: 34).isActive = true
             sidebarViews.append(b); toolButtons[tool] = b
         }
-        colorWell.color = .systemRed; colorWell.target = self; colorWell.action = #selector(changeColor(_:)); colorWell.heightAnchor.constraint(equalToConstant: 38).isActive = true; colorWell.widthAnchor.constraint(equalToConstant: 172).isActive = true
-        widthControl.addItems(withTitles: ["Thin · 2", "Medium · 5", "Bold · 10", "Heavy · 20", "Wide · 40"]); widthControl.selectItem(at: 1); widthControl.font = .systemFont(ofSize: 18); widthControl.target = self; widthControl.action = #selector(changeWidth(_:))
-        let fill = NSButton(checkboxWithTitle: "Filled shapes", target: self, action: #selector(toggleFill(_:))); fill.font = .systemFont(ofSize: 18)
-        let shadow = NSButton(checkboxWithTitle: "Shadow", target: self, action: #selector(toggleShadow(_:))); shadow.font = .systemFont(ofSize: 18); shadow.state = canvas.shadowed ? .on : .off
-        sidebarViews += [label("Color"), colorWell, label("Stroke"), widthControl, fill, shadow]
-        let sidebar = stack(sidebarViews); sidebar.spacing = 5
-        let sidebarScroll = NSScrollView(); sidebarScroll.documentView = sidebar; sidebarScroll.hasVerticalScroller = true; sidebarScroll.drawsBackground = false
+        sidebarViews.append(button("Font", #selector(chooseFont)))
+        let sidebar = stack(sidebarViews); sidebar.spacing = 4; sidebar.alignment = .centerX
+        let sidebarRail = NSView(); sidebarRail.addSubview(sidebar)
         sidebar.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([sidebar.leadingAnchor.constraint(equalTo: sidebarScroll.contentView.leadingAnchor, constant: 4), sidebar.topAnchor.constraint(equalTo: sidebarScroll.contentView.topAnchor, constant: 4), sidebar.widthAnchor.constraint(equalToConstant: 182)])
+        NSLayoutConstraint.activate([sidebar.leadingAnchor.constraint(equalTo: sidebarRail.leadingAnchor), sidebar.topAnchor.constraint(equalTo: sidebarRail.topAnchor), sidebar.widthAnchor.constraint(equalToConstant: 58)])
+        colorWell.color = .systemRed; colorWell.target = self; colorWell.action = #selector(changeColor(_:)); colorWell.heightAnchor.constraint(equalToConstant: 34).isActive = true; colorWell.widthAnchor.constraint(equalToConstant: 64).isActive = true
+        colorWell.setAccessibilityLabel("Drawing color"); colorWell.toolTip = "Drawing color; hold Shift to change the canvas background"
+        widthControl.addItems(withTitles: ["Thin · 2", "Medium · 5", "Bold · 10", "Heavy · 20", "Wide · 40"]); widthControl.selectItem(at: 1); widthControl.font = .systemFont(ofSize: 18); widthControl.target = self; widthControl.action = #selector(changeWidth(_:)); widthControl.setAccessibilityLabel("Stroke size")
+        let actual = button("Actual Size", #selector(toggleActualSize)); actualButton = actual
+        let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
+        dragOriginalControl.title = "Original size"; dragOriginalControl.font = .systemFont(ofSize: 18)
+        dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
+        dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
+        dragOriginalControl.setAccessibilityLabel("Drag out at original size")
+        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), label("Color"), colorWell, label("Size"), widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), button("Wipe", #selector(wipe))])
+        right.spacing = 4; right.alignment = .centerX
+        for control in right.arrangedSubviews where control is NSButton || control is NSPopUpButton {
+            control.widthAnchor.constraint(equalToConstant: 132).isActive = true; control.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        }
+        let rightRail = NSView(); rightRail.addSubview(right)
+        right.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([right.leadingAnchor.constraint(equalTo: rightRail.leadingAnchor), right.topAnchor.constraint(equalTo: rightRail.topAnchor), right.widthAnchor.constraint(equalToConstant: 138)])
         let scroll = NSScrollView(); scroll.documentView = canvas; scroll.hasHorizontalScroller = true; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.backgroundColor = .windowBackgroundColor
         (content as? FrameChromeView)?.canvasScrollView = scroll
-        nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
-        zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:))
+        nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
+        zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:)); zoomControl.setAccessibilityLabel("Canvas zoom")
+        zoomControl.widthAnchor.constraint(equalToConstant: 160).isActive = true
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         drag.prepare = { [weak self] in
             guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return nil }
@@ -562,29 +632,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if self.activeDragID == id { self.activeDragID = nil }
             self.restoreDragThumbnail(id)
         }
-        let actual = button("Actual Size", #selector(toggleActualSize)); actual.font = .systemFont(ofSize: 20); actualButton = actual
-        let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
-        let bottom = stack([nameField, zoomControl, actual, numericResize, button("Export…", #selector(exportFile)), button("Share…", #selector(share(_:))), drag], horizontal: true)
+        drag.setAccessibilityElement(true); drag.setAccessibilityLabel("Drag Me"); drag.toolTip = "Drag the drawing into Finder or another application"
+        let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Share drawing")
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
-        dragFormatControl.font = .systemFont(ofSize: 20)
+        dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
+        dragFormatControl.setAccessibilityLabel("Drag Me format")
         for item in dragFormatControl.itemArray { item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)]) }
         dragFormatControl.target = self; dragFormatControl.action = #selector(changeDragOptions(_:))
         let choice = UserDefaults.standard.integer(forKey: "DragFormatChoice")
         dragFormatControl.selectItem(at: (0..<dragFormatControl.numberOfItems).contains(choice) ? choice : 0)
-        dragOriginalControl.font = .systemFont(ofSize: 20)
-        dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
-        dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
-        dragSizeLabel.font = .systemFont(ofSize: 20); dragSizeLabel.lineBreakMode = .byTruncatingTail
-        let options = stack([label("Drag Me format"), dragFormatControl, dragOriginalControl, dragSizeLabel], horizontal: true)
+        let bottom = stack([nameField, dragFormatControl, drag, webpost], horizontal: true); bottom.spacing = 8
+        dragSizeLabel.font = .systemFont(ofSize: 18); dragSizeLabel.lineBreakMode = .byTruncatingTail
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
-        for v in [top, sidebarScroll, scroll, bottom, options, status] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
+        let options = stack([zoomControl, dragSizeLabel, status], horizontal: true); options.spacing = 12
+        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        for v in [top, sidebarRail, rightRail, scroll, bottom, options] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
         NSLayoutConstraint.activate([
-            top.topAnchor.constraint(equalTo: content.topAnchor, constant: 14), top.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), top.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), top.heightAnchor.constraint(equalToConstant: 42),
-            sidebarScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), sidebarScroll.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 14), sidebarScroll.widthAnchor.constraint(equalToConstant: 196), sidebarScroll.bottomAnchor.constraint(equalTo: bottom.topAnchor, constant: -12),
-            scroll.leadingAnchor.constraint(equalTo: sidebarScroll.trailingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), scroll.topAnchor.constraint(equalTo: sidebarScroll.topAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarScroll.bottomAnchor),
-            bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), bottom.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -8), bottom.heightAnchor.constraint(equalToConstant: 52),
-            options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), options.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 42),
-            status.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), status.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10)
+            top.topAnchor.constraint(equalTo: content.topAnchor, constant: 8), top.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), top.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), top.heightAnchor.constraint(equalToConstant: 36),
+            sidebarRail.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 6), sidebarRail.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 8), sidebarRail.widthAnchor.constraint(equalToConstant: 62), sidebarRail.bottomAnchor.constraint(equalTo: bottom.topAnchor, constant: -8),
+            rightRail.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -6), rightRail.topAnchor.constraint(equalTo: sidebarRail.topAnchor), rightRail.widthAnchor.constraint(equalToConstant: 142), rightRail.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
+            scroll.leadingAnchor.constraint(equalTo: sidebarRail.trailingAnchor, constant: 8), scroll.trailingAnchor.constraint(equalTo: rightRail.leadingAnchor, constant: -8), scroll.topAnchor.constraint(equalTo: sidebarRail.topAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
+            bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), bottom.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -4), bottom.heightAnchor.constraint(equalToConstant: 50),
+            options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), options.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 30)
         ])
         content.addSubview(canvasBorder)
         canvasBorder.onBegin = { [weak self] handle, flags in self?.beginWindowGesture(handle, flags: flags) ?? false }
@@ -653,6 +722,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.strokeSmoothing = mode; UserDefaults.standard.set(mode.rawValue, forKey: "PencilSmoothing")
     }
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(toggleBezelFill(_:)) { menuItem.state = canvas.filled ? .on : .off; return !terminationStarted && !frameCaptureInProgress }
+        if menuItem.action == #selector(toggleBezelShadow(_:)) { menuItem.state = canvas.shadowed ? .on : .off; return !terminationStarted && !frameCaptureInProgress }
         if menuItem.action == #selector(chooseFont) {
             menuItem.title = fontPanel?.isVisible == true ? "Hide Fonts" : "Show Fonts"
             return !terminationStarted
@@ -688,6 +759,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func changeWidth(_ sender: NSPopUpButton) { let widths: [CGFloat] = [2,5,10,20,40]; canvas.strokeWidth = widths[sender.indexOfSelectedItem]; canvas.applyStyleToSelection() }
     @objc func toggleFill(_ sender: NSButton) { canvas.filled = sender.state == .on; canvas.applyStyleToSelection() }
     @objc func toggleShadow(_ sender: NSButton) { canvas.shadowed = sender.state == .on; canvas.applyStyleToSelection() }
+    @objc func toggleBezelFill(_ sender: NSMenuItem) { canvas.filled.toggle(); canvas.applyStyleToSelection() }
+    @objc func toggleBezelShadow(_ sender: NSMenuItem) { canvas.shadowed.toggle(); canvas.applyStyleToSelection() }
     @objc func changeZoom(_ sender: NSPopUpButton) {
         guard !isActualSize, let scale = sender.selectedItem?.representedObject as? Double else { return }
         canvas.setZoom(CGFloat(scale)); updateStatus()
@@ -716,7 +789,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             historyFollowTimer = timer; RunLoop.main.add(timer, forMode: .common)
         }
     }
-    func updateStatus() { let s = canvas.outputSize; status.stringValue = "\(Int(ceil(s.width))) × \(Int(ceil(s.height))) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; updateViewportChrome(); scheduleDragPreview() }
+    func updateStatus() { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
         let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
         return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
@@ -1206,7 +1279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.isOpaque = frameWindowWasOpaque
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
-        snapButton.title = "Screen Snap"; frameButton.isHidden = false; cancelFrameButton.isHidden = true
+        snapButton.title = "Snap"; frameButton.isHidden = false; cancelFrameButton.isHidden = true
         updateStatus()
     }
     func performFrameSnap() {
@@ -1467,6 +1540,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,
                     "frame": NSStringFromRect(button.frame), "selected": button.state == .on]
+        }
+        if let content = window.contentView {
+            var controls: [[String: Any]] = []
+            func inspect(_ view: NSView) {
+                guard view !== canvas else { return }
+                if let control = view as? NSControl, control is NSButton || control is NSTextField {
+                    let rect = control.convert(control.bounds, to: content)
+                    var clipped = rect.intersection(content.bounds)
+                    var ancestor = control.superview
+                    while let parent = ancestor {
+                        if parent is NSClipView { clipped = clipped.intersection(parent.convert(parent.bounds, to: content)) }
+                        ancestor = parent.superview
+                    }
+                    controls.append(["label": control.accessibilityLabel() ?? (control as? NSButton)?.title ?? (control as? NSTextField)?.stringValue ?? "",
+                                     "fontSize": control.font?.pointSize ?? 0, "frame": NSStringFromRect(rect),
+                                     "visibleFrame": NSStringFromRect(clipped), "hidden": control.isHiddenOrHasHiddenAncestor])
+                }
+                for child in view.subviews { inspect(child) }
+            }
+            inspect(content)
+            evidence["bezelControls"] = controls
+            evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize),
+                                       "recoveredArtwork": (content as? FrameChromeView)?.usesRecoveredBezel ?? false]
         }
         let printInfo = NSPrintInfo.shared
         evidence["printInfo"] = ["paperSize": NSStringFromSize(printInfo.paperSize),

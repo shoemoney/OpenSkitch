@@ -1,6 +1,6 @@
 {
-  "verified_at": "2026-10-07T18:17:27.037461+00:00",
-  "checkpoint_id": "close-hide-82d9394aeb",
+  "verified_at": "2026-10-07T19:02:18.742516+00:00",
+  "checkpoint_id": "bezel-b2e2c8173d",
   "checkpoint_state": "current_build_suites_startup_and_listed_desktop_checks_verified",
   "build": {
     "architectures": [
@@ -8,9 +8,9 @@
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.CXpRT5",
+    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.tPUXO2",
     "source_sha256": {
-      "App.swift": "73b1cfbf76df2062b004236e5d44b101eee1e3612d033315e4ac4f8a8f806c59",
+      "App.swift": "362071bb0ef05ec4df8d3e66741b356c58f69fa4803cabd6db1962ae5a7932a0",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "Canvas.swift": "7df33f9610919ead32873fd9f736c54888bf9e856a68103160acc04198a81739",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
@@ -42,6 +42,7 @@
     "resource_sha256": {
       "CursorMove.png": "50ec303249a161e796b0e54977a5408b393d92a5252cb7891a6f68e46c593192",
       "SkitchMac.icns": "81a2b816d8f8aa05fe712147e7bad66626a4607049d02fef80fc7166dd2b7663",
+      "SkitchTitle.png": "c783a487de04832489683d44aa248674db553a38792095b99824c8c07e1ebe8f",
       "Skitch_Cancel_DragMe.png": "feda111f7ea378d48239a0d52c38d39b4a2826ce258fa320e454e321a701cd62",
       "Skitch_ShowSkitch.png": "378bf2d187868c142c376184000372cbce5cb0d7260eb5bd13e0f457c4a9b32a",
       "Skitch_ShowSkitch_mouseover.png": "196d30fef466fc4793a8509da24d62622ed210364f31675a28daa6bdb5dac1aa",
@@ -63,26 +64,39 @@
       "ToolOnLine.png": "00e4a35c63aff7abdbf4bd94c99887dd00a5fe6b89530e252d97c5afc2b23ca2",
       "ToolOnRect.png": "66e2a5074659bf0cccd9d899551f8f6e91dd59c1ba377b045abe6a6182debb81",
       "ToolOnText.png": "3f24e2c186acb004666476881e73a7980a19d4be43d342e065d314715182c499",
+      "docWin_Bottom.png": "9dd3899a57eac2425e08f1bca80c8cf56fc10c02679576db59756792a27447df",
+      "docWin_BottomLeft.png": "f2e493715044d0efd997de206ed03ad5077787be4430f16bac4a851d46d58a98",
+      "docWin_BottomLeftBlank.png": "d0d104302948beec35759f3858a11c23fedf3df898f1a3a805d0ae26ced60eae",
+      "docWin_BottomRight.png": "7428c0075093ca54dee0f512dc18a4ef473c31acf6e5f492ad6fad019c7b724b",
+      "docWin_BottomRightBlank.png": "b6d421307c520a9df782f648cb4ecb1b920e03cb400a0a8964a02d04840febb9",
+      "docWin_Grabbable.png": "4708dbc813f8cb77bdcb4a37a20c131d0a1d88e31aaab6b561d6cad3083af915",
+      "docWin_Left.png": "cbb391543ab409e6930a6292001aea2d97fee62bd5dea613927a8593bc970a6d",
+      "docWin_Right.png": "a7e2332f74f3b79ff001a4fec0c7c38b5258c667d76c326682e8ccb19fedd48c",
+      "docWin_Top.png": "12ca544b7c9ac6797ea0f5383cb089e742b408c2612c1c5d6c6d7cfc8efb22c3",
+      "docWin_TopLeft.png": "22316d9c215d45cbea2a5f4f227c71915339e5c513c00e607374644766731911",
+      "docWin_TopLeftBlank.png": "c1d6c2cb938cb391fceca3e710233ff711c051cc7e0f9b0b35b641eced1ea924",
+      "docWin_TopRight.png": "5c7da7e2f7a0815be8a2bd831bd3b0acf7946e13df67a765ddd22f5145ecd598",
+      "docWin_TopRightBlank.png": "1387c18a861695a3706205fa4d7ad8d4ccee2117ad3cf005361728b976d1ca25",
       "menu-sel.png": "fd392b82cc87354057ba2c02c0418a818855d0f7bc33534db9a732bbb89a4a58",
       "menu.png": "ed16ec7d934cd09d062d1a9906b70ae8de5419d5b076b6934213cf8b33f7bf52"
     },
-    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d"
+    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "ec26e7ce9a6c8099ab83f0365e30e718e93cc0bcbf9c12338d43d4d65b87c254",
+  "build_manifest_sha256": "5ed4093321bbd0b47e06be67a36a1e39ce15b772640574beba7eb320a9afcf50",
   "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/close-hide-verification/build.log",
-  "build_log_sha256": "69f704cfcf4cce7ca45761a808d4e075e6f66d4fcc2f4acf57575d6adb3617cf",
+  "build_log_path": "build/bezel-verification/build.log",
+  "build_log_sha256": "eb1ae9e0f6014c264b90e32747f98cd04f59ebb55cc8f502330791d8c79f36c1",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.wq08arkj",
-      "log_path": "build/close-hide-verification/arm64.log",
-      "log_sha256": "85cde2a971beb4b11f66939906eb1c0f8aa8a1f7c4d57589b07e75a8183fcaa1",
-      "checks": 2532,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.y51vhldo",
+      "log_path": "build/bezel-verification/arm64.log",
+      "log_sha256": "7054fc4b02891c46a41ba34ca0829e11dffbc40d2e146fb3ace7e270b8294c3e",
+      "checks": 2533,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
@@ -90,27 +104,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.3dw9nmfh",
-      "log_path": "build/close-hide-verification/x86_64.log",
-      "log_sha256": "892fc0d84027cb7dfbf1b002f13b04b65d8335305e2971170103a93d67e82bec",
-      "checks": 2532,
+      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.wmr134op",
+      "log_path": "build/bezel-verification/x86_64.log",
+      "log_sha256": "9aa0c688bd4e9256d815f25572da859e501915c862297708eafa68d33b19beec",
+      "checks": 2533,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/close-hide-verification/results.json",
-  "full_suite_results_sha256": "679bc5cc96b78346cc805c89eb78503b0854a50b8bfd72025cb00849908a72fe",
+  "full_suite_results_path": "build/bezel-verification/results.json",
+  "full_suite_results_sha256": "8a320fb42398e6441e91a2e93a59e2733bcfc6d6e34562665d075d71c74d4507",
   "native_startup_smoke": {
-    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d",
-    "verified_at": "2026-10-07T18:11:43.890182+00:00",
+    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac",
+    "verified_at": "2026-10-07T18:39:32.867697+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "f963187e6810a622af6e7d8a8b5a59344090af3d9c9beb988bc807effb49079a"
+      "editable_sha256": "b924e358862e123535b4df9f6eeae2bcc64d15d2838bcfa16ea255f3e528474d"
     },
     "x86_64": {
       "passed": true,
@@ -118,38 +132,56 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "48f02e6b76f4d4231ad3cce3f3acefece859b6aef7c5314d6a93756eb444911a"
+      "editable_sha256": "61c33e9ac0314f9feca48f6e3ae53d25ba58d3bcfae40ba4d6a179bad85df70a"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-82d9394aeb/results.json",
-  "native_startup_smoke_results_sha256": "4a4dc6a72dd45830a03b4bad89e4aeb945f546c90427b2198bc27fa0fc8cdff0",
+  "native_startup_smoke_results_path": "build/startup-smoke-b2e2c8173d/results.json",
+  "native_startup_smoke_results_sha256": "dd83f99a9d944a19a829a89977549af17d52b1e791525f542957f387aad1b4ff",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
-    "tools/build.sh": "8aae27f758367cbf7338672878b9dd5d3b0dc73365aec0b28deadb7724678d81",
+    "tools/build.sh": "75ec01dc99326b2bd4cf30d595cabe0584dbdccf7137bfd8b93648d4ac8f5d1f",
     "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
     "tools/test-app-safety.sh": "cc42833b8183e663ebcbeb970874ea70482a4e46538efefd5bc7703885ca2b17"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
-    "checks_per_architecture": 2532,
+    "checks_per_architecture": 2533,
     "suites": 24,
-    "results_path": "build/close-hide-verification/results.json",
-    "results_sha256": "679bc5cc96b78346cc805c89eb78503b0854a50b8bfd72025cb00849908a72fe"
+    "results_path": "build/bezel-verification/results.json",
+    "results_sha256": "8a320fb42398e6441e91a2e93a59e2733bcfc6d6e34562665d075d71c74d4507"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d",
-    "startup_log_path": "build/close-hide-verification/startup.log",
-    "startup_log_sha256": "a63105c2641a438dcd1609fa285583bfc5dd68926908daa580854e591f214791"
+    "binary_sha256": "b2e2c8173de33c15cd63695b418fca4ed4b3d582a84ef3bdd70adcfba053c0ac",
+    "startup_log_path": "build/bezel-verification/startup.log",
+    "startup_log_sha256": "4855424c2307d064868b5cda4d22f13e4a6b70a5d2fcb50a1a38ac42d2c7771d"
   },
   "current_desktop_checks": [
-    "Native Open dialog loads the saved editable drawing.",
-    "Cmd-W hides the editor without miniaturizing or creating a thumbnail; Finder reopen retains the document and frame.",
-    "Red Close starts a 15-frame menu-target shrink, finishes hidden and restores the same saved drawing and frame through Finder reopen.",
-    "Cmd-H hides the active annotation editor; Finder reopen retains its draft and focused text editor.",
-    "Native typing Undo and Redo operate after restoration; AppKit coalesces the pre-hide and post-hide typing into one group.",
-    "Save As writes a separate native SVG Skitch document containing the restored text.",
-    "Cmd-M menu route hides the editor; Finder reopen retains the saved drawing and frame."
+    {
+      "id": "default_bezel_layout",
+      "result": "passed",
+      "scope": "Live native default-size screenshot reviewed: both control rails top aligned, original frame surrounds canvas without crossing controls, footer controls visible. Read-only layout metrics show owned control fonts >=18 points and positive unclipped frames. Metrics were written at startup before opening the drawing; they do not establish dynamic minimum-size desktop behavior."
+    },
+    {
+      "id": "toolbox_open_drawing",
+      "result": "passed",
+      "scope": "Native Toolbox > File > Open opened the existing Close-Hide proof through the actual Open dialog; editable paths and text visibly rendered."
+    },
+    {
+      "id": "undo_temporary_arrow",
+      "result": "passed",
+      "scope": "A window-size test drag landed on the canvas and created a temporary arrow. The right-rail Undo removed the arrow, verified in the live screenshot. Unsaved status persisted after undo; no clean-state restoration claim."
+    },
+    {
+      "id": "drag_format_switch",
+      "result": "passed",
+      "scope": "Native footer format menu selected JPEG80%; accessibility value and screenshot changed. Returned to PNG; output details settled from46KB PNG to21KB JPEG and back to46KB PNG. Does not establish delivery to Finder or another app."
+    },
+    {
+      "id": "separate_native_save_as",
+      "result": "passed",
+      "scope": "Native Save As wrote Bezel-proof-b2e2c8173d.skitch and visibly reported the saved filename. Saved XML retains prior proof text. Earlier proof file hash unchanged."
+    }
   ],
   "historical_validations": [
     {
@@ -688,6 +720,22 @@
       "full_suite_results_sha256": "ec13e769becbfa91a8a59b76645c8552cd3079df62866c7e3523df636afe84ca",
       "desktop_checks": [],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "close-hide-82d9394aeb",
+      "binary_sha256": "82d9394aeb550f7a56801819a71cc1d09c1e11b24b1ec4e56be13cc30c7a995d",
+      "full_suite_results_path": "build/close-hide-verification/results.json",
+      "full_suite_results_sha256": "679bc5cc96b78346cc805c89eb78503b0854a50b8bfd72025cb00849908a72fe",
+      "desktop_checks": [
+        "Native Open dialog loads the saved editable drawing.",
+        "Cmd-W hides the editor without miniaturizing or creating a thumbnail; Finder reopen retains the document and frame.",
+        "Red Close starts a 15-frame menu-target shrink, finishes hidden and restores the same saved drawing and frame through Finder reopen.",
+        "Cmd-H hides the active annotation editor; Finder reopen retains its draft and focused text editor.",
+        "Native typing Undo and Redo operate after restoration; AppKit coalesces the pre-hide and post-hide typing into one group.",
+        "Save As writes a separate native SVG Skitch document containing the restored text.",
+        "Cmd-M menu route hides the editor; Finder reopen retains the saved drawing and frame."
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
@@ -727,24 +775,22 @@
     "Desktop visual/input proof is arm64; Intel suites and startup run under Rosetta rather than real Intel hardware.",
     "Other accent-label contrast is checked with controlled fixtures, not a desktop appearance/theme change.",
     "Minimum-window desktop resize was attempted but did not change geometry; compact-window layout remains unverified.",
-    "Iconless Crop label padding, other panel spacing, save/export feedback and full original runtime visual equivalence remain unfinished.",
     "All340 original parity flags remain unverified; this proof covers only the listed reconstructed behavior.",
     "Full original runtime parity remains unverified for all340 features.",
     "Full Fonts family/size/effects/edit/save/Undo desktop workflow remains pending.",
     "Actual printer output, original print scaling/margins equivalence and custom paper settings were not verified.",
     "Hide Others and Show All were not executed. Native desktop proof is arm64; Intel startup/tests run under Rosetta.",
     "This is scoped dialog/feedback and spacing verification, not complete original UI equivalence.",
-    "Original custom zoom/corner animation, statusMenu=1 Dock suppression, preference UI, drag thumbnail/iconify/restore and previous-app frontmost restoration remain incomplete.",
-    "Native Minimize behavior, menu-icon click, auxiliary-window visibility details and native pending-text editor continuity remain unverified.",
     "Desktop accessibility timed out during the later saved-copy Open check. Saved file decode and dual-architecture startup round trips pass; that specific desktop round trip is unverified.",
     "Full original parity remains unverified for all340 features; Intel startup/tests use Rosetta.",
     "Original floating snapshot includes native/window effects that are not established by cached owned-view rendering.",
     "Current drag-thumbnail desktop interaction remains unverified: no actual Finder/application delivery, hover/cancel/animated-restore proof was obtained.",
-    "Recovered corner curves, editor15/15 and drag25/15-frame sequences and20ms timers are implemented in default/tracking/modal modes. Listed native Close/Hide/menu-Minimize endpoints and pending-editor continuity are checked; intermediate animation pixels, original CGS2x2 mesh interpolation, shadow/titlebar texture, restoration origin and original runtime equivalence remain unverified.",
+    "Recovered corner curves, editor15/15 and drag25/15-frame sequences and20ms timers are implemented in default/tracking/modal modes. Native Close/Hide/menu-Minimize endpoints and pending-editor continuity were checked on the earlier Close/Hide binary only and have not been repeated on this compact-bezel binary; intermediate animation pixels, original CGS2x2 mesh interpolation, shadow/titlebar texture, restoration origin and original runtime equivalence remain unverified.",
     "Original128-square drag preview styling, byte badge, aspect treatment, legacy filename/image pasteboard compatibility and accepting-application behavior remain unverified.",
     "Previous-app focus, menu-icon click, physical yellow Minimize button, Dock-only/menu-only desktop presence, status-only Dock suppression and preference UI remain unverified or incomplete.",
-    "Complete Fonts native workflow, original compact bezel/layout and full original runtime parity remain unverified."
+    "Complete Fonts native workflow, remaining original control clusters/swatches/size slider/tabs and full original runtime parity remain unverified.",
+    "Current compact-bezel desktop minimum-size resizing remains unverified: attempted native gestures did not change the window size; controlled default/minimum AppKit layout tests are separate evidence."
   ],
-  "current_desktop_proof_path": "build/close-hide-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "38019d4d457e754228cdaf3b3d0f87633a34e80d3fb89227e9ac4ffaa3f43130"
+  "current_desktop_proof_path": "build/bezel-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "f2d898041e6bd4dc39cd561f352d4007413f9b8ffc7a8061a881b95849799982"
 }
