@@ -20,12 +20,14 @@ final class FrameChromeView: NSView {
 }
 
 final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
-    struct Payload { let data: Data; let name: String; let delivered: (URL) -> Void }
+    struct Payload { let data: Data; let name: String; var format: String = "png"; let delivered: (URL) -> Void }
     var prepare: (() -> Payload?)?
+    var overview: NSImage? { didSet { needsDisplay = true } }
     private var payloads: [ObjectIdentifier: Payload] = [:]
     private var sessions: [ObjectIdentifier: ObjectIdentifier] = [:]
     override func draw(_ dirtyRect: NSRect) {
         NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
+        if let overview { overview.draw(in: bounds.insetBy(dx: 4, dy: 4), from: .zero, operation: .sourceOver, fraction: 0.2) }
         let title = "Drag Me"
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 20), .foregroundColor: NSColor.labelColor]
         let size = title.size(withAttributes: attrs)
@@ -33,7 +35,7 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     }
     override func mouseDragged(with event: NSEvent) {
         guard let payload = prepare?() else { return }
-        let provider = NSFilePromiseProvider(fileType: UTType.png.identifier, delegate: self)
+        let provider = NSFilePromiseProvider(fileType: (UTType(filenameExtension: payload.format) ?? .data).identifier, delegate: self)
         payloads[ObjectIdentifier(provider)] = payload
         let item = NSDraggingItem(pasteboardWriter: provider)
         item.setDraggingFrame(bounds, contents: NSImage(systemSymbolName: "photo", accessibilityDescription: "Export image"))
@@ -44,7 +46,7 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
         if let provider = sessions.removeValue(forKey: ObjectIdentifier(session)), operation.isEmpty { payloads.removeValue(forKey: provider) }
     }
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.name ?? "Skitch") + ".png" }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.name ?? "Skitch") + "." + (payloads[ObjectIdentifier(filePromiseProvider)]?.format ?? "png") }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
         let payload = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
         do { guard let payload else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }; try payload.data.write(to: url, options: .atomic); payload.delivered(url); completionHandler(nil) } catch { completionHandler(error) }
@@ -66,6 +68,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let colorWell = NSColorWell()
     let widthControl = NSPopUpButton(frame: .zero, pullsDown: false)
     let zoomControl = NSPopUpButton(frame: .zero, pullsDown: false)
+    let dragFormatControl = NSPopUpButton(frame: .zero, pullsDown: false)
+    let dragOriginalControl = NSButton(checkboxWithTitle: "Export at original size", target: nil, action: nil)
+    let dragSizeLabel = NSTextField(labelWithString: "")
+    var dragExportView: DragExportView?
+    var dragPreviewTimer: Timer?
     var toolButtons: [SketchTool: NSButton] = [:]
     var currentURL: URL?
     var documentGeneration = UUID()
@@ -175,7 +182,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationWillTerminate(_ notification: Notification) {
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
-        timer?.invalidate(); historyFollowTimer?.invalidate(); try? hotkeys.unregister()
+        timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); try? hotkeys.unregister()
     }
     func application(_ sender: NSApplication, openFiles filenames: [String]) {
         if let first = filenames.first { openURL(URL(fileURLWithPath: first)) }
@@ -221,22 +228,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         (content as? FrameChromeView)?.canvasScrollView = scroll
         nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 200).isActive = true
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:))
-        let drag = DragExportView(); drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
+        let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         drag.prepare = { [weak self] in
-            guard let self, let data = self.canvas.imageData(format: "png"), let snapshot = try? self.historySnapshot() else { return nil }
+            guard let self, let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragOriginalControl.state == .on, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
             let name = self.safeName(), generation = self.documentGeneration
-            return DragExportView.Payload(data: data, name: name, delivered: { [weak self] url in
+            return DragExportView.Payload(data: data, name: name, format: self.dragFormat, delivered: { [weak self] url in
                 self?.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
             })
         }
         let bottom = stack([nameField, zoomControl, button("Resize…", #selector(resize)), button("Export…", #selector(exportFile)), button("Share…", #selector(share(_:))), drag], horizontal: true)
+        dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
+        dragFormatControl.font = .systemFont(ofSize: 20)
+        for item in dragFormatControl.itemArray { item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)]) }
+        dragFormatControl.target = self; dragFormatControl.action = #selector(changeDragOptions(_:))
+        let choice = UserDefaults.standard.integer(forKey: "DragFormatChoice")
+        dragFormatControl.selectItem(at: (0..<dragFormatControl.numberOfItems).contains(choice) ? choice : 0)
+        dragOriginalControl.font = .systemFont(ofSize: 20)
+        dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
+        dragOriginalControl.state = UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool == true ? .on : .off
+        dragSizeLabel.font = .systemFont(ofSize: 20); dragSizeLabel.lineBreakMode = .byTruncatingTail
+        let options = stack([label("Drag Me format"), dragFormatControl, dragOriginalControl, dragSizeLabel], horizontal: true)
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
-        for v in [top, sidebarScroll, scroll, bottom, status] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
+        for v in [top, sidebarScroll, scroll, bottom, options, status] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
         NSLayoutConstraint.activate([
             top.topAnchor.constraint(equalTo: content.topAnchor, constant: 14), top.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), top.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), top.heightAnchor.constraint(equalToConstant: 42),
             sidebarScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), sidebarScroll.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 14), sidebarScroll.widthAnchor.constraint(equalToConstant: 196), sidebarScroll.bottomAnchor.constraint(equalTo: bottom.topAnchor, constant: -12),
             scroll.leadingAnchor.constraint(equalTo: sidebarScroll.trailingAnchor, constant: 12), scroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), scroll.topAnchor.constraint(equalTo: sidebarScroll.topAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarScroll.bottomAnchor),
-            bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), bottom.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8), bottom.heightAnchor.constraint(equalToConstant: 52),
+            bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), bottom.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -8), bottom.heightAnchor.constraint(equalToConstant: 52),
+            options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), options.bottomAnchor.constraint(equalTo: status.topAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 42),
             status.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16), status.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -16), status.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10)
         ])
         canvas.strokeColor = colorWell.color; canvas.strokeWidth = 5
@@ -252,7 +271,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let appMenu = menu("Skitch Redux", items: [("About Skitch Redux", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit Skitch Redux", #selector(quit), "q")])
         let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
-        let image = menu("Image", items: [("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
+        let image = menu("Image", items: [("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Toggle Text Outline", #selector(toggleOutline), "")])
         let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
         let drawing = menu("Drawing", items: [])
@@ -297,7 +316,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func fitCanvasToWindow() {
         window.contentView?.layoutSubtreeIfNeeded()
         guard let scroll = canvas.enclosingScrollView else { return }
-        let viewport = scroll.contentView.bounds.size, size = canvas.canvasSize
+        let viewport = scroll.contentView.bounds.size, size = canvas.outputSize
         let scale = min(1, max(0.05, min((viewport.width-20)/size.width, (viewport.height-20)/size.height)))
         setCanvasDisplayZoom(scale, label: "Fit")
         scroll.contentView.scroll(to: .zero); scroll.reflectScrolledClipView(scroll.contentView)
@@ -317,7 +336,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             historyFollowTimer = timer; RunLoop.main.add(timer, forMode: .common)
         }
     }
-    func updateStatus() { let s = canvas.canvasSize; status.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
+    func updateStatus() { let s = canvas.outputSize; status.stringValue = "\(Int(s.width)) × \(Int(s.height)) · \(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; scheduleDragPreview() }
+    var dragFormat: String {
+        let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
+        return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
+    }
+    var dragQuality: Double {
+        let values = [1.0, 1.0, 0.8, 0.6, 0.3, 0.1]
+        return values.indices.contains(dragFormatControl.indexOfSelectedItem) ? values[dragFormatControl.indexOfSelectedItem] : 0.6
+    }
+    @objc func changeDragOptions(_ sender: Any?) {
+        UserDefaults.standard.set(dragFormatControl.indexOfSelectedItem, forKey: "DragFormatChoice")
+        UserDefaults.standard.set(dragOriginalControl.state == .on, forKey: "DragOriginalSize")
+        scheduleDragPreview()
+    }
+    func scheduleDragPreview() {
+        guard dragExportView != nil else { return }
+        dragPreviewTimer?.invalidate()
+        let timer = Timer(timeInterval: 1, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateDragPreview() }
+        }
+        dragPreviewTimer = timer; RunLoop.main.add(timer, forMode: .common)
+    }
+    func updateDragPreview() {
+        dragPreviewTimer?.invalidate(); dragPreviewTimer = nil
+        let original = dragOriginalControl.state == .on
+        let size = original && canvas.document.backgroundPNG != nil ? canvas.canvasSize : canvas.outputSize
+        if let data = try? exportData(format: dragFormat, originalSize: original, jpegQuality: dragQuality) {
+            dragSizeLabel.stringValue = "\(Int(size.width)) × \(Int(size.height)) · " + ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
+        } else { dragSizeLabel.stringValue = "Preview unavailable" }
+        if let raw = try? canvas.snapshotDocumentData(), let document = try? CanvasView.validatedDocumentData(raw) {
+            let scale = min(1, 128 / max(document.size.width, document.size.height))
+            dragExportView?.overview = ImageExport.image(document: document, size: CGSize(width: max(1, ceil(document.size.width * scale)), height: max(1, ceil(document.size.height * scale))))
+        }
+    }
     func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
     func error(_ error: Error) { let a = NSAlert(error: error); a.runModal() }
     func allowDiscard(discardingForTermination: Bool = false) -> Bool {
@@ -401,7 +453,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func historySnapshot() throws -> HistoryStore.Snapshot {
         let raw = try canvas.snapshotDocumentData()
         let document = try CanvasView.validatedDocumentData(raw)
-        let preview = SketchRenderer.bitmap(document: document)?.representation(using: .png, properties: [:])
+        let preview = ImageExport.encode(document: document, size: document.outputSize, format: "png")
         return try HistoryStore.Snapshot(canvasData: raw, metadata: legacyMetadata, preview: preview)
     }
     @discardableResult
@@ -569,11 +621,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func showPhotos() {
         photoBrowser.show(relativeTo: window) { [weak self] url in self?.openURL(url) }
     }
-    @objc func exportFile() {
-        let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".png"; p.allowedContentTypes = [.png,.jpeg,.tiff,.pdf,.bmp,.svg, UTType(filenameExtension: "skitch") ?? .data]; p.allowsOtherFileTypes = false
-        if p.runModal() == .OK, let url = p.url { do { let data: Data; if ["svg", "skitch"].contains(url.pathExtension.lowercased()) { let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot); data = try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).encoded(includeSupplementalState: url.pathExtension.lowercased() == "skitch") } else { guard let encoded = canvas.imageData(format: url.pathExtension.lowercased()) else { throw NSError(domain: "SkitchRedux", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."]) }; data = encoded }; try data.write(to: url, options: .atomic); status.stringValue = "Exported \(url.lastPathComponent)"; archive(try historySnapshot(), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration) } catch { self.error(error) } }
+    func exportData(format: String, originalSize: Bool, jpegQuality: Double) throws -> Data {
+        if ["svg", "skitch"].contains(format.lowercased()) {
+            var snapshot = try canvas.snapshotDocumentData(), document = try CanvasView.validatedDocumentData(snapshot)
+            if format.lowercased() == "skitch", originalSize, document.backgroundPNG != nil {
+                var raw = try JSONSerialization.jsonObject(with: snapshot) as! [String: Any]
+                raw.removeValue(forKey: "renderSize")
+                snapshot = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys])
+                document = try CanvasView.validatedDocumentData(snapshot)
+            }
+            let file = SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot)
+            if format.lowercased() == "skitch" { return try file.encoded() }
+            return try file.exportedSVG(size: originalSize && document.backgroundPNG != nil ? document.size : document.outputSize)
+        }
+        guard let encoded = canvas.imageData(format: format, originalSize: originalSize, jpegQuality: jpegQuality) else {
+            throw NSError(domain: "SkitchRedux", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."])
+        }
+        return encoded
     }
-    @objc func printImage() { let view = NSImageView(frame: NSRect(origin: .zero,size: canvas.canvasSize)); view.image = canvas.renderedImage(); view.imageScaling = .scaleProportionallyUpOrDown; let p = NSPrintInfo.shared.copy() as! NSPrintInfo; p.horizontalPagination = .fit; p.verticalPagination = .fit; NSPrintOperation(view: view, printInfo: p).run() }
+    @objc func exportFile() {
+        let panel = NSSavePanel()
+        let options = ExportAccessory(format: UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
+            originalSize: UserDefaults.standard.bool(forKey: "ExportOriginalSize"),
+            jpegQuality: UserDefaults.standard.object(forKey: "ExportQuality") as? Double ?? 0.7)
+        panel.accessoryView = options.view; panel.allowsOtherFileTypes = false
+        let refresh = { [weak self, weak panel, weak options] in
+            guard let self, let panel, let options else { return }
+            // Commit the filename editor before replacing its extension; otherwise
+            // AppKit can restore the editor's old text when the format popup closes.
+            if let editor = panel.firstResponder as? NSTextView, editor.isFieldEditor {
+                panel.makeFirstResponder(nil)
+            }
+            panel.allowedContentTypes = [UTType(filenameExtension: options.format) ?? .data]
+            let stem = (panel.nameFieldStringValue as NSString).deletingPathExtension
+            panel.nameFieldStringValue = (stem.isEmpty ? self.safeName() : stem) + "." + options.format
+            let size = options.originalSize && self.canvas.document.backgroundPNG != nil ? self.canvas.canvasSize : self.canvas.outputSize
+            let data = try? self.exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.jpegQuality)
+            options.updateByteCount(data?.count, size: size)
+        }
+        options.onChange = refresh
+        panel.nameFieldStringValue = safeName() + "." + options.format
+        refresh()
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let data = try exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.jpegQuality)
+            try data.write(to: url, options: .atomic)
+            UserDefaults.standard.set(options.format, forKey: "ExportFormat")
+            UserDefaults.standard.set(options.originalSize, forKey: "ExportOriginalSize")
+            UserDefaults.standard.set(options.jpegQuality, forKey: "ExportQuality")
+            status.stringValue = "Exported " + url.lastPathComponent
+            archive(try historySnapshot(), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
+        } catch { self.error(error) }
+    }
+    @objc func printImage() { let view = NSImageView(frame: NSRect(origin: .zero,size: canvas.outputSize)); view.image = canvas.renderedImage(); view.imageScaling = .scaleProportionallyUpOrDown; let p = NSPrintInfo.shared.copy() as! NSPrintInfo; p.horizontalPagination = .fit; p.verticalPagination = .fit; NSPrintOperation(view: view, printInfo: p).run() }
     @objc func share(_ sender: NSButton) {
         guard let snapshot = try? historySnapshot() else { return }
         pickerSnapshot = ShareSnapshot(snapshot: snapshot, name: safeName(), generation: documentGeneration)
@@ -799,20 +899,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.fontName = font.fontName; canvas.fontSize = pixels; canvas.applyTextStyleToSelection(); window.makeFirstResponder(canvas)
     }
     @objc func toggleOutline() { canvas.outlined.toggle(); canvas.applyTextStyleToSelection() }
-    @objc func resize() { let size = canvas.canvasSize; if let s = prompt("Resize Image", text: "Width × height in pixels", value: "\(Int(size.width)) × \(Int(size.height))") { let parts = s.components(separatedBy: CharacterSet(charactersIn: "x×, ")).filter { !$0.isEmpty }; guard parts.count == 2, let w = Double(parts[0]), let h = Double(parts[1]), w > 0, h > 0, w <= 16000, h <= 16000 else { return }; canvas.resizeCanvas(to: NSSize(width: w,height: h)); updateStatus() } }
-    var activeUndoManager: UndoManager {
-        if let editor = window?.firstResponder as? NSTextView, let manager = editor.undoManager { return manager }
-        return canvas.editingUndoManager
+    @objc func resize() {
+        let generation = documentGeneration
+        let panel = ResizePanel(size: canvas.outputSize) { [weak self] size, crop, anchor in
+            guard let self, self.documentGeneration == generation else { return }
+            if crop {
+                let source = CGSize(width: size.width * self.canvas.canvasSize.width / self.canvas.outputSize.width,
+                                    height: size.height * self.canvas.canvasSize.height / self.canvas.outputSize.height)
+                if !self.canvas.cropCanvas(to: source, anchor: anchor, outputSize: size) {
+                    self.error(NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This crop exceeds the supported source dimensions. Choose smaller dimensions or restore the snap to normal size first."]))
+                }
+            } else { _ = self.canvas.resizeImage(to: size) }
+            self.updateStatus()
+        }
+        panel.show(attachedTo: window)
     }
-    @objc func undo() {
-        if let editor = window.firstResponder as? NSTextView { editor.undoManager?.undo() } else { canvas.undo() }
+    @objc func normalSize() { canvas.setSnapToNormalSize(); updateStatus() }
+    @objc func trimSnap() { canvas.trimSnapAtCurrentEdges(); updateStatus() }
+    var activeTextEditor: NSTextView? {
+        (window?.attachedSheet ?? NSApp.keyWindow ?? window)?.firstResponder as? NSTextView
     }
-    @objc func redo() {
-        if let editor = window.firstResponder as? NSTextView { editor.undoManager?.redo() } else { canvas.redo() }
-    }
-    @objc func cut() { if let editor = window.firstResponder as? NSTextView { editor.cut(nil) } else { canvas.copySelection(); canvas.deleteSelection() } }; @objc func copyArtwork() { if let editor = window.firstResponder as? NSTextView { editor.copy(nil) } else { canvas.copySelection() } }
+    var activeUndoManager: UndoManager { activeTextEditor?.undoManager ?? canvas.editingUndoManager }
+    @objc func undo() { if let editor = activeTextEditor { editor.undoManager?.undo() } else { canvas.undo() } }
+    @objc func redo() { if let editor = activeTextEditor { editor.undoManager?.redo() } else { canvas.redo() } }
+    @objc func cut() { if let editor = activeTextEditor { editor.cut(nil) } else { canvas.copySelection(); canvas.deleteSelection() } }
+    @objc func copyArtwork() { if let editor = activeTextEditor { editor.copy(nil) } else { canvas.copySelection() } }
     @objc func copyImage() { NSPasteboard.general.clearContents(); NSPasteboard.general.writeObjects([canvas.renderedImage()]) }
-    @objc func paste() { if let editor = window.firstResponder as? NSTextView { editor.paste(nil) } else { canvas.paste() } }; @objc func selectAll() { if let editor = window.firstResponder as? NSTextView { editor.selectAll(nil) } else { canvas.selectAll() } }; @objc func deleteSelection() { canvas.deleteSelection() }
+    @objc func paste() { if let editor = activeTextEditor { editor.paste(nil) } else { canvas.paste() } }
+    @objc func selectAll() { if let editor = activeTextEditor { editor.selectAll(nil) } else { canvas.selectAll() } }
+    @objc func deleteSelection() { if let editor = activeTextEditor { editor.delete(nil) } else { canvas.deleteSelection() } }
     @objc func duplicate() { canvas.duplicateSelection() }; @objc func clear() { canvas.clearAnnotations() }; @objc func crop() { canvas.cropSelection() }
     @objc func wipe() { leaveFrame(); canvas.wipe() }
     @objc func wipeSnap() { leaveFrame(); canvas.wipeSnap() }

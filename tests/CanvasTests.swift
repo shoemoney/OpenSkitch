@@ -91,7 +91,7 @@ struct CanvasTests {
     }
     static func mouse(_ view: CanvasView, _ kind: NSEvent.EventType, _ point: CGPoint,
                       flags: NSEvent.ModifierFlags = [], clicks: Int = 1) throws -> NSEvent {
-        let location = view.convert(CGPoint(x: point.x * view.zoom, y: point.y * view.zoom), to: nil)
+        let location = view.convert(CGPoint(x: point.x * view.displayScale.width, y: point.y * view.displayScale.height), to: nil)
         guard let event = NSEvent.mouseEvent(with: kind, location: location, modifierFlags: flags,
             timestamp: 0, windowNumber: view.window?.windowNumber ?? 0, context: nil,
             eventNumber: 1, clickCount: clicks, pressure: 1) else { throw Failure(description: "Mouse event allocation") }
@@ -135,6 +135,8 @@ struct CanvasTests {
         let tests: [(String, () throws -> Void)] = [
             ("render orientation, alpha and zoom", render),
             ("crop background pixels and editable coordinates", crop),
+            ("border crop retains hidden raster and vectors across save and expansion", reframe),
+            ("independent output sizing and coordinate mapping retain source pixels", outputSizing),
             ("serialization and rejection without mutation", serialization),
             ("undo/redo, grouping, layers and style", history),
             ("rotate, flip and resize preserve vectors/pixels", transforms),
@@ -218,12 +220,99 @@ struct CanvasTests {
         c.cropRect = CGRect(x: 20, y: 10, width: 30, height: 20)
         c.cropSelection()
         try expect(c.canvasSize == NSSize(width: 30, height: 20), "Crop size")
-        try expect(c.document.elements.count == 1 && c.document.elements[0].kind == .rectangle, "Keep editable surviving shape")
+        try expect(c.document.elements.count == 2 && c.document.elements[0].kind == .rectangle, "Keep hidden editable shapes as well as visible ones")
         try expect(c.document.elements[0].bounds.origin == CGPoint(x: 5, y: 5), "Translate annotations")
         let color = try pixel(c, 1, 1)
         try expect(color.greenComponent > 0.9 && color.blueComponent < 0.1, "Crop actual background, not stretch it")
         c.undo(); try expect(c.document == before, "Undo crop restores background, size and annotations")
         c.redo(); try expect(c.canvasSize.width == 30, "Redo crop")
+    }
+    static func reframe() throws {
+        let c = canvas()
+        let bitmap = SketchRenderer.bitmap(size: c.canvasSize) {
+            NSColor.blue.setFill(); CGRect(origin: .zero, size: c.canvasSize).fill()
+            NSColor.green.setFill(); CGRect(x: 20, y: 10, width: 30, height: 20).fill()
+        }!
+        let image = NSImage(size: c.canvasSize); image.addRepresentation(bitmap); c.setBackground(image)
+        let hidden = rectangle(CGRect(x: 80, y: 60, width: 5, height: 5))
+        c.document.elements = [hidden]; c.selection = [hidden.id]; c.editingUndoManager.removeAllActions()
+        let original = c.document, originalImage = c.imageData(format: "png")
+        try expect(c.reframe(to: CGRect(x: 20, y: 10, width: 30, height: 20)), "Border crop accepted")
+        try expect(c.selection == [hidden.id] && c.document.elements.count == 1, "Hidden selection and object identity retained")
+        let cropped = try c.documentData(), croppedDocument = c.document
+        let restored = canvas(); try restored.loadDocument(data: cropped)
+        try expect(restored.reframe(to: CGRect(x: -20, y: -10, width: 100, height: 80)), "Expand saved crop")
+        try expect(restored.document.elements == original.elements && restored.imageData(format: "png") == originalImage,
+                   "Crop/save/reopen/expand restores original photo pixels and vectors exactly")
+        c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Crop is one undo transaction")
+        c.redo(); try expect(c.document == croppedDocument, "Redo restores hidden source crop")
+        c.trimSnapAtCurrentEdges(); let trimmed = try c.documentData()
+        let trimmedCanvas = canvas(); try trimmedCanvas.loadDocument(data: trimmed)
+        _ = trimmedCanvas.reframe(to: CGRect(x: -20, y: -10, width: 100, height: 80))
+        let color = try pixel(trimmedCanvas, 5, 5)
+        try expect(color.redComponent > 0.9 && color.greenComponent > 0.9 && color.blueComponent > 0.9,
+                   "Permanent snap trim leaves white space when expanded")
+        try expect(trimmedCanvas.document.elements == original.elements, "Permanent snap trim keeps hidden annotations")
+        c.undo(); _ = c.reframe(to: CGRect(x: -20, y: -10, width: 100, height: 80))
+        try expect(c.imageData(format: "png") == originalImage, "Undo permanent trim recovers original hidden photo")
+        for clockwise in [true, false] {
+            let rotated = canvas(); try rotated.loadDocument(data: cropped)
+            rotated.rotate(clockwise: clockwise)
+            let full = canvas(); full.document = original; full.rotate(clockwise: clockwise)
+            let origin = clockwise ? CGPoint(x: -50, y: -20) : CGPoint(x: -10, y: -50)
+            _ = rotated.reframe(to: CGRect(origin: origin, size: CGSize(width: 80, height: 100)))
+            try expect(rotated.document.elements == full.document.elements && rotated.imageData(format: "png") == full.imageData(format: "png"),
+                       "Hidden snap and editable objects survive cropped quarter-turn and expansion")
+        }
+        for horizontal in [true, false] {
+            let flipped = canvas(); try flipped.loadDocument(data: cropped)
+            flipped.flip(horizontal: horizontal)
+            let full = canvas(); full.document = original; full.flip(horizontal: horizontal)
+            let origin = horizontal ? CGPoint(x: -50, y: -10) : CGPoint(x: -20, y: -50)
+            _ = flipped.reframe(to: CGRect(origin: origin, size: CGSize(width: 100, height: 80)))
+            try expect(flipped.document.elements == full.document.elements && flipped.imageData(format: "png") == full.imageData(format: "png"),
+                       "Hidden snap and editable objects survive cropped flip and expansion")
+        }
+        let before = try c.documentData()
+        try expect(!c.reframe(to: CGRect(x: CGFloat.infinity, y: 0, width: 2, height: 2)) &&
+                   !c.reframe(to: CGRect(x: 0, y: 0, width: 0, height: 2)) &&
+                   !c.reframe(to: CGRect(x: 0, y: 0, width: 16384, height: 16384)), "Reject invalid or excessive crop")
+        try expect(try c.documentData() == before, "Invalid crop preserves all document state")
+        let small = canvas(NSSize(width: 100, height: 80)); small.document.elements = [hidden]
+        try expect(small.cropCanvas(to: NSSize(width: 140, height: 120), anchor: CGPoint(x: 0.5, y: 0.5)), "Centered border expansion")
+        try expect(small.document.elements[0].bounds.origin == CGPoint(x: 100, y: 80), "Center expansion adds equal margins")
+    }
+    static func outputSizing() throws {
+        let c = canvas(); c.setBackground(backdrop(c.canvasSize))
+        let object = rectangle(CGRect(x: 20, y: 20, width: 60, height: 50))
+        c.document.elements = [object]; c.selection = [object.id]; c.editingUndoManager.removeAllActions()
+        let original = c.document
+        try expect(c.resizeImage(to: CGSize(width: 50, height: 60)), "Independent output resize")
+        try expect(c.canvasSize == original.size && c.document.elements == original.elements && c.document.backgroundPNG == original.backgroundPNG,
+                   "Resize keeps source pixels and vector geometry untouched")
+        try expect(c.outputSize == CGSize(width: 50, height: 60) && c.frame.size == c.outputSize, "Normal output and native canvas frame follow resize")
+        let encoded = try c.documentData(), undoName = c.editingUndoManager.undoActionName
+        let normal = NSBitmapImageRep(data: c.imageData(format: "png")!)!
+        let full = NSBitmapImageRep(data: c.imageData(format: "png", originalSize: true)!)!
+        try expect(normal.pixelsWide == 50 && normal.pixelsHigh == 60 && full.pixelsWide == 100 && full.pixelsHigh == 80,
+                   "Normal and original-size exports use different sizes")
+        try expect(try c.documentData() == encoded && c.selection == [object.id] && c.editingUndoManager.undoActionName == undoName,
+                   "Original-size render does not change document, selection or undo")
+        c.tool = .select; try drag(c, from: CGPoint(x: 50, y: 45), to: CGPoint(x: 60, y: 55))
+        try expect(c.document.elements[0].bounds.origin == CGPoint(x: 30, y: 30), "Nonuniform native display maps mouse motion to document pixels: \(c.document.elements[0].bounds)")
+        c.undo(); c.undo(); try expect(c.document == original, "Undo resize restores exact source geometry and output")
+        c.redo(); try expect(c.outputSize == CGSize(width: 50, height: 60), "Redo output resize")
+        c.crop(to: CGRect(x: 20, y: 10, width: 30, height: 20))
+        try expect(c.outputSize == CGSize(width: 15, height: 15), "Cropping retains normal display density")
+        let fractional = canvas(NSSize(width: 800, height: 600))
+        _ = fractional.resizeImage(to: CGSize(width: 1600, height: 1200))
+        _ = fractional.cropCanvas(to: CGSize(width: 399.5, height: 299.5), anchor: CGPoint(x: 0.5, y: 0.5), outputSize: CGSize(width: 799, height: 599))
+        try expect(fractional.outputSize == CGSize(width: 799, height: 599) && fractional.canvasSize == CGSize(width: 399.5, height: 299.5),
+                   "Odd output crop retains exact requested pixels and fractional source geometry")
+        let saved = try c.documentData(), loaded = canvas(); try loaded.loadDocument(data: saved)
+        try expect(loaded.outputSize == c.outputSize && loaded.document == c.document, "Output size persists with hidden source")
+        loaded.setSnapToNormalSize(); try expect(loaded.outputSize == loaded.canvasSize, "Set Snap to Normal Size restores source pixel density")
+        loaded.rotate(clockwise: true); try expect(loaded.outputSize == loaded.canvasSize, "Rotated normal size follows swapped axes")
     }
     static func serialization() throws {
         let c = canvas()
@@ -549,7 +638,14 @@ struct CanvasTests {
         guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Native text editor") }
         try expect(editor.undoManager !== c.editingUndoManager, "Typing has independent native undo history")
         editor.insertText("Native text", replacementRange: NSRange(location: 0, length: 0))
-        _ = c.renderedImage() // Commit before export.
+        let liveBefore = c.document
+        let pending = try c.snapshotDocumentData()
+        let blank = SketchRenderer.bitmap(document: c.document)?.representation(using: .png, properties: [:])
+        _ = c.renderedImage()
+        try expect(c.document == liveBefore && c.hasPendingTextChanges && c.imageData(format: "png") != blank &&
+                   (try c.snapshotDocumentData()) == pending && c.subviews.contains(editor),
+                   "Export includes pending text without committing editor, model, or undo")
+        c.commitPendingTextEditing()
         try expect(c.document.elements.count == 1 && c.document.elements[0].text == "Native text", "Text commit")
         try expect(c.document.elements[0].fontSize == 24 && c.document.elements[0].shadowed, "Text default font and shadow")
         c.tool = .select

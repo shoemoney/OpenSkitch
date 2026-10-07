@@ -30,7 +30,7 @@ enum SVGExport {
         }
         return lines
     }
-    static func encode(_ document: SketchDocument, preserving metadata: LegacyBridge.Metadata = .init(), backdrop: Backdrop? = nil) throws -> Data {
+    static func encode(_ document: SketchDocument, preserving metadata: LegacyBridge.Metadata = .init(), backdrop: Backdrop? = nil, outputSize: CGSize? = nil) throws -> Data {
         _ = try document.validated()
         func number(_ value: CGFloat) -> String { String(format: "%.6f", locale: Locale(identifier: "en_US_POSIX"), Double(value)) }
         func escape(_ text: String) -> String { text.replacingOccurrences(of: "&",with:"&amp;").replacingOccurrences(of:"<",with:"&lt;").replacingOccurrences(of:">",with:"&gt;").replacingOccurrences(of:"\"",with:"&quot;").replacingOccurrences(of:"'",with:"&apos;") }
@@ -88,6 +88,14 @@ enum SVGExport {
             return merged.keys.sorted().map { "\($0)=\"\(escape(merged[$0]!))\"" }.joined(separator: " ")
         }
         let width = number(ceil(document.size.width)), height = number(ceil(document.size.height))
+        let output = outputSize ?? document.size
+        guard SketchDocument.validSize(output) else { throw SketchDocumentError.invalidDocument }
+        var viewport = ["xmlns": "http://www.w3.org/2000/svg", "xmlns:xlink": "http://www.w3.org/1999/xlink", "version": "1.1",
+                        "width": number(ceil(output.width)), "height": number(ceil(output.height))]
+        if outputSize != nil {
+            viewport["viewBox"] = "0 0 \(number(document.size.width)) \(number(document.size.height))"
+            viewport["preserveAspectRatio"] = "none"
+        }
         var root = metadata.root
         let defaults = ["xmlns:ev": "http://www.w3.org/2001/xml-events", "baseProfile": "full", "overflow": "hidden",
             "skitchDocumentType": document.backgroundPNG != nil || document.elements.contains(where: { $0.kind == .raster }) ? "2" : "3",
@@ -97,7 +105,7 @@ enum SVGExport {
         for (key, value) in defaults where root[key] == nil { root[key] = value }
         if metadata.originalSize != document.size { root["skitchVisibleWidth"] = number(document.size.width); root["skitchVisibleHeight"] = number(document.size.height) }
         var xml = ["<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "<!-- Skitch 1.0 -->",
-            "<svg " + attributes(root, ["xmlns": "http://www.w3.org/2000/svg", "xmlns:xlink": "http://www.w3.org/1999/xlink", "version": "1.1", "width": width, "height": height]) + ">",
+            "<svg " + attributes(root, viewport) + ">",
             "<rect " + attributes(metadata.background, ["x": "0", "y": "0", "width": width, "height": height, "fill": color(document.backgroundColor), "opacity": number(document.backgroundColor.alpha)]) + "/>" ]
         if document.elements.contains(where: { $0.shadowed }) {
             // A canvas-sized user-space region avoids clipping shadows on thin strokes.

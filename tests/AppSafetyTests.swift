@@ -6,6 +6,8 @@ import AppKit
 import UniformTypeIdentifiers
 
 final class AppSafetyWindow: NSWindow {
+    var simulatedSheet: NSWindow?
+    override var attachedSheet: NSWindow? { simulatedSheet ?? super.attachedSheet }
     override func makeKeyAndOrderFront(_ sender: Any?) {}
     override func orderFront(_ sender: Any?) {}
     override func orderBack(_ sender: Any?) {}
@@ -49,6 +51,13 @@ final class AppSafetyFilePanel {
         var url: URL? = nil
     }
     static var answers: [Answer] = []
+    var accessoryView: NSView?
+    var firstResponder: NSResponder?
+    @discardableResult
+    func makeFirstResponder(_ responder: NSResponder?) -> Bool {
+        firstResponder = responder
+        return true
+    }
     var allowedContentTypes: [UTType] = []
     var nameFieldStringValue = ""
     var allowsOtherFileTypes = false
@@ -224,6 +233,7 @@ enum AppSafetyTests {
             MainActor.assumeIsolated {
                 app.timer?.invalidate()
                 app.historyFollowTimer?.invalidate()
+                app.dragPreviewTimer?.invalidate()
                 app.window.delegate = nil
                 app.window.close()
                 app.historyWindow?.delegate = nil
@@ -1642,6 +1652,63 @@ enum AppSafetyTests {
                    store.entries.isEmpty && app.currentArchiveID == nil && AppSafetyFilePanel.answers.isEmpty && AppSafetyAlert.seen.isEmpty,
                    "A cancelled capture must keep the draft and cannot create an empty or cancelled-output record")
     }
+    static func sheetEditingCommands() throws {
+        let fixture = try Fixture(), app = fixture.app
+        var shape = SketchElement(kind: .rectangle); shape.rect = CGRect(x: 10, y: 10, width: 40, height: 40)
+        app.canvas.document.elements = [shape]; app.canvas.selection.removeAll()
+        let document = app.canvas.document
+        let sheet = AppSafetyWindow(contentRect: CGRect(x: 0, y: 0, width: 400, height: 200),
+                                    styleMask: [.titled], backing: .buffered, defer: false)
+        sheet.isReleasedWhenClosed = false
+        let editor = NSTextView(frame: sheet.contentView!.bounds); editor.allowsUndo = true; editor.string = "580"
+        sheet.contentView = editor; sheet.makeFirstResponder(editor)
+        (app.window as! AppSafetyWindow).simulatedSheet = sheet
+        defer { (app.window as! AppSafetyWindow).simulatedSheet = nil; sheet.close() }
+        app.selectAll()
+        try expect(editor.selectedRange() == NSRange(location: 0, length: 3) && app.canvas.selection.isEmpty,
+                   "Sheet Select All must select field text rather than canvas objects")
+        try expect(app.activeTextEditor === editor && app.activeUndoManager === editor.undoManager,
+                   "Sheet field editor owns command routing and Undo")
+        app.deleteSelection()
+        try expect(editor.string.isEmpty && app.canvas.document == document,
+                   "Sheet Delete removes field text while preserving the editing document")
+    }
+    static func exportSizingLifecycle() throws {
+        let keys = ["ExportFormat", "ExportOriginalSize", "ExportQuality"]
+        let defaults = UserDefaults.standard, previous = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer { for (key, value) in zip(keys, previous) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
+        defaults.set("png", forKey: "ExportFormat"); defaults.set(false, forKey: "ExportOriginalSize"); defaults.set(0.7, forKey: "ExportQuality")
+        let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
+        app.canvas.setBackground(try image(size: CGSize(width: 300, height: 180)))
+        _ = app.canvas.resizeImage(to: CGSize(width: 150, height: 90))
+        let destination = fixture.file("PriorFile"); app.currentURL = destination
+        let text = try editor(app, text: "Export should leave me typing")
+        let before = try app.canvas.snapshotDocumentData(), live = app.canvas.document, undo = app.canvas.editingUndoManager.undoActionName
+        AppSafetyFilePanel.answers.append(.init(response: .cancel)); app.exportFile()
+        try expect(try app.canvas.snapshotDocumentData() == before && app.canvas.document == live && text.superview === app.canvas &&
+                   app.currentURL == destination && app.canvas.editingUndoManager.undoActionName == undo && store.entries.isEmpty,
+                   "Cancelled native Export preserves pending text, output geometry, destination, Undo and History")
+        let normal = try app.exportData(format: "png", originalSize: false, jpegQuality: 0.7)
+        let full = try app.exportData(format: "png", originalSize: true, jpegQuality: 0.7)
+        try expect(NSBitmapImageRep(data: normal)?.pixelsWide == 150 && NSBitmapImageRep(data: full)?.pixelsWide == 300,
+                   "App export dispatch uses normal and original-size rendering")
+        let svg = String(decoding: try app.exportData(format: "svg", originalSize: false, jpegQuality: 0.7), as: UTF8.self)
+        try expect(svg.contains("viewBox=\"0 0 300.000000 180.000000\"") && svg.contains("width=\"150.000000\""),
+                   "Ordinary SVG output uses independent dimensions and source viewBox")
+        let native = try SkitchFile.decode(app.exportData(format: "skitch", originalSize: false, jpegQuality: 0.7))
+        let nativeFull = try SkitchFile.decode(app.exportData(format: "skitch", originalSize: true, jpegQuality: 0.7))
+        try expect(native.document.outputSize == CGSize(width: 150, height: 90) && nativeFull.document.outputSize == CGSize(width: 300, height: 180) &&
+                   native.document.elements == nativeFull.document.elements && native.document.backgroundPNG == nativeFull.document.backgroundPNG,
+                   "Native original-size export changes only the exported copy's output dimensions")
+        let target = fixture.file("Output").deletingPathExtension().appendingPathExtension("png")
+        AppSafetyFilePanel.answers.append(.init(response: .OK, url: target)); app.exportFile()
+        try expect(try Data(contentsOf: target) == normal && app.canvas.snapshotDocumentData() == before && text.superview === app.canvas &&
+                   app.currentURL == destination && app.canvas.editingUndoManager.undoActionName == undo,
+                   "Successful native Export writes preview-equivalent bytes and preserves editing and save identity")
+        try expect(store.entries.count == 1 && store.entries[0].size == CGSize(width: 150, height: 90) &&
+                   store.entries[0].text.contains("Export should leave me typing"),
+                   "History snapshot keeps the normal output dimensions and pending editable annotation")
+    }
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -1655,6 +1722,8 @@ enum AppSafetyTests {
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
         let tests: [(String, () throws -> Void)] = [
+            ("native sheet text commands target the sheet field editor", sheetEditingCommands),
+            ("native Export cancellation/success, original size and SVG preserve editing", exportSizingLifecycle),
             ("dirty typing protects New and Quit", dirtyTyping),
             ("active editor Undo/Redo and menu validation", typingUndo),
             ("recovery includes pending text without committing", recoverySnapshot),

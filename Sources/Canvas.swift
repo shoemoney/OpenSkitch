@@ -18,7 +18,7 @@ private final class SketchTextEditor: NSTextView {
 }
 
 /// Native AppKit canvas. All model geometry stays in top-left document pixels.
-/// Assign as NSScrollView.documentView; frame/intrinsic size follow canvasSize * zoom.
+/// Assign as NSScrollView.documentView; frame/intrinsic size follow output size * display zoom.
 final class CanvasView: NSView, NSTextViewDelegate {
     var tool: SketchTool = .arrow {
         didSet {
@@ -71,11 +71,15 @@ final class CanvasView: NSView, NSTextViewDelegate {
         return documentIncludingPendingText() != before.document
     }
     var canvasSize: NSSize { document.size }
+    var outputSize: NSSize { document.outputSize }
+    var displayScale: CGSize { CGSize(width: outputSize.width / canvasSize.width * zoom,
+                                     height: outputSize.height / canvasSize.height * zoom) }
+    private var minimumDisplayScale: CGFloat { min(displayScale.width, displayScale.height) }
     override var undoManager: UndoManager? { editingUndoManager }
     override var acceptsFirstResponder: Bool { true }
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { false }
-    override var intrinsicContentSize: NSSize { NSSize(width: canvasSize.width * zoom, height: canvasSize.height * zoom) }
+    override var intrinsicContentSize: NSSize { NSSize(width: outputSize.width * zoom, height: outputSize.height * zoom) }
 
     // Internal access also makes the executable tests independent of a visible window.
     var selection: Set<UUID> = [] { didSet { needsDisplay = true } }
@@ -197,6 +201,17 @@ final class CanvasView: NSView, NSTextViewDelegate {
     func undo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.undo() }
     func redo() { finishTextEditing(); if dragMode != .none { cancelOperation(nil) }; editingUndoManager.redo() }
     func setZoom(_ value: CGFloat) { zoom = value }
+    @discardableResult
+    func resizeImage(to size: CGSize) -> Bool {
+        guard SketchDocument.validSize(size) else { return false }
+        let pixels = integralSize(size)
+        edit("Resize Image") { document.renderSize = pixels == document.size ? nil : pixels }
+        return true
+    }
+    func setSnapToNormalSize() {
+        guard document.backgroundPNG != nil else { return }
+        _ = resizeImage(to: document.size)
+    }
 
     func newBlank(size: NSSize) {
         guard SketchDocument.validSize(size) else { return }
@@ -214,7 +229,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let normalized = NSImage(cgImage: cg, size: size)
         guard let png = SketchRenderer.png(image: normalized) else { return }
         edit("Set Background") {
-            document.size = size; document.backgroundPNG = png; panBackground = nil
+            document.size = size; document.renderSize = nil; document.backgroundPNG = png; panBackground = nil
             selection.removeAll(); cropRect = nil
         }
     }
@@ -466,12 +481,33 @@ final class CanvasView: NSView, NSTextViewDelegate {
         transformDocument(matrix, size: canvasSize, name: "Flip")
     }
     private func transformDocument(_ matrix: SketchTransform, size: NSSize, name: String) {
-        finishTextEditing()
-        let background = transformedBackground(matrix, size: size)
+        var source = panBackground
+        let background: Data?
+        if let retained = source {
+            let sourceRect = CGRect(origin: retained.offset, size: retained.sourceSize)
+            let transformedRect = sourceRect.applying(matrix.cg).standardized
+            guard SketchDocument.validSize(transformedRect.size),
+                  abs(transformedRect.minX) <= 1_000_000, abs(transformedRect.minY) <= 1_000_000,
+                  let image = NSImage(data: retained.sourcePNG),
+                  let png = SketchRenderer.bitmap(size: transformedRect.size, draw: {
+                    NSGraphicsContext.current?.cgContext.translateBy(x: -transformedRect.minX, y: -transformedRect.minY)
+                    NSGraphicsContext.current?.cgContext.concatenate(matrix.cg)
+                    SketchRenderer.drawImage(image, in: sourceRect)
+                  })?.representation(using: .png, properties: [:]),
+                  let rotated = NSImage(data: png),
+                  let visible = SketchRenderer.bitmap(size: size, draw: {
+                    SketchRenderer.drawImage(rotated, in: transformedRect)
+                  })?.representation(using: .png, properties: [:]) else { return }
+            source = PanBackground(sourcePNG: png, sourceSize: transformedRect.size, offset: transformedRect.origin)
+            background = visible
+        } else { background = transformedBackground(matrix, size: size) }
         if document.backgroundPNG != nil && background == nil { return }
+        let output = document.renderSize
         edit(name) {
-            document.backgroundPNG = background
-            document.size = size
+            settingPanBackground = true
+            document.backgroundPNG = background; document.size = size
+            settingPanBackground = false; panBackground = source
+            if let output, name == "Rotate" { document.renderSize = CGSize(width: output.height, height: output.width) }
             for index in document.elements.indices {
                 document.elements[index].transform = document.elements[index].transform.followed(by: matrix)
             }
@@ -486,83 +522,75 @@ final class CanvasView: NSView, NSTextViewDelegate {
             SketchRenderer.drawImage(image, in: oldRect)
         }?.representation(using: .png, properties: [:])
     }
-    /// Canvas resize changes the viewport, preserving annotation geometry at the top left.
-    func resizeCanvas(to size: NSSize) {
-        guard SketchDocument.validSize(size) else { return }
-        finishTextEditing()
-        let newSize = integralSize(size)
-        let background = transformedBackground(.identity, size: newSize)
-        if document.backgroundPNG != nil && background == nil { return }
-        edit("Resize Canvas") { document.size = newSize; document.backgroundPNG = background; cropRect = nil }
+    /// Border cropping changes the visible rectangle, retaining hidden pixels and
+    /// every editable object. The original ActionCropResize never deletes graphics.
+    @discardableResult
+    func reframe(to rect: CGRect, outputSize requestedOutput: CGSize? = nil, name: String = "Crop") -> Bool {
+        guard rect.origin.x.isFinite, rect.origin.y.isFinite,
+              abs(rect.origin.x) <= 1_000_000, abs(rect.origin.y) <= 1_000_000,
+              rect.width.isFinite, rect.height.isFinite, rect.width > 0, rect.height > 0 else { return false }
+        let viewport = rect
+        guard SketchDocument.validSize(viewport.size) else { return false }
+        if viewport == document.canvasRect && (requestedOutput == nil || requestedOutput == outputSize) { cropRect = nil; return true }
+        let scale = CGSize(width: outputSize.width / canvasSize.width, height: outputSize.height / canvasSize.height)
+        let output = requestedOutput ?? integralSize(CGSize(width: viewport.width * scale.width, height: viewport.height * scale.height))
+        guard SketchDocument.validSize(output) else { return false }
+        var source = panBackground
+        if source == nil, let png = document.backgroundPNG {
+            source = PanBackground(sourcePNG: png, sourceSize: document.size, offset: .zero)
+        }
+        var visiblePNG: Data?
+        if var moved = source {
+            moved.offset.x -= viewport.minX; moved.offset.y -= viewport.minY
+            guard abs(moved.offset.x) <= 1_000_000, abs(moved.offset.y) <= 1_000_000,
+                  let image = NSImage(data: moved.sourcePNG),
+                  let png = SketchRenderer.bitmap(size: viewport.size, draw: {
+                    SketchRenderer.drawImage(image, in: CGRect(origin: moved.offset, size: moved.sourceSize))
+                  })?.representation(using: .png, properties: [:]) else { return false }
+            visiblePNG = png; source = moved
+        }
+        edit(name) {
+            settingPanBackground = true
+            document.size = viewport.size; document.renderSize = output == viewport.size ? nil : output; document.backgroundPNG = visiblePNG
+            settingPanBackground = false; panBackground = source
+            for index in document.elements.indices {
+                document.elements[index].translate(x: -viewport.minX, y: -viewport.minY)
+            }
+            cropRect = nil
+        }
+        return true
+    }
+    /// Canvas dimensions use border-crop semantics; image resizing is separate.
+    func resizeCanvas(to size: NSSize) { _ = reframe(to: CGRect(origin: .zero, size: size), name: "Resize Canvas") }
+    @discardableResult
+    func cropCanvas(to size: NSSize, anchor: CGPoint, outputSize: CGSize? = nil) -> Bool {
+        guard anchor.x.isFinite, anchor.y.isFinite, (0...1).contains(anchor.x), (0...1).contains(anchor.y) else { return false }
+        return reframe(to: CGRect(x: (canvasSize.width - size.width) * anchor.x,
+                                 y: (canvasSize.height - size.height) * anchor.y,
+                                 width: size.width, height: size.height), outputSize: outputSize)
     }
     func cropSelection() {
         guard let rect = cropRect ?? selectionBounds else { return }
         crop(to: rect)
     }
-    /// Crop both the underlying bitmap and the viewport, translating surviving editable objects.
-    func crop(to rect: CGRect) {
-        finishTextEditing()
-        guard rect.origin.x.isFinite, rect.origin.y.isFinite, rect.width.isFinite, rect.height.isFinite else { return }
-        let clipped = rect.standardized.integral.intersection(document.canvasRect)
-        guard clipped.width >= 1, clipped.height >= 1 else { return }
-        let background = transformedBackground(.translation(x: -clipped.minX, y: -clipped.minY), size: clipped.size)
-        if document.backgroundPNG != nil && background == nil { return }
-        edit("Crop") {
-            document.backgroundPNG = background
-            document.size = clipped.size
-            document.elements.removeAll { !$0.paintBounds.intersects(clipped) }
-            for index in document.elements.indices {
-                document.elements[index].translate(x: -clipped.minX, y: -clipped.minY)
-            }
-            selection.formIntersection(Set(document.elements.map(\.id)))
-            cropRect = nil
-        }
+    func crop(to rect: CGRect) { _ = reframe(to: rect) }
+    /// Original "Crop Snap at Current Edges" permanently trims only the photo.
+    /// Hidden annotations stay editable and can reappear when borders expand.
+    func trimSnapAtCurrentEdges() {
+        guard panBackground != nil, document.backgroundPNG != nil else { return }
+        edit("Crop Snap at Current Edges") { panBackground = nil }
     }
 
-    func renderedImage() -> NSImage {
-        finishTextEditing()
-        let image = NSImage(size: canvasSize)
-        if let bitmap = SketchRenderer.bitmap(document: document) { image.addRepresentation(bitmap) }
-        return image
+    func renderedImage(originalSize: Bool = false) -> NSImage {
+        let value = documentIncludingPendingText()
+        let size = originalSize && value.backgroundPNG != nil ? value.size : value.outputSize
+        return ImageExport.image(document: value, size: size) ?? NSImage(size: size)
     }
-    func imageData(format: String) -> Data? {
-        finishTextEditing()
-        let format = format.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: ". "))
-        if format == "pdf" { return pdfData() }
-        var exported = document
-        // JPEG/BMP do not reliably support alpha; composite transparent pixels onto white.
-        if ["jpeg", "jpg", "bmp"].contains(format) {
-            let background = exported.backgroundColor.nsColor
-            exported.backgroundColor = SketchColor(NSColor.white.blended(withFraction: background.alphaComponent,
-                of: background.withAlphaComponent(1)) ?? .white)
-        }
-        guard let bitmap = SketchRenderer.bitmap(document: exported) else { return nil }
-        switch format {
-        case "png": return bitmap.representation(using: .png, properties: [:])
-        case "jpg", "jpeg": return bitmap.representation(using: .jpeg, properties: [.compressionFactor: 0.92])
-        case "tif", "tiff": return bitmap.representation(using: .tiff, properties: [:])
-        case "bmp":
-            guard let cg = bitmap.cgImage else { return nil }
-            let data = NSMutableData()
-            guard let destination = CGImageDestinationCreateWithData(data, UTType.bmp.identifier as CFString, 1, nil) else { return nil }
-            CGImageDestinationAddImage(destination, cg, nil)
-            return CGImageDestinationFinalize(destination) ? data as Data : nil
-        default: return nil
-        }
-    }
-    private func pdfData() -> Data? {
-        let data = NSMutableData()
-        guard let consumer = CGDataConsumer(data: data) else { return nil }
-        var box = document.canvasRect
-        guard let context = CGContext(consumer: consumer, mediaBox: &box, nil) else { return nil }
-        context.beginPDFPage(nil)
-        NSGraphicsContext.saveGraphicsState()
-        context.translateBy(x: 0, y: canvasSize.height); context.scaleBy(x: 1, y: -1)
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: context, flipped: true)
-        SketchRenderer.draw(document)
-        NSGraphicsContext.restoreGraphicsState()
-        context.endPDFPage(); context.closePDF()
-        return data as Data
+    /// Export is a pure render of pending text; no model, editor, selection or undo changes.
+    func imageData(format: String, originalSize: Bool = false, jpegQuality: Double = 0.7) -> Data? {
+        let value = documentIncludingPendingText()
+        let size = originalSize && value.backgroundPNG != nil ? value.size : value.outputSize
+        return ImageExport.encode(document: value, size: size, format: format, jpegQuality: jpegQuality)
     }
     func documentData() throws -> Data { finishTextEditing(); return try encodeCanvasDocument(document) }
     /// Recovery/autosave serialization. Does not end typing, change the live model,
@@ -657,7 +685,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         }
         // Original growth is measured in display pixels: opaque fills hide seams;
         // translucent fills use the smaller overlap to avoid a dark boundary.
-        let growth: CGFloat = (color.alpha == 1 ? 1 : 0.2) / zoom
+        let growth: CGFloat = (color.alpha == 1 ? 1 : 0.2) / minimumDisplayScale
         let rim = candidate.copy(strokingWithWidth: 2 * growth, lineCap: .round, lineJoin: .round, miterLimit: 10)
         var region = candidate.union(rim)
         var style = SketchElement(kind: .path)
@@ -759,7 +787,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         NSGraphicsContext.saveGraphicsState()
         let context = NSGraphicsContext.current?.cgContext
         if framePreview { context?.clear(dirtyRect) }
-        context?.scaleBy(x: zoom, y: zoom)
+        context?.scaleBy(x: displayScale.width, y: displayScale.height)
         if !framePreview { drawCheckerboard(in: document.canvasRect) }
         var visible = document
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
@@ -776,7 +804,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private func drawCheckerboard(in rect: CGRect) {
         NSColor.white.setFill(); rect.fill()
         NSColor(white: 0.88, alpha: 1).setFill()
-        let tile: CGFloat = 12 / zoom
+        let tile: CGFloat = 12 / minimumDisplayScale
         // Restrict checkerboard work to the visible viewport at large canvas sizes.
         let visible = documentRect(visibleRect).intersection(rect)
         guard !visible.isEmpty else { return }
@@ -792,7 +820,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             let path = NSBezierPath(rect: viewRect(bounds).insetBy(dx: -2, dy: -2))
             path.lineWidth = 1.5; path.stroke()
             for point in handlePoints(for: bounds) {
-                let rect = CGRect(x: point.x * zoom - 5, y: point.y * zoom - 5, width: 10, height: 10)
+                let rect = CGRect(x: point.x * displayScale.width - 5, y: point.y * displayScale.height - 5, width: 10, height: 10)
                 NSColor.white.setFill(); rect.fill()
                 NSColor.controlAccentColor.setStroke(); NSBezierPath(rect: rect).stroke()
             }
@@ -891,13 +919,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private func integralSize(_ size: CGSize) -> CGSize { CGSize(width: ceil(size.width), height: ceil(size.height)) }
     private func documentPoint(_ event: NSEvent) -> CGPoint {
         let point = convert(event.locationInWindow, from: nil)
-        return CGPoint(x: point.x / zoom, y: point.y / zoom)
+        return CGPoint(x: point.x / displayScale.width, y: point.y / displayScale.height)
     }
     private func documentRect(_ rect: CGRect) -> CGRect {
-        CGRect(x: rect.minX / zoom, y: rect.minY / zoom, width: rect.width / zoom, height: rect.height / zoom)
+        CGRect(x: rect.minX / displayScale.width, y: rect.minY / displayScale.height, width: rect.width / displayScale.width, height: rect.height / displayScale.height)
     }
     private func viewRect(_ rect: CGRect) -> CGRect {
-        CGRect(x: rect.minX * zoom, y: rect.minY * zoom, width: rect.width * zoom, height: rect.height * zoom)
+        CGRect(x: rect.minX * displayScale.width, y: rect.minY * displayScale.height, width: rect.width * displayScale.width, height: rect.height * displayScale.height)
     }
     var selectionBounds: CGRect? {
         let elements = document.elements.filter { selection.contains($0.id) }
@@ -912,13 +940,13 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     private func hitHandle(_ point: CGPoint) -> Int? {
         guard let bounds = selectionBounds else { return nil }
-        return handlePoints(for: bounds).firstIndex { hypot($0.x - point.x, $0.y - point.y) <= 8 / zoom }
+        return handlePoints(for: bounds).firstIndex { hypot(($0.x - point.x) * displayScale.width, ($0.y - point.y) * displayScale.height) <= 8 }
     }
     private func hitElement(_ point: CGPoint) -> SketchElement? {
         let hitOrder = document.elements.filter { $0.kind != .text } + document.elements.filter { $0.kind == .text }
         return hitOrder.reversed().first { element in
             let local = point.applying(element.transform.cg.inverted())
-            let tolerance = max(4 / zoom, element.strokeWidth / 2 + 2)
+            let tolerance = max(4 / minimumDisplayScale, element.strokeWidth / 2 + 2)
             switch element.kind {
             case .path:
                 guard let path = try? SVGPathParser.makeCGPath(element.pathCommands) else { return false }
@@ -1191,8 +1219,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         editor.isRichText = false; editor.isEditable = true; editor.isSelectable = true
         editor.allowsUndo = true; editor.drawsBackground = true
         editor.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.96)
-        editor.font = NSFont(name: element.fontName, size: max(18, element.fontSize * zoom)) ??
-            NSFont.boldSystemFont(ofSize: max(18, element.fontSize * zoom))
+        editor.font = NSFont(name: element.fontName, size: max(18, element.fontSize * displayScale.height)) ??
+            NSFont.boldSystemFont(ofSize: max(18, element.fontSize * displayScale.height))
         editor.textColor = element.color.nsColor
         editor.textContainerInset = NSSize(width: 4, height: 4)
         editor.string = element.text
@@ -1254,7 +1282,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         var point = lastMousePoint
         if point == nil, let window {
             let viewPoint = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-            let pointer = CGPoint(x: viewPoint.x / zoom, y: viewPoint.y / zoom)
+            let pointer = CGPoint(x: viewPoint.x / displayScale.width, y: viewPoint.y / displayScale.height)
             if document.canvasRect.contains(pointer) { point = pointer }
         }
         let visible = documentRect(visibleRect).intersection(document.canvasRect)

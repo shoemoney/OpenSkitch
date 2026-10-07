@@ -17,7 +17,7 @@ final class HistoryStore {
         init(canvasData: Data, metadata: LegacyBridge.Metadata, preview: Data?) throws {
             let document = try CanvasView.validatedDocumentData(canvasData)
             native = try SkitchFile(document: document, metadata: metadata, canvasData: canvasData).encoded()
-            self.preview = preview; size = document.size
+            self.preview = preview; size = document.outputSize
             isEmpty = document.elements.isEmpty && document.backgroundPNG == nil &&
                 (document.backgroundColor == .white || document.backgroundColor.alpha == 0)
             text = document.elements.filter { $0.kind == .text }.map(\.text).joined(separator: "\n")
@@ -117,7 +117,7 @@ final class HistoryStore {
             let date = prefix.map(Date.init(timeIntervalSince1970:)) ?? values?.creationDate ?? values?.contentModificationDate ?? Date()
             let preview = url.deletingPathExtension().appendingPathExtension("png").lastPathComponent
             next.entries.append(Entry(id: UUID(), name: url.deletingPathExtension().lastPathComponent, date: date, updated: date,
-                size: file.document.size, text: file.document.elements.filter { $0.kind == .text }.map(\.text).joined(separator: "\n"),
+                size: file.document.outputSize, text: file.document.elements.filter { $0.kind == .text }.map(\.text).joined(separator: "\n"),
                 action: .archived, nativeFile: url.lastPathComponent,
                 previewFile: FileManager.default.fileExists(atPath: directory.appendingPathComponent(preview).path) ? preview : nil,
                 imported: true))

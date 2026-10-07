@@ -251,6 +251,18 @@ fileprivate enum SVGExportTests {
     static func main() {
         var passed = 0, failures: [String] = []
         let cases: [(String, () throws -> Void)] = [
+            ("Explicit SVG output retains exact fractional crop viewBox and source geometry", {
+                var document = SketchDocument(size: CGSize(width: 399.5, height: 299.5))
+                document.elements = [nativePath()]; let original = document
+                let data = try SVGExport.encode(document, outputSize: CGSize(width: 799, height: 599))
+                let root = try SVGTestXML.read(data).root!
+                let viewBox = root.attributes["viewBox"]!.split(separator: " ").compactMap { Double($0) }
+                try expect(try number(root, "width") == 799 && number(root, "height") == 599 && viewBox == [0, 0, 399.5, 299.5],
+                           "SVG output must preserve requested pixels and exact fractional source extent")
+                try expect(root.attributes["preserveAspectRatio"] == "none" && document == original,
+                           "SVG independently scales axes without changing the editing document")
+                try compareCommands(commands(root.named("path")[0]), original.elements[0].pathCommands)
+            }),
             ("XML declaration, native marker, namespaces and document dimensions", {
                 let (data, root) = try exported()
                 try expect(String(decoding: data, as: UTF8.self).hasPrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"), "Missing UTF-8 declaration")

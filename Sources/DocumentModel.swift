@@ -133,11 +133,13 @@ struct SketchDocument: Codable, Equatable {
     var format = Self.formatIdentifier
     var version = 1
     var size: CGSize = CGSize(width: 800, height: 600)
+    var renderSize: CGSize?
     var backgroundColor = SketchColor.white
     var backgroundPNG: Data?
     var elements: [SketchElement] = []
 
     init(size: CGSize = CGSize(width: 800, height: 600)) { self.size = size }
+    var outputSize: CGSize { renderSize ?? size }
     var canvasRect: CGRect { CGRect(origin: .zero, size: size) }
     var backgroundImage: NSImage? {
         get { backgroundPNG.flatMap(NSImage.init(data:)) }
@@ -157,7 +159,8 @@ struct SketchDocument: Codable, Equatable {
         func validColor(_ color: SketchColor) -> Bool {
             [color.red, color.green, color.blue, color.alpha].allSatisfy { $0.isFinite && (0...1).contains($0) }
         }
-        guard Self.validSize(size), validColor(backgroundColor), elements.count <= 100_000,
+        guard Self.validSize(size), renderSize.map(Self.validSize) ?? true,
+              validColor(backgroundColor), elements.count <= 100_000,
               Set(elements.map(\.id)).count == elements.count else { throw SketchDocumentError.invalidDocument }
         if let data = backgroundPNG, NSImage(data: data) == nil { throw SketchDocumentError.invalidImage }
         for element in elements {

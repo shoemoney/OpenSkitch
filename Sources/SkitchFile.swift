@@ -88,6 +88,12 @@ struct SkitchFile {
         return data
     }
 
+    /// Ordinary SVG uses a viewBox for output scaling while preserving source geometry.
+    /// Native .skitch keeps its original-sized SVG plus the exact editing supplement.
+    func exportedSVG(size: CGSize) throws -> Data {
+        try SVGExport.encode(document, preserving: metadata, backdrop: validatedBackdrop(), outputSize: size)
+    }
+
     /// Atomic local save. The explicit old extension retains JSON compatibility.
     func write(to url: URL) throws {
         let data = url.pathExtension.lowercased() == SketchDocument.fileExtension ? try canvasData : try encoded()
