@@ -1,4 +1,4 @@
-# Skitch Redux
+# OpenSkitch
 
 A personal native AppKit reconstruction of Skitch 1.0.12 for macOS 13 and newer. The build contains both Apple Silicon and Intel 64-bit executables. Full original feature parity remains in progress.
 
@@ -6,8 +6,10 @@ A personal native AppKit reconstruction of Skitch 1.0.12 for macOS 13 and newer.
 
 ```
 ./tools/build.sh
-open "build/Skitch Redux.app"
+open "build/OpenSkitch.app"
 ```
+
+OpenSkitch was previously named Skitch Redux. Existing document identifiers, application-support storage, preferences and Keychain entries retain their compatibility names so the rename preserves drawings, History and sharing settings. The project lives in `~/Projects/OpenSkitch`; the old project path remains a compatibility symlink for existing evidence and scripts.
 
 The original ZIP and extracted bundle must remain in `original/` for local icon resources. They are deliberately excluded from Git, along with the decompiled analysis and build outputs. The original ZIP SHA-256 is `b2f4181f5eb40a570547054e8ec22ca9bbe490eca02a28e2389fc5d83fdc6e97`.
 
@@ -49,7 +51,7 @@ Drawing colors expose the ten original preset tags and RGBA floats, including tr
 
 Size uses the original1.5...12 range and five steps, Shift-continuous mouse/keyboard adjustment, native slider accessibility and original track/knob artwork. The recovered font polynomial and output-to-logical height ratio drive future brush and selected/future text sizing independently of editor zoom; individual fonts/effects and existing paths remain intact, with grouped Undo for continuous selected-text changes. The18-point annotation floor and4096-point stored-font ceiling are explicit readability adaptations. Changed brush color/alpha, Size and custom RGB/alpha now persist in original SVG root attributes and restore on Open, session recovery and History restoration. Global/new-document preference migration and full original-runtime equivalence remain unverified.
 
-Current exact-binary desktop checks cover early Redux mixed-font Open/save/reopen and the listed Fonts interaction metrics. Earlier exact-binary checks cover the readable window/palette, retained custom RGBA,900x640 minimum window, Blue/Highlighter during pending typing, quarter-scale output sizing, Shift keyboard input and visible Undo/Redo; they have not all been repeated on this build. Native system-panel alpha entry remains unverified; macOS owns that panel's typography. Very large text can wrap inside an existing narrow annotation box; automatic box-width adjustment is not claimed. Both architectures pass2540 reconstruction checks across24 suites and native startup/save/reopen; Intel runs under Rosetta. Full Fonts/tool-panel workflows, original double-click behavior, historical file interoperability and complete original visual equivalence remain open.
+Current exact-binary desktop checks cover the OpenSkitch app/window name, About/Hide/Quit commands and opening the preserved mixed-font drawing without changing it. Earlier exact-binary checks cover early Redux mixed-font Open/save/reopen and the listed Fonts interaction metrics. Earlier exact-binary checks cover the readable window/palette, retained custom RGBA,900x640 minimum window, Blue/Highlighter during pending typing, quarter-scale output sizing, Shift keyboard input and visible Undo/Redo; they have not all been repeated on this build. Native system-panel alpha entry remains unverified; macOS owns that panel's typography. Very large text can wrap inside an existing narrow annotation box; automatic box-width adjustment is not claimed. Both architectures pass2540 reconstruction checks across24 suites and native startup/save/reopen; Intel runs under Rosetta. Full Fonts/tool-panel workflows, original double-click behavior, historical file interoperability and complete original visual equivalence remain open.
 
 Important remaining gaps include exact original Boolean tolerance/growth and separated color-run fill behavior, tablet hardware and exact original fitted-stroke output, some original modifiers, exact original window sizing, border limits and navigator layout, complete historical file interoperability, real legacy History-index interoperability, exact original History date labels/DST behavior and sharing details, exact capture behavior across displays and legacy service behavior. Actual screen/camera permissions and hardware, the system Photos-library picker and unfocused global shortcuts still need desktop verification. The chosen-folder Photos browser, full-resolution open, Justype, Pencil toggle, native editable save/reopen and SFTP publication have been checked in the desktop app. Original online account services and obsolete update/crash endpoints cannot be assumed operational. Full original-runtime visual equivalence has not been established.
 

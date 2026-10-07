@@ -55,7 +55,7 @@ final class HistoryStore {
             case .corruptIndex: return "The History index could not be read safely. Your archived drawings were preserved."
             case .missing: return "This History drawing is missing or has changed outside Skitch."
             case .unsafePath: return "History refused a file path outside its own archive."
-            case .unsupportedVersion: return "This History was written by a newer version of Skitch Redux."
+            case .unsupportedVersion: return "This History was written by a newer version of OpenSkitch."
             }
         }
     }

@@ -372,7 +372,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             button.image = NSImage(named: "menu")
             button.alternateImage = NSImage(named: "menu-sel")
             button.toolTip = "Click to show/hide Skitch"
-            button.setAccessibilityLabel("Show or hide Skitch Redux")
+            button.setAccessibilityLabel("Show or hide OpenSkitch")
             button.target = self; button.action = #selector(showHide)
         }
     }
@@ -567,7 +567,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1024, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "Skitch Redux"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
+        window.title = "OpenSkitch"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
         window.contentView = FrameChromeView(frame: window.contentView?.bounds ?? .zero)
         guard let content = window.contentView else { return }
         content.appearance = NSAppearance(named: .aqua)
@@ -699,8 +699,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func buildMenus() {
         let bar = NSMenu()
-        let appMenu = menu("Skitch Redux", items: [("About Skitch Redux", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit Skitch Redux", #selector(quit), "q")])
-        appMenu.insertItem(NSMenuItem(title: "Hide Skitch Redux", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
+        let appMenu = menu("OpenSkitch", items: [("About OpenSkitch", #selector(about), ""), ("Sharing Settings…", #selector(sharingSettings), ","), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit OpenSkitch", #selector(quit), "q")])
+        appMenu.insertItem(NSMenuItem(title: "Hide OpenSkitch", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
         appMenu.item(at: appMenu.numberOfItems - 2)?.target = self
         let quitIndex = appMenu.numberOfItems - 1
         let hideOthers = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -1662,7 +1662,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func transparent() { canvas.setBackgroundColor(.clear) }; @objc func white() { canvas.setBackgroundColor(.white) }; @objc func flatten() { canvas.flatten() }
     @objc func front() { canvas.bringSelectionToFront() }; @objc func back() { canvas.sendSelectionToBack() }; @objc func group() { canvas.groupSelection() }; @objc func ungroup() { canvas.ungroupSelection() }
     @objc func quit() { NSApp.terminate(nil) }
-    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "Skitch Redux", .applicationVersion: "0.2", .credits: NSAttributedString(string: "Native 64-bit reconstruction for personal use. Feature parity with Skitch 1.0.12 is still in progress.")]) }
+    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "OpenSkitch", .applicationVersion: "0.2", .credits: NSAttributedString(string: "Native 64-bit reconstruction for personal use. Feature parity with Skitch 1.0.12 is still in progress.")]) }
     func runSmokeTest() {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? NSTemporaryDirectory())
         do {
@@ -1750,7 +1750,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
 @main
 @MainActor
-enum SkitchReduxMain {
+enum OpenSkitchMain {
     static func main() {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)

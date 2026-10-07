@@ -1,30 +1,30 @@
 {
-  "verified_at": "2026-10-07T20:54:31.673286+00:00",
-  "checkpoint_id": "font-scale-4210d583e5",
-  "checkpoint_state": "current_build_suites_startup_and_listed_native_metrics_verified",
+  "verified_at": "2026-10-07T21:05:29.558773+00:00",
+  "checkpoint_id": "openskitch-9bae1c01fa",
+  "checkpoint_state": "renamed_build_suites_startup_and_listed_native_checks_verified",
   "build": {
     "architectures": [
       "arm64",
       "x86_64"
     ],
     "minimum_macos": "13.0",
-    "source_snapshot": "/Users/shoemoney/Projects/skitch-redux/build/source-snapshot.wbV21C",
+    "source_snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/source-snapshot.FfPQg8",
     "source_sha256": {
-      "App.swift": "1208cf3540440630b48571b23daba168366782e231a6d9f955d19369fa897892",
+      "App.swift": "55a249976fcaabdbe5c2f3aa65ff2a6d47d10aad689ee3b11327193da6efd6df",
       "AppViewport.swift": "0bd9e85b7fa9d8cbd0f3183a7d6b408c1bb788c447d1e02f061c35bda813c443",
       "BezelDrawingControls.swift": "b79594826a9cf1a0177f02c11d00735dec4361c4fd3364f28aca6a08961797d9",
       "Canvas.swift": "135e1d62588b43f47531f06dd8a180493c26010a07aa9938dcc4a69890813420",
       "CanvasBorderView.swift": "9dadf8ebcd9a00cc80c8ed9ad2b8f8f4ffe9859b5d6174b6bf2c99363515f68b",
       "CanvasNavigator.swift": "94e4543807c6821e8dc26ddc5f652baa1f025838682362ad571eb4f7e75f5a5a",
       "Capture.swift": "db8c26d3510555ab6924228369fdf306aa80458fdf421a69067ff02dd57d699b",
-      "DocumentModel.swift": "8136ab9d62943f880ffe947c862566c15b5a95be43ab0250a8aba40652330d6b",
+      "DocumentModel.swift": "85bcef126805eb03b3ecb5830d52bcd39185efa03d82d2ceb4310527480dd25c",
       "ExportAccessory.swift": "285e53a1dd58e9a95a0ed8523f6817d35fb1f0b97b7b3edf7c6d00e36334aa87",
       "GlobalHotkeys.swift": "263541c786e14af8b060b99a4acfb8dbc01d8311e0a16bb8836c5a3cf827abbc",
       "HistoryBrowser.swift": "ee3c9a2dc48982721403fbf9dfb0440651c09c4b6676c69dd78bf99d31a93b3c",
       "HistoryRemoteDeletion.swift": "de8a69153fd185d5026838ec878d2ccdee7e6d65ae9b4eff4b22fe018e6209e6",
-      "HistoryStore.swift": "8975922e59d13acbea3cb87b52a107ec8df994523f47a5bb61da7a6724609986",
+      "HistoryStore.swift": "22b844f988db0232706a26680271ad8e9ecdfcda4ddbc8774b47fe38ec737ff6",
       "ImageExport.swift": "d54f00f33b1337f7d45870fa14230162957a609650791ff0867af5c1bc1cd0f0",
-      "Info.plist": "2cfa9422ebc8c2dd26d53109d8c4bd4e804de5b9a8e304f58378ac3f1edfe0ab",
+      "Info.plist": "31d43e115e32aa398d9548af9da0d61cca70d35d0f6f26376108337e680dce24",
       "LegacyBridge.swift": "651725bfe4d69fcd07f7987d252e700bb449900a35680c32d1ed6505370e7ec3",
       "LegacyHistoryImporter.swift": "2add6149931fa2c418b71604af6622b8006b561c52464d49732a6a502011b08d",
       "LegacySkitch.swift": "5aa257438eee764d3be8b1c66a8402dddbfe2a84794ec274f910c47fa9d28820",
@@ -83,22 +83,22 @@
       "sizeSlider-indicator.png": "06a2bf7bcd97bff7bf29d9830ae1f57bf604d99a7e48ad7ff40105985f291cd5",
       "sizeSlider.png": "223238e9b4cf626c5e0cabfe7adc605339af3f0901825b8ae024141aaad7e2c5"
     },
-    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd"
+    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572"
   },
   "build_manifest_path": "build/build-manifest.json",
-  "build_manifest_sha256": "1a662d0ff2ac0080acf1656ae6999c23e9dad3aa0814f735ede6bec88121849d",
-  "build_binary_path": "build/Skitch Redux.app/Contents/MacOS/SkitchRedux",
+  "build_manifest_sha256": "640f1b09b289eea56e93d115b77975a5ac2bdcd14d4f75c984b27ed31a11bf5d",
+  "build_binary_path": "build/OpenSkitch.app/Contents/MacOS/OpenSkitch",
   "build_binary_hash_matches": true,
   "build_source_snapshot_hash_matches": true,
-  "build_log_path": "build/font-scale-verification/build.log",
-  "build_log_sha256": "414450549ea70d1eb877b5a10d6517b2a1af58d4d9337114a3b2cff64d3ed687",
+  "build_log_path": "build/rename-verification/build-audit.log",
+  "build_log_sha256": "d27170606a5af89801003331dd18156d8d58f4887a9140849fe1e48978019529",
   "architectures": {
     "arm64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.f8toyrgg",
-      "log_path": "build/font-scale-verification/arm64.log",
-      "log_sha256": "27b020f5eead396c4ccdf64ee55a7f15883c7eb3de7ba2cecfaf97ff0471228f",
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.n4753y6r",
+      "log_path": "build/rename-verification/arm64.log",
+      "log_sha256": "d94044cccf20ed0d2ba66bfa00c0ba0eae4456bac0fbff4f74fbe94f8b042240",
       "checks": 2540,
       "suites": 24,
       "source_drift": false,
@@ -107,27 +107,27 @@
     "x86_64": {
       "passed": true,
       "exit_code": 0,
-      "snapshot": "/Users/shoemoney/Projects/skitch-redux/build/test-snapshot.2ytqrgq5",
-      "log_path": "build/font-scale-verification/x86_64.log",
-      "log_sha256": "a4458255409e60bb710340c20660390e200f61996b35f652cd8536f73783fa65",
+      "snapshot": "/Users/shoemoney/Projects/OpenSkitch/build/test-snapshot.4zu_ynle",
+      "log_path": "build/rename-verification/x86_64.log",
+      "log_sha256": "3f496be4d87607757deb3757306a3552b52b5fa8638b492eb8e6d4f64f2df666",
       "checks": 2540,
       "suites": 24,
       "source_drift": false,
       "output_capture": "Complete stdout/stderr retained; terminal exit 0 observed separately; full summaries and final success present."
     }
   },
-  "full_suite_results_path": "build/font-scale-verification/results.json",
-  "full_suite_results_sha256": "11199f2964b800f6598a846bbad85d3962be1a452350638961d3c183c833eb78",
+  "full_suite_results_path": "build/rename-verification/results.json",
+  "full_suite_results_sha256": "cbdf775a531612ce0c36e09e1d7ab562b702ae5772ef28972f54a58c640d4d8e",
   "native_startup_smoke": {
-    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd",
-    "verified_at": "2026-10-07T20:49:31.515599+00:00",
+    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572",
+    "verified_at": "2026-10-07T21:02:51.667778+00:00",
     "arm64": {
       "passed": true,
       "exit_code": 0,
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24807,
       "editable_bytes": 29480,
-      "editable_sha256": "c0af34b8e55f2c58c2ff2405b8974c8ae9da80e0fa46f703c04565446caa4d0f"
+      "editable_sha256": "fd748fd528f14fd03c249e647cab0f82f69ec01553fd18685e10eaaa03e36d9f"
     },
     "x86_64": {
       "passed": true,
@@ -135,58 +135,45 @@
       "result": "native startup, original-format editable save/load, PNG export succeeded",
       "png_bytes": 24394,
       "editable_bytes": 29480,
-      "editable_sha256": "474afe68b5c1942c396a7277d5d292e056ed5aae5e0fe45224ee2fc0e70dac11"
+      "editable_sha256": "e67e99cf9bf8d5b0faf4817731758d269a7e447f4139556c90ca373ee62e784b"
     }
   },
-  "native_startup_smoke_results_path": "build/startup-smoke-4210d583e5/results.json",
-  "native_startup_smoke_results_sha256": "e24786a613eec0f8c6b5301361bb0412edcd6356ee50e3284cd3cef31c9bab6b",
+  "native_startup_smoke_results_path": "build/startup-smoke-9bae1c01fa/results.json",
+  "native_startup_smoke_results_sha256": "d54c785246bcb60bc28a3bf8dde5206a75d48dc7fae3e44ec8bf6f3d22b186d1",
   "validation_tools_sha256": {
     "tools/test.py": "d4864ee5dc43552300019c00bbe41362a582c41685424591f26cd72c506b8634",
-    "tools/build.sh": "6d0136cd6131d3fe0c742b44abcb1e1a4a483a8efec98aafd290ba7fabfff7ae",
-    "tools/test-native-startup.py": "f065940bb63a63c9de2f1d8f61fd420f17cc2e41c1268e49a3dac9a7e33f3ac9",
-    "tools/test-app-safety.sh": "54aad030bac6c10a38a3d230e0d6b23241f95fea0497d86460a5a39642c04bc7"
+    "tools/build.sh": "ed993469a866b711b94ec00b0134ddf77b343a74ae3543d4afa75d4bbb18ec98",
+    "tools/test-native-startup.py": "c0fe52feadbbe11b62c7913c5e12eaf72d62cff3d01a3239943ce73638c6f248",
+    "tools/test-app-safety.sh": "a33dea4e76093ca0a9bcde612d6e746128c612a93ea0c6c8f8ab2f0436ac7d04"
   },
   "current_full_suite_validation": {
     "status": "passed_both_architectures",
     "checks_per_architecture": 2540,
     "suites": 24,
-    "results_path": "build/font-scale-verification/results.json",
-    "results_sha256": "11199f2964b800f6598a846bbad85d3962be1a452350638961d3c183c833eb78"
+    "results_path": "build/rename-verification/results.json",
+    "results_sha256": "cbdf775a531612ce0c36e09e1d7ab562b702ae5772ef28972f54a58c640d4d8e"
   },
   "current_native_startup_validation": {
     "status": "passed_both_architectures",
-    "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd",
-    "startup_log_path": "build/font-scale-verification/startup.log",
-    "startup_log_sha256": "ec1635903db28ba3879fb6aa0bdf3c496c225231a3d94176e8f53dc2a25045fc"
+    "binary_sha256": "9bae1c01fa1b63cf6f5ef0121b316633a45634033b6effda0fc46a73cf0e1572",
+    "startup_log_path": "build/rename-verification/startup.log",
+    "startup_log_sha256": "078ab3286c8615873befbd92dfa255359c254af1cc078b4349dcd1f95e3cfef5"
   },
   "current_desktop_checks": [
     {
-      "name": "Preserved early Redux drawing opens without consistency error",
-      "result": "passed",
-      "scope": "Native Open and reviewed editor screenshot show both original text annotations, with differing font/effect styles.",
-      "evidence": "opened.png"
+      "name": "Native OpenSkitch app and window name",
+      "passed": true,
+      "evidence": "build/rename-verification/reopened-ax.txt"
     },
     {
-      "name": "Native Fonts mixed selection and opening metrics",
-      "result": "passed",
-      "scope": "Native Select All then Font yields visible shared panel with blank mixed-size field. Auxiliary Fonts pixels and direct font choices were not exposed by the desktop tool.",
-      "evidence": "selected-fit-layout.json"
+      "name": "About, Hide and Quit use OpenSkitch",
+      "passed": true,
+      "evidence": "build/rename-verification/menu-ax.txt"
     },
     {
-      "name": "Native single-selection font size excludes editor zoom",
-      "result": "passed",
-      "scope": "Single text annotation visually selected; Font shows24 in live metrics at Fit and25% zoom. Panel close/open generated each fresh snapshot; no Fonts visual-layout claim.",
-      "evidence": [
-        "single-fit-layout.json",
-        "single-quarter-layout.json",
-        "quarter-ax.txt"
-      ]
-    },
-    {
-      "name": "Migrated independent Save As reopens without artwork changes",
-      "result": "passed",
-      "scope": "Native Save As/reopen and reviewed editor screenshot; exact original document model preserved, five known early implicit defaults made explicit. Original fixture unchanged.",
-      "evidence": "reopened.png"
+      "name": "Preserved mixed-font drawing opens and remains unchanged",
+      "passed": true,
+      "evidence": "build/rename-verification/reopened.png"
     }
   ],
   "historical_validations": [
@@ -849,10 +836,47 @@
         }
       ],
       "scope": "historical_exact_binary_listed_checks_only"
+    },
+    {
+      "checkpoint_id": "font-scale-4210d583e5",
+      "binary_sha256": "4210d583e5fb25d50db09f451a42b8159ec86cece8b428d86387333938a19cdd",
+      "full_suite_results_path": "build/font-scale-verification/results.json",
+      "full_suite_results_sha256": "11199f2964b800f6598a846bbad85d3962be1a452350638961d3c183c833eb78",
+      "desktop_checks": [
+        {
+          "name": "Preserved early Redux drawing opens without consistency error",
+          "result": "passed",
+          "scope": "Native Open and reviewed editor screenshot show both original text annotations, with differing font/effect styles.",
+          "evidence": "opened.png"
+        },
+        {
+          "name": "Native Fonts mixed selection and opening metrics",
+          "result": "passed",
+          "scope": "Native Select All then Font yields visible shared panel with blank mixed-size field. Auxiliary Fonts pixels and direct font choices were not exposed by the desktop tool.",
+          "evidence": "selected-fit-layout.json"
+        },
+        {
+          "name": "Native single-selection font size excludes editor zoom",
+          "result": "passed",
+          "scope": "Single text annotation visually selected; Font shows24 in live metrics at Fit and25% zoom. Panel close/open generated each fresh snapshot; no Fonts visual-layout claim.",
+          "evidence": [
+            "single-fit-layout.json",
+            "single-quarter-layout.json",
+            "quarter-ax.txt"
+          ]
+        },
+        {
+          "name": "Migrated independent Save As reopens without artwork changes",
+          "result": "passed",
+          "scope": "Native Save As/reopen and reviewed editor screenshot; exact original document model preserved, five known early implicit defaults made explicit. Original fixture unchanged.",
+          "evidence": "reopened.png"
+        }
+      ],
+      "scope": "historical_exact_binary_listed_checks_only"
     }
   ],
   "full_original_parity": false,
-  "text_verification_scope": "Original modeless Fonts contract reconstructed with live per-item font conversion and mixed effects. Pending text keeps native typing and recovery, with one document transaction. Full suites and listed current-binary native observations only; original runtime equivalence and complete current-build native font/edit/save/Undo workflow remain unverified.",
+  "text_verification_scope": "The pre-rename drawing opens with both text styles visible. Earlier Fonts metrics remain historical exact-binary evidence.",
   "not_verified": [
     "Original i386 runtime equivalence and historical corpus interoperability",
     "Screen/camera capture permissions, hardware and display fidelity",
@@ -905,8 +929,9 @@
     "Complete Fonts native workflow, remaining original tool-specific clusters, real idle-pointer hover and preference tabs and full original runtime parity remain unverified.",
     "Native minimum900x640 window layout was reached through the Resize workflow on the prior palette/Size binary; manual edge-resize gestures and original geometry/runtime equivalence remain unverified.",
     "Current Fonts opening and zoom independence are native interaction plus live metrics only; the desktop tool did not expose the auxiliary Fonts window for visual or direct font-choice verification.",
-    "Current minimum-window, color/pending-text and Close/Hide proof remains pinned to earlier exact binaries; no original-runtime equivalence claim."
+    "Current minimum-window, color/pending-text and Close/Hide proof remains pinned to earlier exact binaries; no original-runtime equivalence claim.",
+    "Rename desktop checks cover app identity, commands and existing drawing Open; earlier detailed workflow proofs have not all been repeated on the renamed binary."
   ],
-  "current_desktop_proof_path": "build/font-scale-verification/desktop-proof.json",
-  "current_desktop_proof_sha256": "5a5ca68751f8381ae3902b07d160e6c78c6a5dbdafaee3f74e22f6411b700118"
+  "current_desktop_proof_path": "build/rename-verification/desktop-proof.json",
+  "current_desktop_proof_sha256": "c5d4d10ab895ae045feeb31cbd73fff16b7363100f758085c258682236d3dddf"
 }

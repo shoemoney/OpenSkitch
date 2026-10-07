@@ -117,7 +117,7 @@ enum SketchDocumentError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFormat: return "This is not a supported Skitch document."
-        case .unsupportedVersion: return "This Skitch Redux document uses an unsupported format version."
+        case .unsupportedVersion: return "This OpenSkitch document uses an unsupported format version."
         case .invalidDocument: return "The document contains invalid dimensions, colors, or drawing data."
         case .invalidImage: return "The image could not be decoded."
         }

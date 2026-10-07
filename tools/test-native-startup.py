@@ -19,7 +19,7 @@ parser.add_argument("--arch", choices=["arm64", "x86_64", "both"], default="both
 parser.add_argument("--timeout", type=float, default=30)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
-binary = root / "build/Skitch Redux.app/Contents/MacOS/SkitchRedux"
+binary = root / "build/OpenSkitch.app/Contents/MacOS/OpenSkitch"
 manifest = json.loads((root / "build/build-manifest.json").read_text())
 digest = hashlib.sha256(binary.read_bytes()).hexdigest()
 assert digest == manifest["binary_sha256"], "Binary differs from its build manifest."

@@ -49,7 +49,7 @@ for name, (path, data) in snapshot.items():
     target = sources / name
     if name == 'App.swift':
         text = data.decode()
-        entry = re.search(r'^@main\s+@MainActor\s+enum\s+SkitchReduxMain\b', text, re.M)
+        entry = re.search(r'^@main\s+@MainActor\s+enum\s+OpenSkitchMain\b', text, re.M)
         if not entry:
             raise SystemExit('Cannot safely locate and remove the production @main entry.')
         text = text[:entry.start()]
