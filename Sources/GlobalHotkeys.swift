@@ -4,7 +4,7 @@ import Carbon
 // Physical key positions and Carbon modifier masks come from the local macOS
 // HIToolbox/Events.h. No event tap, keyboard monitor or Accessibility API is used.
 enum GlobalHotkeyAction: String, Codable, CaseIterable, Sendable {
-    case screen, window, fullscreen, frame, camera
+    case screen, window, fullscreen, frame, camera, upload, show
     var title: String {
         switch self {
         case .screen: return "Screen region"
@@ -12,6 +12,8 @@ enum GlobalHotkeyAction: String, Codable, CaseIterable, Sendable {
         case .fullscreen: return "Full screen"
         case .frame: return "Frame"
         case .camera: return "Camera"
+        case .upload: return "Upload"
+        case .show: return "Show Skitch"
         }
     }
     var carbonID: UInt32 { UInt32(Self.allCases.firstIndex(of: self)! + 1) }
@@ -122,6 +124,23 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
     var fullscreen: GlobalHotkeyBinding = .none
     var frame: GlobalHotkeyBinding = .none
     var camera: GlobalHotkeyBinding = .none
+    var upload: GlobalHotkeyBinding = .none
+    var show: GlobalHotkeyBinding = .none
+
+    init() {}
+    // Preferences saved before Upload/Show existed lack those keys.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decode(Int.self, forKey: .version)
+        enabled = try c.decode(Bool.self, forKey: .enabled)
+        screen = try c.decode(GlobalHotkeyBinding.self, forKey: .screen)
+        window = try c.decode(GlobalHotkeyBinding.self, forKey: .window)
+        fullscreen = try c.decode(GlobalHotkeyBinding.self, forKey: .fullscreen)
+        frame = try c.decode(GlobalHotkeyBinding.self, forKey: .frame)
+        camera = try c.decode(GlobalHotkeyBinding.self, forKey: .camera)
+        upload = try c.decodeIfPresent(GlobalHotkeyBinding.self, forKey: .upload) ?? .none
+        show = try c.decodeIfPresent(GlobalHotkeyBinding.self, forKey: .show) ?? .none
+    }
 
     subscript(_ action: GlobalHotkeyAction) -> GlobalHotkeyBinding {
         get {
@@ -131,6 +150,8 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
             case .fullscreen: return fullscreen
             case .frame: return frame
             case .camera: return camera
+            case .upload: return upload
+            case .show: return show
             }
         }
         set {
@@ -140,6 +161,8 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
             case .fullscreen: fullscreen = newValue
             case .frame: frame = newValue
             case .camera: camera = newValue
+            case .upload: upload = newValue
+            case .show: show = newValue
             }
         }
     }
@@ -152,7 +175,10 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
     static let originalBindings: [GlobalHotkeyAction: GlobalHotkeyBinding] = [
         .screen: .init(keyCode: UInt32(kVK_ANSI_5), modifiers: [.command, .shift]),
         .fullscreen: .init(keyCode: UInt32(kVK_ANSI_6), modifiers: [.command, .shift]),
-        .frame: .init(keyCode: UInt32(kVK_ANSI_7), modifiers: [.command, .shift])
+        .frame: .init(keyCode: UInt32(kVK_ANSI_7), modifiers: [.command, .shift]),
+        // kCrosshairsAndWebPostHotkey: code 0x17, flags 0x1300 (Command+Shift+Control).
+        // kShowApplicationHotkey has no default.
+        .upload: .init(keyCode: UInt32(kVK_ANSI_5), modifiers: [.command, .shift, .control])
     ]
     // First launch and Reset Defaults claim no shortcuts. Only explicit saved
     // choices are activated; an invalid saved choice remains an actual error.
@@ -175,7 +201,9 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
         for key in ["3", "4", "5", "6"] {
             let code = GlobalHotkeyKeys.code(forMenuKey: key)
             result.insert(.init(keyCode: code, modifiers: [.command, .shift]))
-            result.insert(.init(keyCode: code, modifiers: [.command, .shift, .control]))
+            // Control adds copy-to-clipboard only for 3 and 4; Command+Shift+Control+5 is
+            // the original Upload chord and no macOS screenshot shortcut.
+            if key == "3" || key == "4" { result.insert(.init(keyCode: code, modifiers: [.command, .shift, .control])) }
         }
         return result
     }()
@@ -405,9 +433,10 @@ final class GlobalHotkeyManager: NSObject {
 
     func install(globalScreen: @escaping Callback, globalWindow: @escaping Callback,
                  globalFullscreen: @escaping Callback, globalFrame: @escaping Callback,
-                 globalCamera: @escaping Callback) throws {
+                 globalCamera: @escaping Callback, globalUpload: @escaping Callback,
+                 globalShow: @escaping Callback) throws {
         callbacks = [.screen: globalScreen, .window: globalWindow, .fullscreen: globalFullscreen,
-                     .frame: globalFrame, .camera: globalCamera]
+                     .frame: globalFrame, .camera: globalCamera, .upload: globalUpload, .show: globalShow]
         generation &+= 1
         try register()
     }
