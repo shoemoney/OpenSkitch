@@ -9,9 +9,9 @@ Final handoff, October 7, 2026, America/Chicago. User requested merge/push to ma
 - Code checkpoint after the additional license commit: `eeb3008f954ab71c3cbf17a0e7a7628d02c01fbe`. The subsequent handoff commit changes documentation only.
 - GitHub `shoemoney/OpenSkitch` is origin and the issue tracker. Forgejo `shoemoney/skitch-redux` is the push mirror. The configured origin pushes to both. Both main tips were verified equal at the code checkpoint, and both default branches are main.
 - The merged local and remote `codex/native-reconstruction` branches were deleted after ancestor verification. There is only the primary checkout, with no attached temporary worktrees. The sidecar agent was shut down.
-- Verification remains 43,029 checks across 33 arm64 suites, all 85 AppSafety cases, successful arm64 build and native save/reopen/render/Quit. Source snapshot equality was rechecked during finalization; no partially applied Fonts fix remains.
+- Verification recorded for the delivered patch: 43,029 checks across 33 arm64 suites, successful arm64 build and native save/reopen/render/Quit. Source snapshot equality was rechecked during finalization. That aggregate predates `f7d4321`, which fixed both Fonts findings and changed the test counts; the 43,029 figure is no longer current and has not been re-measured.
 - Keep ignored build/evidence folders and the original archive: they are needed for the next agent. Cleanup intentionally preserves them and user documents.
-- Two Fonts review findings, corner/resizing work, live Fonts/capture proof, and broader original parity remain open. Nothing below claims full completion.
+- The two Fonts review findings were fixed in `f7d4321` (Fonts panel keeps your divider and stays on screen). Corner/resizing work, live Fonts/capture proof, and broader original parity remain open. Nothing below claims full completion.
 - The overarching goal is paused at the user request. Do not automatically resume development; wait for the user.
 - A committed copy of this handoff is saved in `/Users/shoemoney/Projects/OpenSkitch/HANDOFF.md`.
 
@@ -35,7 +35,7 @@ This is a Swift/AppKit reconstruction, not a successfully recompiled original bi
 - Included native skill commits: `b3cec46` and `0cbc153`; agent/issue docs commit `6abf284`; license commit `eeb3008`. Preserve these.
 - Earlier verified interface checkpoint: `8bd0e32f37b0c5bca4a23b2aa7e35ceb40889710`.
 
-The delivered interface commit changes README.md, Sources/App.swift, Sources/TextStyleForm.swift, tests/AppSafetyTests.swift, tests/TextStyleFormTests.swift, and tools/build.sh. These changes are committed, not pending. Two concrete review findings below remain unfixed. They are recorded rather than being silently described as complete. No live worker or verification sessions remain.
+The delivered interface commit changes README.md, Sources/App.swift, Sources/TextStyleForm.swift, tests/AppSafetyTests.swift, tests/TextStyleFormTests.swift, and tools/build.sh. These changes are committed, not pending. The two concrete review findings recorded below were fixed afterward in `f7d4321`; they stay recorded so the fix is traceable. No live worker or verification sessions remain.
 
 ## Current verified build and tests
 
@@ -51,13 +51,13 @@ Evidence paths below are relative to the actual repository:
 - Build log: `build/interface-layout-verification/build.log`, terminal exit 0.
 - Full arm64 test snapshot: `build/test-snapshot.c775uhph`
 - Full test log: `build/interface-layout-verification/arm64.log`, terminal exit 0, all suites passed with no source drift.
-- **43,029 aggregate checks across 33 suites**, including **85/85 AppSafety cases** and **71 TextStyleForm checks**.
+- **43,029 aggregate checks across 33 suites** were recorded for the delivered patch, before `f7d4321`. That aggregate is no longer current. After `f7d4321` the counts are **87 AppSafety cases** and **117 TextStyleForm checks**; the new aggregate has not been re-measured here.
 - `build/interface-layout-verification/results.json` was generated while writing this handoff. Its summarizer checked the complete log counts and verified snapshot hashes against current sources.
 - Startup proof: `build/startup-smoke-e71a84b127/results.json`, arm64 passed native save/reopen/render and Quit.
 - Startup log: `build/interface-layout-verification/startup.log`, terminal exit 0.
 - AppSafety temporary evidence: `/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.mTlIgJ`.
 
-Existing AVFoundation and NSToolbarItem minSize/maxSize deprecation warnings remain; they were not build failures.
+The earlier AVFoundation deprecation warnings no longer appear in a full typecheck. The remaining deprecation warnings are only the TextStyleForm uses of NSToolbarItem minSize/maxSize and NSBrowser matrix(inColumn:); they are warnings, not build failures.
 
 The tracked `analysis/*.json` checkpoint metadata still describes **8bd0e32 / binary 896edbdebc**, not the current build. Do not confuse historical evidence with the current patch.
 
@@ -86,18 +86,20 @@ The tracked `analysis/*.json` checkpoint metadata still describes **8bd0e32 / bi
 ### Tests, packaging, documentation
 
 - Existing AppSafety cases now verify centered header at default/minimum sizes, recovered tool order plus Crop, right-side Font, lower-left sizing controls, no permanent Frame button, and real menu/action Frame routing with Cam/Cancel replacement and restoration.
-- TextStyleForm coverage expanded from 19 to 71 checks for overflow, full-size control reachability, native state/callback preservation, matching split only, and toolbar allocation/style preservation.
+- TextStyleForm coverage expanded from 19 checks to 71 in the delivered patch, and to 117 with `f7d4321`, covering overflow, full-size control reachability, native state/callback preservation, matching split only, and toolbar allocation/style preservation.
 - `tools/build.sh` packages these ten recovered images: `SnapCrosshair`, `SnapISight`, `Font`, `ActualSizeToggleOff`, `ActualSizeToggleOn`, `Resize`, `SaveToHistoryArrow`, `Hide`, `SnapSnap`, `SnapCancel`.
 - README explains archive grouping and the explicit Photos/Crop/readability adaptations. Refresh final checkpoint information only after remaining fixes and verification.
 - Corner/resize gesture engines were not changed in this pass.
 
-## Two remaining review findings: fix next
+## Fonts review findings: fixed in f7d4321
 
-1. **P2: A font change can reset a divider the user dragged.** Around App.swift line 1867, `changeFont` resets `fontPanelRecordedTypography`; the timer around line 1821 calls `prepareFontPanelLayout` whenever that evidence flag is false. A new font choice can therefore reapply the opening 360-point divider position. Separate “opening layout applied” state from typography/evidence refresh. Suggested implementation: a dedicated flag; have `prepareFontPanelLayout` return whether the matching loaded structure was found; retry only until applied; reset layout state on a new presentation lifecycle, not on every font change. Preserve user divider choices. Add a meaningful regression test.
+Both findings from the delivered-patch review were fixed in `f7d4321` (`fix: 🔤 Fonts panel keeps your divider and stays on screen 🖥️`). The fix is committed. Live Fonts-panel rendering is still unverified (see the desktop section).
 
-2. **P2: The Fonts panel can extend offscreen on small displays.** Around App.swift line 1803, it requests 940×720 content, then clamps origin as if the whole frame fits the visible screen. Bound the size to the usable screen before positioning. Preserve readable controls, scroll overflow, and pending text editing. Verify geometry with controlled tests and actual rendering if feasible.
+1. **P2 (fixed): A font change could reset a divider the user dragged.** `changeFont` reset `fontPanelRecordedTypography`, and the refresh timer then re-applied the opening 360-point divider position. `f7d4321` splits the opening layout state (`fontPanelOpeningLayoutApplied`) from typography/evidence refresh. `prepareFontPanelLayout` reports whether the matching loaded structure was found, so the layout is retried only until applied. The flag is set per presentation on show and cleared on teardown, not on every font change. Late-loading panels now also receive the opening layout.
 
-Line numbers may move. Find the symbols rather than relying solely on these offsets. Neither fix has been implemented. The reviewer found no additional blocking issue in header, rail/footer constraints, or the Frame replacement.
+2. **P2 (fixed): The Fonts panel could extend offscreen on small displays.** It requested 940×720 content and clamped its origin as if the whole frame fit the visible screen. `f7d4321` bounds the frame to the usable display (`TextStyleForm.fontPanelFrame`) before positioning, and the accessory scrolls when constrained.
+
+Regression coverage was added in `f7d4321` (TextStyleForm and AppSafety cases; counts in the stop state above). The reviewer found no additional blocking issue in header, rail/footer constraints, or the Frame replacement.
 
 ## Desktop state, proof, and limitations
 
@@ -185,7 +187,7 @@ The prior complete checkpoint evidence is in `build/interface-verification/`, st
 ## Resume sequence
 
 1. Read this handoff, inspect the actual checkout and current diff, read applicable instructions/skills. Start with `/Users/shoemoney/.codex/RTK.md`, `/Users/shoemoney/AGENTS.md`, `/Users/shoemoney/Projects/AGENTS.md`; also read the repository AGENTS.md and referenced docs/agents files. The appkit-interop skill is at `/Users/shoemoney/.codex/skills/appkit-interop/SKILL.md`, and newly vendored native skills are under the repository `.claude/skills/`.
-2. Fix the two Fonts review findings while preserving native presentation, divider choices, text state and readability.
+2. The two Fonts review findings are already fixed in `f7d4321`. Re-verify them with step 3 and keep native presentation, divider choices, text state and readability intact in any later change to that code.
 3. Recheck the currently running app/document through supported Cua controls. Quit safely before overwriting its built bundle. Run appropriate verification on the final source snapshot:
 
    ```sh
