@@ -559,7 +559,7 @@ private enum GlassChromeTests {
         expect(stack?.arrangedSubviews.count == 2 && stack?.spacing == GlassChrome.Metrics.surfaceSpacing && stack?.orientation == .horizontal, "Group stacks its surfaces")
         let metrics = GlassChrome.Metrics.self
         expect(metrics.toolButton == NSSize(width: 48, height: 40) && metrics.commandHeight == 36 && metrics.railWidth == 64 && metrics.rightRailWidth == 160 && metrics.headerHeight == 44, "Metrics match the plan with Apple's 36 pt Extra Large commands")
-        expect(metrics.iconPointSize == 22 && metrics.labelPointSize == 20 && metrics.groupSpacing == 10 && metrics.surfaceSpacing == 6 && metrics.containerSpacing == 8, "Spacing and type metrics match the plan")
+        expect(metrics.iconPointSize == 22 && metrics.labelPointSize == 20 && metrics.groupSpacing == 10 && metrics.surfaceSpacing == 6 && metrics.containerSpacing == 2, "Spacing and type metrics match the plan")
     }
 
     // MARK: ModernEditorChrome
@@ -754,6 +754,7 @@ private enum GlassChromeTests {
             let rig = makeRig(size)
             verifyLayout(rig, label)
             semantics(rig, label)
+            glassNeckChecks(rig, label)
             rig.chrome.frameMode = true
             verifyLayout(rig, label + " frame mode")
             frameModeChecks(rig, label)
@@ -763,6 +764,25 @@ private enum GlassChromeTests {
                 bleedChecks(rig, label)
                 accessibilityChecks(rig, label)
             }
+        }
+    }
+
+    /// Glass shapes fuse into a "neck" when their container's spacing reaches the gap between them.
+    @available(macOS 26, *)
+    private static func glassNeckChecks(_ rig: Rig, _ label: String) {
+        func containers(in view: NSView) -> [NSGlassEffectContainerView] {
+            (view as? NSGlassEffectContainerView).map { [$0] + (($0.contentView).map(containers) ?? []) } ?? view.subviews.flatMap(containers)
+        }
+        let found = containers(in: rig.chrome)
+        expect(found.count >= 6, "\(label): the chrome builds its glass groups (found \(found.count))")
+        for container in found {
+            let id = container.identifier?.rawValue ?? "?"
+            guard let stack = container.contentView as? NSStackView else { expect(false, "\(label): \(id) wraps a stack"); continue }
+            var smallest = stack.spacing
+            for (index, view) in stack.arrangedSubviews.enumerated() where index < stack.arrangedSubviews.count - 1 {
+                smallest = min(smallest, stack.customSpacing(after: view))
+            }
+            expect(container.spacing < smallest, "\(label): \(id) container spacing \(container.spacing) stays below its smallest gap \(smallest) so neighbours do not fuse")
         }
     }
 
@@ -892,9 +912,14 @@ private enum GlassChromeTests {
     @available(macOS 26, *)
     private static func bleedChecks(_ rig: Rig, _ label: String) {
         let chrome = rig.chrome
-        expect(GlassChrome.usesCanvasBleed, "\(label): bleed defaults on")
+        expect(!GlassChrome.usesCanvasBleed, "\(label): bleed defaults off")
         expect(!chrome.bleedIsVisible, "\(label): bleed is hidden until there is a thumbnail")
         let thumbnail = NSImage(size: NSSize(width: 8, height: 8), flipped: false) { rect in NSColor.systemPink.setFill(); rect.fill(); return true }
+        chrome.updateCanvasBleed(thumbnail)
+        expect(!chrome.bleedIsVisible, "\(label): a thumbnail does not show the bleed by default")
+        chrome.updateCanvasBleed(nil)
+        GlassChrome.usesCanvasBleed = true
+        defer { GlassChrome.usesCanvasBleed = false; chrome.updateCanvasBleed(nil) }
         chrome.updateCanvasBleed(thumbnail)
         expect(chrome.bleedIsVisible && chrome.backdropIsVisible, "\(label): a thumbnail shows the bleed")
         rig.content.layoutSubtreeIfNeeded()
@@ -921,6 +946,8 @@ private enum GlassChromeTests {
     private static func accessibilityChecks(_ rig: Rig, _ label: String) {
         let chrome = rig.chrome
         let thumbnail = NSImage(size: NSSize(width: 8, height: 8), flipped: false) { rect in NSColor.systemPink.setFill(); rect.fill(); return true }
+        GlassChrome.usesCanvasBleed = true
+        defer { GlassChrome.usesCanvasBleed = false }
         chrome.updateCanvasBleed(thumbnail)
         expect(chrome.bleedIsVisible, "\(label): bleed visible before injection")
         let hovered = chrome.surface(for: chrome.undoButton)!

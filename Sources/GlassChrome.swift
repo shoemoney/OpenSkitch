@@ -378,12 +378,13 @@ enum GlassChrome {
         static let commandHeight: CGFloat = 36
         static let railWidth: CGFloat = 64, rightRailWidth: CGFloat = 160, headerHeight: CGFloat = 44
         static let iconPointSize: CGFloat = 22, labelPointSize: CGFloat = 20
-        static let groupSpacing: CGFloat = 10, surfaceSpacing: CGFloat = 6, containerSpacing: CGFloat = 8
+        static let groupSpacing: CGFloat = 10, surfaceSpacing: CGFloat = 6, containerSpacing: CGFloat = 2
         /// Icon beside a 20-point label is drawn at 20 points; icon-only controls use `iconPointSize`.
         static let labeledIconPointSize: CGFloat = 20
         static let pillPadding: CGFloat = 12
         static let railPillWidth: CGFloat = 148
         static let toolSpacing: CGFloat = 4
+        // NSGlassEffectContainerView fuses glass shapes closer than its spacing, so it must stay below every stack gap (smallest: toolSpacing).
         static let toolRadius: CGFloat = 12, dragRadius: CGFloat = 14
     }
 
@@ -396,7 +397,7 @@ enum GlassChrome {
     }
 
     /// Experimental canvas bleed under the rails; off falls back to the plain window backdrop.
-    static var usesCanvasBleed = true
+    static var usesCanvasBleed = false
 
     /// Wraps `control` in a glass surface. Without an explicit size the surface is a command-height pill that
     /// is never narrower than its content (flexible width) or, for circles, a command-height square.

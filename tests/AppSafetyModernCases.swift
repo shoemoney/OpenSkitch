@@ -198,6 +198,8 @@ extension AppSafetyTests {
         try expect(app.canvasBorder.onBegin != nil && app.canvasBorder.onDrag != nil && app.canvasBorder.onEnd != nil && app.navigator.onNavigate != nil, "Canvas border and navigator callbacks are wired")
         try expect(app.canvas.tool == .arrow && app.helpBevel != nil && app.canvas.onHintHover != nil, "Launch ends on the Arrow tool with the hint shell attached")
         try expect(app.sizeLabel.stringValue.hasPrefix("Size · ") && (app.paletteButton.image?.size.width ?? 0) > 0, "Drawing controls were synchronized after the chrome was built")
+        app.canvas.strokeWidth = 9.38; app.syncDrawingControls()
+        try expect(app.sizeLabel.stringValue == "Size · 9" && abs(app.widthControl.doubleValue - 9.38) < 0.001, "Size label shows a whole number while the stored value keeps its fraction")
     }
 
     @available(macOS 26, *)
@@ -324,7 +326,12 @@ extension AppSafetyTests {
         try expect(!chrome.bleedIsVisible, "No thumbnail, no bleed")
         app.updateDragPreview()
         guard let overview = app.dragExportView?.overview else { throw Failure(description: "updateDragPreview produced no thumbnail") }
-        try expect(chrome.bleedIsVisible && chrome.backdropIsVisible, "updateDragPreview shows the bleed over the backdrop")
+        try expect(!GlassChrome.usesCanvasBleed && !chrome.bleedIsVisible && chrome.backdropIsVisible, "The bleed is hidden by default even with a thumbnail; the backdrop stays")
+        GlassChrome.usesCanvasBleed = true
+        defer { GlassChrome.usesCanvasBleed = false }
+        app.updateDragPreview()
+        try expect(chrome.bleedIsVisible && chrome.backdropIsVisible, "updateDragPreview shows the bleed over the backdrop when the flag is on")
+        guard let overview = app.dragExportView?.overview else { throw Failure(description: "updateDragPreview produced no thumbnail") }
         try expect(image()?.image === overview, "The bleed shows the Drag Me thumbnail itself")
         try expect(max(overview.size.width, overview.size.height) <= 128, "The thumbnail is the 128 px preview")
         app.frameSnap()

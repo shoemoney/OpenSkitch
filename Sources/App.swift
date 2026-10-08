@@ -1006,7 +1006,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func syncDrawingControls() {
         colorWell.color = canvas.strokeColor
         widthControl.doubleValue = Double(canvas.strokeWidth)
-        sizeLabel.stringValue = "Size · " + String(format: "%.3g", widthControl.doubleValue)
+        sizeLabel.stringValue = "Size · " + String(format: "%.0f", widthControl.doubleValue.rounded())
         let indicatorColor = canvas.strokeColor
         paletteButton.image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
             NSColor.white.setFill(); rect.fill()
