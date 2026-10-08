@@ -32,6 +32,14 @@ else
 fi
 EVIDENCE=$(CDPATH= cd -- "$EVIDENCE" && pwd)
 echo "App safety evidence: $EVIDENCE"
+# A bare binary's UserDefaults.standard domain is its process name, so a unique
+# name per run is a throwaway defaults domain: concurrent runs cannot share keys.
+BIN="AppSafetyTests-$$-$(basename "$EVIDENCE" | tr -c 'A-Za-z0-9' '-')"
+cleanup_defaults() {
+    defaults delete "$BIN" >/dev/null 2>&1 || true
+    rm -f "$HOME/Library/Preferences/$BIN.plist"
+}
+trap cleanup_defaults EXIT
 python3 - "$ROOT" "$APP_SOURCE" "$EVIDENCE" <<'PY'
 import hashlib, json, pathlib, re, sys
 root, app_source, evidence = map(pathlib.Path, sys.argv[1:])
@@ -119,23 +127,23 @@ SDK=$(xcrun --show-sdk-path)
 if ! xcrun swiftc -swift-version 5 -O -D APP_SAFETY_TESTS -sdk "$SDK" \
     -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit \
     -framework AVFoundation -framework CoreMedia -framework ImageIO \
-    "$EVIDENCE"/sources/*.swift -o "$EVIDENCE/AppSafetyTests" >"$EVIDENCE/compile.log" 2>&1; then
+    "$EVIDENCE"/sources/*.swift -o "$EVIDENCE/$BIN" >"$EVIDENCE/compile.log" 2>&1; then
     cat "$EVIDENCE/compile.log" >&2
     exit 1
 fi
 set +e
 env -u SKITCH_FIXTURE SKITCH_APPEARANCE="$APPEARANCE" SKITCH_APP_SUPPORT="$EVIDENCE/support" \
     SKITCH_EVIDENCE_DIR="$EVIDENCE/layout" APP_SAFETY_EVIDENCE="$EVIDENCE" APP_SAFETY_ARCH="$ARCH" \
-    /usr/bin/arch "-$ARCH" "$EVIDENCE/AppSafetyTests" >"$EVIDENCE/run.log" 2>&1
+    /usr/bin/arch "-$ARCH" "$EVIDENCE/$BIN" >"$EVIDENCE/run.log" 2>&1
 RESULT=$?
 set -e
 cat "$EVIDENCE/run.log"
 if [ "$RESULT" -eq 0 ]; then
     # Reproduce the real AppKit quit loop without launching a preview app or
     # ordering any window. Bound hangs and terminate only this owned child.
-    python3 - "$EVIDENCE" "$ARCH" "$APPEARANCE" <<'PY'
+    python3 - "$EVIDENCE" "$ARCH" "$APPEARANCE" "$BIN" <<'PY'
 import json, os, pathlib, subprocess, sys
-evidence, arch, appearance = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+evidence, arch, appearance, binary = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
 env = os.environ.copy()
 env.pop('SKITCH_FIXTURE', None)
 env.update(SKITCH_APPEARANCE=appearance, SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
@@ -144,7 +152,7 @@ env.update(SKITCH_APPEARANCE=appearance, SKITCH_APP_SUPPORT=str(evidence / 'nati
 (evidence / 'native-layout').mkdir()
 with (evidence / 'native-termination.log').open('w') as log:
     try:
-        result = subprocess.run(['/usr/bin/arch', '-' + arch, str(evidence / 'AppSafetyTests'),
+        result = subprocess.run(['/usr/bin/arch', '-' + arch, str(evidence / binary),
                                  '--native-idle-termination'], env=env, stdout=log,
                                 stderr=subprocess.STDOUT, timeout=10)
     except subprocess.TimeoutExpired:
