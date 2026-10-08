@@ -1,27 +1,6 @@
 import AppKit
 import UniformTypeIdentifiers
 
-final class ToolButton: NSButton {
-    static func textColor(on background: NSColor) -> NSColor {
-        guard let rgb = background.usingColorSpace(.deviceRGB) else { return .labelColor }
-        func linear(_ value: CGFloat) -> Double {
-            let channel = Double(value)
-            return channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
-        }
-        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
-        return luminance > 0.179 ? .black : .white
-    }
-    override func draw(_ dirtyRect: NSRect) {
-        let shape = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 6, yRadius: 6)
-        let background = state == .on ? NSColor.controlAccentColor : NSColor.controlColor
-        let foreground = state == .on ? Self.textColor(on: background) : NSColor.labelColor
-        if contentTintColor != foreground { contentTintColor = foreground }
-        background.setFill()
-        shape.fill()
-        cell?.draw(withFrame: bounds.insetBy(dx: imagePosition == .imageOnly || bounds.width < 64 ? 2 : 10, dy: 0), in: self)
-    }
-}
-
 /// Frame preview clears only the canvas hole; application controls keep an
 /// opaque backdrop so their adaptive label colors remain readable.
 final class FrameChromeView: NSView {
@@ -600,7 +579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func label(_ text: String) -> NSTextField { let f = NSTextField(labelWithString: text); f.font = .systemFont(ofSize: 18); return f }
-    func button(_ title: String, _ action: Selector) -> NSButton { let b = NSButton(title: title, target: self, action: action); b.font = .systemFont(ofSize: 18); return b }
+    func button(_ title: String, _ action: Selector) -> NSButton { let b = OriginalActionButton(title: title, target: self, action: action); b.font = .systemFont(ofSize: 18); return b }
     func stack(_ views: [NSView], horizontal: Bool = false) -> NSStackView {
         let s = NSStackView(views: views); s.orientation = horizontal ? .horizontal : .vertical; s.spacing = 12; s.alignment = horizontal ? .centerY : .leading; return s
     }
@@ -608,23 +587,63 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
         return NSImage(contentsOf: url)
     }
+    func copiedMainMenuItem(_ action: Selector, title: String? = nil) -> NSMenuItem? {
+        func find(_ menu: NSMenu) -> NSMenuItem? {
+            for item in menu.items {
+                if item.action == action { return item }
+                if let submenu = item.submenu, let found = find(submenu) { return found }
+            }
+            return nil
+        }
+        guard let main = NSApp.mainMenu, let item = find(main)?.copy() as? NSMenuItem else { return nil }
+        if let title { item.title = title }
+        return item
+    }
+    func copiedMainMenu(_ title: String) -> NSMenu? {
+        guard let original = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == title })?.submenu,
+              let copied = original.copy() as? NSMenu else { return nil }
+        copied.font = .systemFont(ofSize: 20)
+        return copied
+    }
     func bezelToolbox() -> NSPopUpButton {
         let control = NSPopUpButton(frame: .zero, pullsDown: true)
         control.font = .systemFont(ofSize: 20)
         let choices = NSMenu(title: "Toolbox"); choices.font = .systemFont(ofSize: 20)
         choices.addItem(withTitle: "Toolbox", action: nil, keyEquivalent: "")
-        for title in ["File", "Image", "Drawing", "Text", "Capture"] {
-            guard let existing = NSApp.mainMenu?.items.first(where: { $0.submenu?.title == title })?.submenu,
-                  let copied = existing.copy() as? NSMenu else { continue }
-            let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = copied; choices.addItem(item)
+        let groups: [[(String, Selector)]] = [
+            [("About OpenSkitch", #selector(about)), ("Preferences…", #selector(showPreferences)), ("Quit OpenSkitch", #selector(quit))],
+            [("New", #selector(newFile)), ("Open...", #selector(openFile)), ("Browse Photos", #selector(showPhotos)),
+             ("Save to History", #selector(saveHistory)), ("Export...", #selector(exportFile)), ("Save As...", #selector(saveAs)), ("Print...", #selector(printImage))],
+            [("Cut", #selector(cut)), ("Copy", #selector(copyArtwork)), ("Paste", #selector(paste)),
+             ("Delete", #selector(deleteSelection)), ("Select All", #selector(selectAll)), ("Duplicate", #selector(duplicate)), ("Show Fonts", #selector(chooseFont))],
+            [("Crosshair Snapshot", #selector(screenSnap)), ("Fullscreen Snapshot", #selector(fullscreenSnap)), ("Frame Snapshot", #selector(frameSnap)),
+             ("Cam Snapshot...", #selector(cameraSnap)), ("Re-snap (Keep Pen)", #selector(resnap))],
+            [("Set Snap to Normal Size", #selector(normalSize)), ("Flip", #selector(flipH)), ("Rotate 90° Clockwise", #selector(rotateCW)),
+             ("Background Color to Transparent", #selector(transparent)), ("Crop Snap at Current View", #selector(trimSnap)), ("Wipe Snap Only", #selector(wipeSnap))]
+        ]
+        for (index, group) in groups.enumerated() {
+            if index > 0 { choices.addItem(.separator()) }
+            for (title, action) in group {
+                if let item = copiedMainMenuItem(action, title: title) { choices.addItem(item) }
+            }
         }
         choices.addItem(.separator())
-        for (title, action) in [("Filled Shapes", #selector(toggleBezelFill(_:))), ("Shadow", #selector(toggleBezelShadow(_:))),
-                                ("Preferences…", #selector(showPreferences)),
-                                ("Sharing Settings…", #selector(sharingSettings)), ("Capture Shortcuts…", #selector(shortcutSettings))] {
+        // Existing additions remain reachable without placing the original
+        // common commands behind another menu level.
+        let more = NSMenu(title: "More Commands"); more.font = .systemFont(ofSize: 20)
+        for title in ["File", "Image", "Drawing", "Text", "Capture"] {
+            guard let copied = copiedMainMenu(title) else { continue }
+            let item = NSMenuItem(title: title, action: nil, keyEquivalent: ""); item.submenu = copied; more.addItem(item)
+        }
+        for (title, action) in [("Sharing Settings…", #selector(sharingSettings)), ("Capture Shortcuts…", #selector(shortcutSettings))] {
+            if let item = copiedMainMenuItem(action, title: title) { more.addItem(item) }
+        }
+        let extra = NSMenuItem(title: "More Commands", action: nil, keyEquivalent: ""); extra.submenu = more; choices.addItem(extra)
+        for (title, action) in [("Filled Shapes", #selector(toggleBezelFill(_:))), ("Shadow", #selector(toggleBezelShadow(_:)))] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; choices.addItem(item)
         }
-        control.menu = choices; control.setAccessibilityLabel("Toolbox"); control.toolTip = "Image, drawing, text, capture and sharing controls"
+        control.menu = choices; control.setAccessibilityLabel("Toolbox")
+        control.toolTip = "Common drawing and capture commands; additional actions are in More Commands"
         return control
     }
     func buildWindow() {
@@ -649,7 +668,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let top = stack([toolbox, photos, beforeTitle, title, afterTitle, button("Save", #selector(saveHistory)), button("History", #selector(showHistory))], horizontal: true)
         beforeTitle.widthAnchor.constraint(equalTo: afterTitle.widthAnchor).isActive = true
         top.spacing = 8
-        snapButton = button("Snap", #selector(snapButtonPressed)); snapButton.toolTip = "Crosshair snapshot; capture modes are in Toolbox and the Capture menu"
+        snapButton = button("Snap", #selector(snapButtonPressed))
+        (snapButton as? OriginalActionButton)?.alternateTarget = self
+        (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
+        snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
         frameButton = button("Frame", #selector(frameSnap))
         cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
         var sidebarViews: [NSView] = [label("Tools")]
@@ -1604,7 +1626,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         (window.contentView as? FrameChromeView)?.showsCanvasHole = true
         canvas.enclosingScrollView?.drawsBackground = false
         canvas.framePreview = true
-        snapButton.title = "Snap Frame"; frameButton.isHidden = true; cancelFrameButton.isHidden = false
+        snapButton.cancelOperation(nil)
+        snapButton.title = "Snap Frame"
+        (snapButton as? OriginalActionButton)?.alternateAction = nil
+        snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
+        frameButton.isHidden = true; cancelFrameButton.isHidden = false
         status.stringValue = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
     }
     @objc func cancelFrame() {
@@ -1620,7 +1646,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.isOpaque = frameWindowWasOpaque
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
-        snapButton.title = "Snap"; frameButton.isHidden = false; cancelFrameButton.isHidden = true
+        snapButton.title = "Snap"
+        (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
+        snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
+        frameButton.isHidden = false; cancelFrameButton.isHidden = true
         updateStatus()
     }
     func performFrameSnap(delay: Double = 0) {

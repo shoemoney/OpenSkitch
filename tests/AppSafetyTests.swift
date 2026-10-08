@@ -2035,6 +2035,170 @@ enum AppSafetyTests {
         app.cancelSnapshot()
         try expect(!app.validateMenuItem(item) && app.canvas.document == before, "Cancel Snapshot drains the request without replacing the drawing")
     }
+    static func snapSecondaryCaptureRouting() throws {
+        let fixture = try Fixture(), app = fixture.app
+        guard let snap = app.snapButton as? OriginalActionButton else {
+            throw Failure(description: "Actual Snap must use OriginalActionButton")
+        }
+        defer {
+            // Even an assertion failure must not leave a held fake operation.
+            app.cancelSnapshot()
+            AppSafetyCaptureCoordinator.holdCapture = false
+            AppSafetyEvents.current = nil
+        }
+        try expect(snap.target === app && snap.action == #selector(AppDelegate.snapButtonPressed) &&
+                   snap.alternateTarget === app && snap.alternateAction == #selector(AppDelegate.fullscreenSnap) && snap.menu == nil,
+                   "Actual Snap keeps primary crosshair and the recovered Fullscreen secondary target/action, without a menu")
+        let destination = try fixture.saveA(), savedBytes = try Data(contentsOf: destination)
+        app.canvas.setBackgroundColor(.yellow)
+        let pending = try editor(app, text: "Pending capture annotation")
+        let model = app.canvas.document, serialized = try app.canvas.snapshotDocumentData()
+        let generation = app.documentGeneration, caret = pending.selectedRange()
+        let typingUndo = pending.undoManager!, canvasUndo = app.canvas.editingUndoManager
+        let canvasUndoName = canvasUndo.undoActionName, typingUndoName = typingUndo.undoActionName
+        let dirty = app.dirty, edited = app.window.isDocumentEdited
+        try expect(canvasUndo.canUndo && typingUndo.canUndo && app.canvas.hasPendingTextChanges,
+                   "Integration fixture contains drawing Undo and independently pending typing Undo")
+
+        func preserved(_ label: String) throws {
+            try expect(try app.canvas.document == model && app.canvas.snapshotDocumentData() == serialized &&
+                       app.documentGeneration == generation && app.currentURL == destination && Data(contentsOf: destination) == savedBytes,
+                       "\(label) preserves drawing, pending serialization, identity and saved bytes")
+            try expect(pending.superview === app.canvas && app.window.firstResponder === pending &&
+                       pending.string == "Pending capture annotation" && pending.selectedRange() == caret &&
+                       pending.undoManager === typingUndo && typingUndo.canUndo && typingUndo.undoActionName == typingUndoName,
+                       "\(label) retains the actual pending editor, caret, focus and typing history")
+            try expect(canvasUndo.canUndo && canvasUndo.undoActionName == canvasUndoName &&
+                       app.dirty == dirty && app.window.isDocumentEdited == edited,
+                       "\(label) does not clear drawing Undo or change dirty flags")
+        }
+        func event(_ type: NSEvent.EventType, control: Bool = false) throws -> NSEvent {
+            let location = snap.convert(NSPoint(x: snap.bounds.midX, y: snap.bounds.midY), to: nil)
+            guard let event = NSEvent.mouseEvent(with: type, location: location,
+                modifierFlags: control ? .control : [], timestamp: 0,
+                windowNumber: app.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1) else {
+                throw Failure(description: "Internal Snap secondary event allocation")
+            }
+            return event
+        }
+        AppSafetyCaptureCoordinator.holdCapture = true
+        for control in [false, true] {
+            let count = AppSafetyCaptureCoordinator.screenRequests.count
+            let down = try event(control ? .leftMouseDown : .rightMouseDown, control: control)
+            AppSafetyEvents.current = down
+            if control { snap.mouseDown(with: down) } else { snap.rightMouseDown(with: down) }
+            try expect(AppSafetyCaptureCoordinator.screenRequests.count == count && snap.cell?.isHighlighted == true,
+                       "Secondary press highlights the actual Snap without capturing before release")
+            // Release Control before mouse-up too: the owned secondary press
+            // must still consume the gesture instead of falling into primary.
+            let up = try event(control ? .leftMouseUp : .rightMouseUp)
+            AppSafetyEvents.current = up
+            if control { snap.mouseUp(with: up) } else { snap.rightMouseUp(with: up) }
+            try expect(AppSafetyCaptureCoordinator.screenRequests.count == count + 1 &&
+                       AppSafetyCaptureCoordinator.screenRequests.last?.mode == "fullscreen" &&
+                       AppSafetyCaptureCoordinator.captureCallbacks.count == 1 && app.capture.isCapturing,
+                       "Actual \(control ? "Control-click" : "right-click") Snap dispatches exactly one held Fullscreen capture")
+            if control { snap.mouseUp(with: up) } else { snap.rightMouseUp(with: up) }
+            try expect(AppSafetyCaptureCoordinator.screenRequests.count == count + 1 && snap.cell?.isHighlighted == false,
+                       "Stray secondary release cannot repeat Fullscreen and the actual Snap clears its highlight")
+            app.cancelSnapshot()
+            try expect(AppSafetyCaptureCoordinator.captureCallbacks.isEmpty && !app.capture.isCapturing,
+                       "Actual Cancel Snapshot drains the held fake capture")
+            try preserved("Cancelled secondary Snap")
+        }
+        AppSafetyEvents.current = nil
+        var count = AppSafetyCaptureCoordinator.screenRequests.count
+        snap.performClick(nil)
+        try expect(AppSafetyCaptureCoordinator.screenRequests.count == count + 1 &&
+                   AppSafetyCaptureCoordinator.screenRequests.last?.mode == "crosshair" &&
+                   AppSafetyCaptureCoordinator.captureCallbacks.count == 1,
+                   "Actual native primary Snap remains exactly one crosshair request")
+        app.cancelSnapshot(); try preserved("Cancelled primary Snap")
+        app.undo()
+        try expect(pending.string.isEmpty && pending.superview === app.canvas && app.canvas.document == model && typingUndo.canRedo,
+                   "Capture cancellation retains usable pending typing Undo without consuming the drawing edit")
+        app.redo(); try preserved("Typing Redo after capture cancellation")
+
+        func actionButtons(_ view: NSView) -> [OriginalActionButton] {
+            let own = (view as? OriginalActionButton).map { [$0] } ?? []
+            return own + view.subviews.flatMap { actionButtons($0) }
+        }
+        let others = actionButtons(app.window.contentView!).filter { $0 !== snap }
+        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.frameButton } &&
+                   others.contains { $0.action == #selector(AppDelegate.cameraSnap) },
+                   "No-alternate checks cover actual tool, Frame and Camera controls rather than fabricated buttons")
+        let otherRequests = AppSafetyCaptureCoordinator.screenRequests.count
+        let selectedTool = app.canvas.tool, selectedElements = app.canvas.selection
+        for button in others {
+            try expect(button.alternateAction == nil && button.alternateTarget == nil && button.menu == nil,
+                       "Other actual action/tool control \(button.identifier?.rawValue ?? button.title) has no invented alternate action or menu")
+            let state = button.state
+            button.rightMouseDown(with: try event(.rightMouseDown))
+            button.rightMouseUp(with: try event(.rightMouseUp))
+            button.mouseDown(with: try event(.leftMouseDown, control: true))
+            button.mouseUp(with: try event(.leftMouseUp))
+            try expect(button.state == state && button.cell?.isHighlighted == false,
+                       "Secondary gestures on other actual controls cannot toggle a tool or leave a pressed state")
+        }
+        try expect(AppSafetyCaptureCoordinator.screenRequests.count == otherRequests && app.canvas.tool == selectedTool &&
+                   app.canvas.selection == selectedElements && !app.frameMode,
+                   "Other actual controls cannot route an invented capture or tool/frame action through secondary gestures")
+        try preserved("Other action/tool secondary gestures")
+
+        count = AppSafetyCaptureCoordinator.screenRequests.count
+        let staleDown = try event(.rightMouseDown), staleUp = try event(.rightMouseUp)
+        snap.rightMouseDown(with: staleDown)
+        try expect(snap.cell?.isHighlighted == true, "Stale-press fixture arms the actual Snap alternate")
+        app.hotkeys.frame?()
+        try expect(app.frameMode && snap.alternateAction == nil && snap.cell?.isHighlighted == false,
+                   "Frame shortcut cancels an armed actual Snap press before removing its alternate action")
+        app.cancelFrameButton.performClick(nil)
+        snap.rightMouseUp(with: staleUp)
+        try expect(!app.frameMode && AppSafetyCaptureCoordinator.screenRequests.count == count &&
+                   AppSafetyCaptureCoordinator.captureCallbacks.isEmpty,
+                   "Right-down, Frame shortcut, Cancel Frame, right-up cannot resurrect Fullscreen")
+        let afterStale = app.canvas.document
+        snap.rightMouseDown(with: staleDown); snap.rightMouseUp(with: staleUp)
+        try expect(AppSafetyCaptureCoordinator.screenRequests.count == count + 1 &&
+                   AppSafetyCaptureCoordinator.screenRequests.last?.mode == "fullscreen" &&
+                   AppSafetyCaptureCoordinator.captureCallbacks.count == 1,
+                   "A fresh right-click after Frame cancellation still dispatches exactly one Fullscreen")
+        app.cancelSnapshot()
+        try expect(app.canvas.document == afterStale && AppSafetyCaptureCoordinator.captureCallbacks.isEmpty,
+                   "Fresh secondary cancellation preserves the drawing committed by Frame entry")
+
+        app.frameButton.performClick(nil)
+        try expect(app.frameMode && snap.alternateAction == nil && snap.action == #selector(AppDelegate.snapButtonPressed),
+                   "Actual Frame control clears Snap's Fullscreen alternate while keeping its primary frame action")
+        let framedModel = app.canvas.document, framedUndoName = canvasUndo.undoActionName
+        try expect(pending.superview == nil && framedModel.elements.contains { $0.text == "Pending capture annotation" } && canvasUndo.canUndo,
+                   "Frame entry deliberately commits pending typing, preserving it as drawing history")
+        count = AppSafetyCaptureCoordinator.screenRequests.count
+        for control in [false, true] {
+            let down = try event(control ? .leftMouseDown : .rightMouseDown, control: control)
+            let up = try event(control ? .leftMouseUp : .rightMouseUp)
+            if control { snap.mouseDown(with: down); snap.mouseUp(with: up) }
+            else { snap.rightMouseDown(with: down); snap.rightMouseUp(with: up) }
+        }
+        try expect(AppSafetyCaptureCoordinator.screenRequests.count == count && app.frameMode &&
+                   app.canvas.document == framedModel && canvasUndo.undoActionName == framedUndoName && canvasUndo.canUndo,
+                   "Frame-mode secondary gestures cannot capture, leave Frame, mutate committed text or clear Undo")
+        app.cancelFrameButton.performClick(nil)
+        try expect(!app.frameMode && snap.alternateAction == #selector(AppDelegate.fullscreenSnap) && snap.alternateTarget === app &&
+                   app.canvas.document == framedModel && canvasUndo.canUndo && canvasUndo.undoActionName == framedUndoName,
+                   "Actual Frame Cancel restores the Fullscreen alternate and retains drawing/committed typing Undo")
+        AppSafetyEvents.current = nil
+        snap.performClick(nil)
+        try expect(AppSafetyCaptureCoordinator.screenRequests.count == count + 1 &&
+                   AppSafetyCaptureCoordinator.screenRequests.last?.mode == "crosshair",
+                   "Primary Snap returns to crosshair after actual Frame Cancel")
+        app.cancelSnapshot()
+        app.undo()
+        try expect(!app.canvas.document.elements.contains { $0.text == "Pending capture annotation" } && canvasUndo.canRedo,
+                   "Cancelled Snap after Frame retains usable committed-typing drawing Undo")
+        app.redo()
+        try expect(app.canvas.document == framedModel, "Committed-typing drawing Redo survives both capture and Frame cancellation")
+    }
     static func originalSoundRouting() throws {
         let key = "disableSounds", defaults = UserDefaults.standard, previous = UserDefaults.standard.object(forKey: "disableSounds")
         defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
@@ -2779,6 +2943,7 @@ enum AppSafetyTests {
             ("Original hint shell routes modifiers, suppression, lifecycle and screen-fit reserves", hintShellRouting),
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
             ("Original screen timing, sticky Frame Shift, crosshair routing and cancellation", captureTimingRouting),
+            ("Actual Snap secondary Fullscreen, primary crosshair, Frame cancellation and pending typing Undo", snapSecondaryCaptureRouting),
             ("Original sound toggle controls Wipe and accepted Snap feedback", originalSoundRouting),
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
@@ -3312,11 +3477,27 @@ enum AppSafetyTests {
                 }
                 collect(content)
                 guard let toolbox = controls.compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Toolbox" }), let choices = toolbox.menu else { throw Failure(description: "Recovered Toolbox") }
+                let more = choices.items.first { $0.title == "More Commands" }!.submenu!
                 for title in ["File", "Image", "Drawing", "Text", "Capture"] {
-                    try expect(choices.items.contains { $0.title == title && $0.submenu != nil }, "Toolbox retains the \(title) entry point")
+                    try expect(more.items.contains { $0.title == title && $0.submenu != nil }, "Additional commands retain the \(title) entry point")
+                }
+                let expected: [Selector] = [#selector(AppDelegate.about), #selector(AppDelegate.showPreferences), #selector(AppDelegate.quit),
+                    #selector(AppDelegate.newFile), #selector(AppDelegate.openFile), #selector(AppDelegate.showPhotos), #selector(AppDelegate.saveHistory),
+                    #selector(AppDelegate.exportFile), #selector(AppDelegate.saveAs), #selector(AppDelegate.printImage), #selector(AppDelegate.cut), #selector(AppDelegate.copyArtwork),
+                    #selector(AppDelegate.paste), #selector(AppDelegate.deleteSelection), #selector(AppDelegate.selectAll), #selector(AppDelegate.duplicate),
+                    #selector(AppDelegate.chooseFont), #selector(AppDelegate.screenSnap), #selector(AppDelegate.fullscreenSnap), #selector(AppDelegate.frameSnap),
+                    #selector(AppDelegate.cameraSnap), #selector(AppDelegate.resnap), #selector(AppDelegate.normalSize), #selector(AppDelegate.flipH),
+                    #selector(AppDelegate.rotateCW), #selector(AppDelegate.transparent), #selector(AppDelegate.trimSnap), #selector(AppDelegate.wipeSnap)]
+                let actual = choices.items.compactMap(\.action).filter { expected.contains($0) }
+                try expect(actual == expected, "Original common commands are direct Toolbox items in original group order")
+                // AppKit assigns its own popup-cell actions to the title and separators.
+                // Only the recovered commands belong to our application target.
+                for item in choices.items {
+                    guard let action = item.action, expected.contains(action) else { continue }
+                    try expect(item.target === app && (choices.font?.pointSize ?? 0) >= 20, "Direct Toolbox command \(item.title) retains its real native target and readable menu type")
                 }
                 let source = NSApp.mainMenu!.items.first { $0.submenu?.title == "Image" }!.submenu!
-                let copy = choices.items.first { $0.title == "Image" }!.submenu!
+                let copy = more.items.first { $0.title == "Image" }!.submenu!
                 try expect(source !== copy && source.items.map(\.action) == copy.items.map(\.action), "Bezel menu copies preserve real image actions without stealing the menu-bar submenu")
                 for size in [app.window.frame.size, app.window.minSize] {
                     app.window.setFrame(NSRect(origin: app.window.frame.origin, size: size), display: false)

@@ -35,6 +35,8 @@ def suite(name, sources, test, define=None, arguments=()):
     return name
 
 suites = [
+    ("original-action-button-tests", ["OriginalActionButton.swift"], "OriginalActionButtonTests.swift", "ORIGINAL_ACTION_BUTTON_TESTS", ()),
+    ("tool-button-tests", ["OriginalActionButton.swift", "ToolButton.swift"], "ToolButtonTests.swift", "TOOL_BUTTON_TESTS", ()),
     ("original-capture-timing-tests", ["OriginalCaptureTiming.swift"], "OriginalCaptureTimingTests.swift", "ORIGINAL_CAPTURE_TIMING_TESTS", ()),
     ("original-capture-picker-tests", ["OriginalCapturePicker.swift"], "OriginalCapturePickerTests.swift", "ORIGINAL_CAPTURE_PICKER_TESTS", ()),
     ("original-capture-countdown-tests", ["OriginalCaptureTiming.swift", "OriginalCaptureCountdown.swift"], "OriginalCaptureCountdownTests.swift", "ORIGINAL_CAPTURE_COUNTDOWN_TESTS", ()),
