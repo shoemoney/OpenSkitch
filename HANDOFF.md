@@ -1,15 +1,22 @@
 # OpenSkitch agent handoff
 
-Resume document, October 8, 2026, America/Chicago. Describes `main` at `4bc9ece` plus this documentation pass. Repository: `/Users/shoemoney/Projects/OpenSkitch` (with **i**; `~/Projects/OpenSketch` with an e was only an old handoff location). Apple Silicon only. Origin is GitHub `shoemoney/OpenSkitch` (issue tracker; also pushes to the Forgejo mirror `shoemoney/skitch-redux`). Read `AGENTS.md` and `docs/agents/` first.
+Resume document, October 8, 2026, America/Chicago. Describes `main` at `db84445` plus this documentation pass. Repository: `/Users/shoemoney/Projects/OpenSkitch` (with **i**; `~/Projects/OpenSketch` with an e was only an old handoff location). Apple Silicon only. Origin is GitHub `shoemoney/OpenSkitch` (issue tracker; also pushes to the Forgejo mirror `shoemoney/skitch-redux`). Read `AGENTS.md` and `docs/agents/` first.
 
 This is a Swift/AppKit reconstruction of Skitch 1.0.12, not a recompiled original (the archived original is 32-bit and has not been run on this Mac). **All 340 original parity flags remain unverified.** Passing tests prove the reconstruction, not original equivalence. Nothing here claims completion.
 
-## State at 4bc9ece
+## State at db84445
 
-Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in code with tests. Measured on `4bc9ece`: AppSafety **94/94 Classic** and **16/16 Modern**, full `python3 tools/test.py` passes, startup smoke passes in both appearances with 3/3 relaunches. These counts supersede the 43,029 and 87 figures in older notes.
+Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in code with tests. Measured on the merged tree at `db84445`: AppSafety **96/96 Classic** (re-run in a docs worktree) and **16/16 Modern**, full `python3 tools/test.py` passes ("All suites passed on arm64 with no source drift"), startup smoke passes in both appearances with 3/3 relaunches. These counts supersede the 43,029 and 87 figures in older notes.
 
 | Landed since `2d1ca2c` | Where to look |
 | --- | --- |
+| Cam runs the original 3 s countdown (Shift skips); `CaptureCoordinator.submit` starts every capture via run-loop delivery. Not verified live: no Camera permission | `snapSnap` decompiled.c 22327-22442, `Sources/Capture.swift` |
+| Magnifier fed by a screen-image provider (native provider returns nil without Screen Recording, so the lens stays grey); tests use a synthetic image | `Sources/OriginalCaptureMagnifier.swift` |
+| Image > Add Shadow (canvas +27x27, picture at (14,6), one NSShadow 8 down/blur 27/alpha 0.8, one Undo) from `MacImage::addShadow`/`addShadowTA` | `canvas.shadow` row |
+| New and Open register one Undo restoring the previous document (original `loadFromFileTA`) | `analysis/reconstruction-progress.json` |
+| A new Snap during a running capture cancels it and starts the new one | `snapSnap` cancelTimedSnap-first |
+| Original corner/edge crop-resize rules; Option = centred resize; no crop handles in Actual mode | `docs/adr/0001-crop-resize-original-rules.md`, `tests/WindowSizingTests.swift` |
+| 19 progress rows promoted to `implemented_partial`; README planned count is 2 (`capture.camera-flip`, `gestures.control-share`) | `analysis/reconstruction-progress.json`, `tools/check-dispositions.py` |
 | On-screen shadows fall down-right like export and original (issue #1); `visualProof` compares with shadows on, 0 of 237,760 px differ | `NSShadow.cast(in:inFlippedView:)`, `tests/CanvasTests.swift` |
 | App-safety isolation (issue #2): per-run binary name, default domain; Classic and Modern run at once | `tools/test-app-safety.sh`, `tools/test-app-safety-concurrent.sh`, `python3 tools/test.py --concurrent-app-safety` |
 | Fonts panel sets `rowHeight` only on item-based `NSBrowser` delegates (issue #3) | `Sources/TextStyleForm.swift` |
@@ -20,31 +27,30 @@ Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in cod
 | Welcome document: first launch with an empty app-support folder opens bundled `firstlaunch.skitch` as unsaved "Welcome", once (`FirstLaunchDone` marker) | `Sources/App.swift` |
 | Line tool Option polygon: holding Option keeps it open, releasing Option ends it | `Sources/Canvas.swift` |
 | Capture flash: white panel after successful captures, 0.1 s (region/window/Frame/fullscreen) and 0.2 s (camera) | `Sources/OriginalCaptureFlash.swift` |
-| Crosshair magnifier geometry (10x zoom, 100x100 lens) behind `showCrosshairMagnifier` | `Sources/OriginalCaptureMagnifier.swift` |
+| Crosshair magnifier geometry (10x zoom, 100x100 lens) behind `showCrosshairMagnifier` (now fed by the picker, see above) | `Sources/OriginalCaptureMagnifier.swift` |
 | Modern canvas border corner/edge mouse gestures proven equal to Classic | `tests/AppSafetyModernCases.swift` |
 | Every `unimplemented` row has a disposition; README "Not reconstructed" table; `tools/check-dispositions.py` enforces it (run by `tools/test.py`) | `analysis/reconstruction-progress.json` |
 
 ## Do not over-claim
 
-- **The magnifier is not live.** The picker does not feed it a screenshot, so it draws a grey lens. Only the geometry is done.
+- **The magnifier feed is wired but not proven live.** The picker passes a screen-image provider; the native one returns nil without Screen Recording permission, so the lens stays grey there. Tests use an injected synthetic image. Do not claim live magnifier pixels.
 - **Not notarized.** Releases are ad-hoc signed; Gatekeeper blocks a downloaded copy until the user opens it via Privacy & Security or removes the quarantine flag (see README Releases).
-- **No capture behavior has been verified live.** Screen Recording is not granted on this host to an agent; flash, countdown, region, window, fullscreen, Frame and camera are proven by controlled tests only. Do not change Security settings; ask the user to grant permission.
+- **No capture behavior has been verified live.** Screen Recording is not granted on this host to an agent; flash, countdown (including the new Cam countdown), region, window, fullscreen, Frame and camera are proven by controlled tests only; no Camera permission either. Do not change Security settings; ask the user to grant permission.
 - **`analysis/*.json` checkpoint metadata deliberately still describes an older binary** (`interface-896edbdebc`, 42,977 checks/33 suites). Leave those numbers alone until the evidence reconciliation pass.
+- The crop-resize ADR leaves the original snap-mode integer meaning unresolved (snap mode 1 + Shift is not honoured), and edge-crop rounding is not in the decompile.
 - Real tablet hardware, printer output, the Fonts panel's live rendering and original-runtime visual equivalence remain unverified.
 
 ## Remaining plan
 
 Source of truth: `/Users/shoemoney/Projects/OpenSkitch/build/completion-plan.md` (git-ignored; Bar B is the 0.3.0 release bar). Still open:
 
-1. **Camera timing integration.** `OriginalCaptureTiming.cameraDelay` exists but nothing in `Capture.swift`/`App.swift` uses it; the `AVCapturePhotoOutput` path is unconnected to it. Decide camera mirroring (preview only) first.
-2. **Cursor policy.** Original `showMouse:` route versus the modern helper's native cursor inclusion.
-3. **Mixed-display and cancellation.** Region spanning scale-1 and scale-2 screens, Escape during countdown, flash and outside the picker. Make the magnifier live (feed the picker a screenshot) as part of the picker work.
-4. **Corner/edge original semantics.** Recovered modifier, anchor, rounding and max-window rules from the decompile; gesture parity between appearances is already proven.
-5. **Document load-undo.** Opening a file or history item and New should register one undo transaction (today New clears undo).
-6. **Add Shadow to Image / colour sample precedence** (`canvas.shadow`, `color.sample`).
-7. **Visual review by eye** of app-owned screenshots (default size, minimum size, Frame, Actual) in both appearances.
-8. **Evidence reconciliation.** Re-anchor `analysis/*.json` (snapshot, current checkpoint, hashes, test counts) to the release binary; keep parity flags unverified unless evidence supports otherwise.
-9. **Release execution.** `sh tools/release.sh 0.3.0`, startup smoke on the release bundle, live capture proof once permissions are granted, tag, push, GitHub release with the zip SHA-256.
+1. **Cursor policy.** Original `showMouse:` route versus the modern helper's native cursor inclusion. Camera mirroring (preview only) is still undecided; `capture.camera-flip` is a planned row.
+2. **Mixed-display and cancellation.** Region spanning scale-1 and scale-2 screens, Escape during countdown, flash and outside the picker.
+3. **Crop-resize leftovers.** The ADR's open points: original snap-mode integers and Shift behaviour, edge-crop rounding. Colour sample precedence (`color.sample`) is also still open; `gestures.control-share` is the other planned row.
+4. **WP-06: visual review by eye** of app-owned screenshots (default size, minimum size, Frame, Actual) in both appearances, Modern especially.
+5. **WP-07: evidence reconciliation.** Re-anchor `analysis/*.json` (snapshot, `current_tests` metadata, hashes, test counts) to the release binary; keep parity flags unverified unless evidence supports otherwise.
+6. **Live capture proof** needing Screen Recording and Camera permission (capture, countdown, magnifier pixels, camera path). Ask the user to grant them.
+7. **WP-21b: release execution** (needs the user). `sh tools/release.sh 0.3.0`, startup smoke on the release bundle, tag, push, GitHub release with the zip SHA-256. Notarization is absent; builds are ad-hoc signed.
 
 ## Verification commands
 
