@@ -2093,7 +2093,9 @@
         "Persist source URL and provide visit-original action."
       ],
       "next_action": "Implement and test: Persist source URL and provide visit-original action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Visit-original needs a stored source URL from retired Skitch.com posts; deferred past 0.3.0."
     },
     {
       "id": "document.external-path",
@@ -2627,7 +2629,9 @@
         "Recover migration of original user history, previews, preferences and documents."
       ],
       "next_action": "Implement and test: Recover migration of original user history, previews, preferences and documents.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "needs_user_artifact",
+      "disposition_reason": "Importing legacy Skitch data needs a real legacy index or document from the user; none is available to reconstruct against."
     },
     {
       "id": "document.load-undo",
@@ -2659,7 +2663,9 @@
         "Opening another native/history document is undoable via loadFromFileTA transactions."
       ],
       "next_action": "Implement and test: Opening another native/history document is undoable via loadFromFileTA transactions.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-16 (document replacement Undo) in this cycle."
     },
     {
       "id": "document.welcome",
@@ -2696,7 +2702,9 @@
         "Display firstlaunch.skitch through welcome/introduction flow."
       ],
       "next_action": "Implement and test: Display firstlaunch.skitch through welcome/introduction flow.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-16 (welcome document) in this cycle."
     },
     {
       "id": "capture.region",
@@ -4890,7 +4898,9 @@
         "Supply clean white margins behind rounded window/shadow captures."
       ],
       "next_action": "Implement and test: Supply clean white margins behind rounded window/shadow captures.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.transparent",
@@ -4956,7 +4966,9 @@
         "Show clean wallpaper around window snap even when files or other windows are underneath."
       ],
       "next_action": "Implement and test: Show clean wallpaper around window snap even when files or other windows are underneath.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.shadow",
@@ -5023,7 +5035,9 @@
         "Magnify screen pixels while choosing crosshair capture area."
       ],
       "next_action": "Implement and test: Magnify screen pixels while choosing crosshair capture area.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-08 (crosshair magnifier) in this cycle."
     },
     {
       "id": "capture.cursor",
@@ -5057,7 +5071,9 @@
         "Recover user trigger for showMouse paths and cursor-hotspot placement."
       ],
       "next_action": "Implement and test: Recover user trigger for showMouse paths and cursor-hotspot placement.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-11 (cursor inclusion policy) in this cycle."
     },
     {
       "id": "capture.flash",
@@ -5089,7 +5105,9 @@
         "Flash the captured screen region with original duration and preference behavior."
       ],
       "next_action": "Implement and test: Flash the captured screen region with original duration and preference behavior.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-10 (capture flash feedback) in this cycle."
     },
     {
       "id": "capture.displays",
@@ -5409,7 +5427,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: Recover flipPreview visibility and whether mirror affects preview or saved image.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-13 (camera timing and preview) in this cycle."
     },
     {
       "id": "capture.camera-unavailable",
@@ -5496,7 +5516,9 @@
         "Read Safari URL and window width and render webpage snapshot."
       ],
       "next_action": "Implement and test: Read Safari URL and window width and render webpage snapshot.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.firefox",
@@ -5530,7 +5552,9 @@
         "Read Firefox URL and capture page through original browser integration."
       ],
       "next_action": "Implement and test: Read Firefox URL and capture page through original browser integration.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.url",
@@ -5729,7 +5753,9 @@
         "Recover full-content-height WebView capture, which contradicts older beta help and is Plus-gated."
       ],
       "next_action": "Implement and test: Recover full-content-height WebView capture, which contradicts older beta help and is Plus-gated.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.web-progress",
@@ -5810,7 +5836,9 @@
         "Recover supported Photoshop discovery, AppleScript image extraction and external document linkage."
       ],
       "next_action": "Implement and test: Recover supported Photoshop discovery, AppleScript image extraction and external document linkage.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.app-availability",
@@ -5847,7 +5875,9 @@
         "Enable/hide application snap menu items using supported app and running/document state."
       ],
       "next_action": "Implement and test: Enable/hide application snap menu items using supported app and running/document state.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "capture.capture-upload",
@@ -5880,7 +5910,9 @@
         "Snap region then immediately webpost to selected destination; cancellation prevents posting."
       ],
       "next_action": "Implement and test: Snap region then immediately webpost to selected destination; cancellation prevents posting.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Auto-upload after capture targeted retired upload services; not reconstructed."
     },
     {
       "id": "drawing.vector-model",
@@ -7527,7 +7559,9 @@
         "Move canvas contents and snap together."
       ],
       "next_action": "Implement and test: Move canvas contents and snap together.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "drawing.tablet",
@@ -8848,7 +8882,9 @@
         "Cursor plus Option copies selected graphics while dragging."
       ],
       "next_action": "Implement and test: Cursor plus Option copies selected graphics while dragging.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
     },
     {
       "id": "gestures.shift-select",
@@ -9428,7 +9464,9 @@
         "Create continuous connected line/polygon segments with Option."
       ],
       "next_action": "Implement and test: Create continuous connected line/polygon segments with Option.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
     },
     {
       "id": "gestures.option-arrow",
@@ -9718,7 +9756,9 @@
         "Shift-click swatch changes backdrop rather than current annotation color."
       ],
       "next_action": "Implement and test: Shift-click swatch changes backdrop rather than current annotation color.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
     },
     {
       "id": "gestures.option-crop",
@@ -9975,7 +10015,9 @@
         "Recover target control for Shift-click return to original size."
       ],
       "next_action": "Implement and test: Recover target control for Shift-click return to original size.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
     },
     {
       "id": "gestures.control-share",
@@ -10006,7 +10048,9 @@
         "Control-click webpost opens quick destination selection."
       ],
       "next_action": "Implement and test: Control-click webpost opens quick destination selection.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
     },
     {
       "id": "gestures.nudge",
@@ -12274,7 +12318,9 @@
         "Recover original undo memory limits/defaults and transaction eviction."
       ],
       "next_action": "Implement and test: Recover original undo memory limits/defaults and transaction eviction.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "text.type",
@@ -16997,7 +17043,9 @@
         "Eyedrop vector path color when hit, otherwise renderer pixel color."
       ],
       "next_action": "Implement and test: Eyedrop vector path color when hit, otherwise renderer pixel color.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-18 (colour sample precedence) in this cycle."
     },
     {
       "id": "canvas.wysiwyg",
@@ -18293,7 +18341,9 @@
         "Add background drop shadow with expanded image bounds."
       ],
       "next_action": "Implement and test: Add background drop shadow with expanded image bounds.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-01 (shadow direction) and WP-18 (Add Shadow) in this cycle."
     },
     {
       "id": "canvas.crop-snap",
@@ -20370,7 +20420,9 @@
         "Original1.0.12 runtime parity remains unverified."
       ],
       "next_action": "Verify remaining scope: No matching original full-resolution interactive crop is implemented/proven; recover original Actual crop reachability and semantics.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-14a/WP-14b (corner and edge handles) in this cycle."
     },
     {
       "id": "import.drag",
@@ -20719,7 +20771,9 @@
         "Distinguish image download, native document and webpage URL workflows."
       ],
       "next_action": "Implement and test: Distinguish image download, native document and webpage URL workflows.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "import.types",
@@ -21207,7 +21261,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: Recover actual image orientation/metadata treatment without assuming all decoder capabilities are user features.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "export.jpeg",
@@ -22154,7 +22210,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: Format-ID 6 saves serialized document; no user-visible selector proven.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Doozla was a retired third-party service; the export target is not reconstructed."
     },
     {
       "id": "export.selector",
@@ -23488,7 +23546,9 @@
         "Set generated preview icon where original export requests it."
       ],
       "next_action": "Implement and test: Set generated preview icon where original export requests it.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "export.filenames",
@@ -26140,7 +26200,9 @@
         "Browse original iPhoto library source."
       ],
       "next_action": "Implement and test: Browse original iPhoto library source.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "photos.aperture",
@@ -26169,7 +26231,9 @@
         "Browse legacy Aperture library source."
       ],
       "next_action": "Implement and test: Browse legacy Aperture library source.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "photos.pictures",
@@ -26317,7 +26381,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: Recover original iMedia navigation/selection/drag source controls from embedded framework UI.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "sharing.accounts",
@@ -26437,7 +26503,9 @@
         "Rename account without losing ID/settings/credential binding."
       ],
       "next_action": "Implement and test: Rename account without losing ID/settings/credential binding.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.remove",
@@ -26482,7 +26550,9 @@
         "Recover account deletion/default selection/history association behavior."
       ],
       "next_action": "Implement and test: Recover account deletion/default selection/history association behavior.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.persist",
@@ -26755,7 +26825,9 @@
         "Offer original quit-during-upload confirmation."
       ],
       "next_action": "Implement and test: Offer original quit-during-upload confirmation.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.errors",
@@ -26867,7 +26939,9 @@
         "Honor original system proxy/configuration and changes for supported protocols."
       ],
       "next_action": "Implement and test: Honor original system proxy/configuration and changes for supported protocols.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.latest",
@@ -26905,7 +26979,9 @@
         "Open/copy latest successful upload and preserve original error/state semantics."
       ],
       "next_action": "Implement and test: Open/copy latest successful upload and preserve original error/state semantics.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.plain",
@@ -27010,7 +27086,9 @@
         "Copy original escaped HTML representation."
       ],
       "next_action": "Implement and test: Copy original escaped HTML representation.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.forum",
@@ -27042,7 +27120,9 @@
         "Copy original forum/BBCode representation."
       ],
       "next_action": "Implement and test: Copy original forum/BBCode representation.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.postback",
@@ -27080,7 +27160,9 @@
         "Return edited image to supplied destination, cancel mode or visit original destination."
       ],
       "next_action": "Implement and test: Return edited image to supplied destination, cancel mode or visit original destination.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Belongs to the retired destination/account upload flow; not reconstructed."
     },
     {
       "id": "sharing.schemes",
@@ -27114,7 +27196,9 @@
         "Parse open-URL Apple events including image/title/postback parameters."
       ],
       "next_action": "Implement and test: Parse open-URL Apple events including image/title/postback parameters.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "skitch:// and skitchsnap:// URL dispatch is deferred past 0.3.0."
     },
     {
       "id": "sharing.after",
@@ -27257,7 +27341,9 @@
         "Export JPEG and hand it to original Bluetooth transfer chooser/workflow."
       ],
       "next_action": "Implement and test: Export JPEG and hand it to original Bluetooth transfer chooser/workflow.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Bluetooth transfer hand-off is deferred past 0.3.0."
     },
     {
       "id": "providers.skitch",
@@ -27288,7 +27374,9 @@
         "Retain original anonymous/registered account destination and personalize flow."
       ],
       "next_action": "Implement and test: Retain original anonymous/registered account destination and personalize flow.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.authorization",
@@ -27320,7 +27408,9 @@
         "Recover startup update, cached authorization, failure/retry and suppression state."
       ],
       "next_action": "Implement and test: Recover startup update, cached authorization, failure/retry and suppression state.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.account-page",
@@ -27353,7 +27443,9 @@
         "Open account-specific page and handle missing account."
       ],
       "next_action": "Implement and test: Open account-specific page and handle missing account.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.details",
@@ -27383,7 +27475,9 @@
         "Retain local Share/Details/Organize/Title/Description fields; server-provided UI remains unknown."
       ],
       "next_action": "Implement and test: Retain local Share/Details/Organize/Title/Description fields; server-provided UI remains unknown.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.twitter",
@@ -27414,7 +27508,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: Original text promises Twitter functionality; native Twitter posting is not proven.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.ftp",
@@ -27762,7 +27858,9 @@
         "User-visible reachability and exact behavior require original call-site/runtime evidence."
       ],
       "next_action": "Implement and test: TFTP is in new-location archive but lacks a demonstrated Skitch handler; bundled curl support is insufficient evidence.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.mobileme",
@@ -27793,7 +27891,9 @@
         "Preserve provider/system account/directory UI as retired-service-dependent parity work."
       ],
       "next_action": "Implement and test: Preserve provider/system account/directory UI as retired-service-dependent parity work.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.mobileme-validation",
@@ -27827,7 +27927,9 @@
         "Retain validation/trial-days/subscription/upgrade original states."
       ],
       "next_action": "Implement and test: Retain validation/trial-days/subscription/upgrade original states.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.flickr-auth",
@@ -27863,7 +27965,9 @@
         "Authorize in browser then finish and retrieve username/token."
       ],
       "next_action": "Implement and test: Authorize in browser then finish and retrieve username/token.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.flickr-upload",
@@ -27894,7 +27998,9 @@
         "Upload with title/tags/result identifiers; only JPEG/PNG supported."
       ],
       "next_action": "Implement and test: Upload with title/tags/result identifiers; only JPEG/PNG supported.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.flickr-privacy",
@@ -27926,7 +28032,9 @@
         "Everybody, friends & family, friends, family or just me maps to original request parameters."
       ],
       "next_action": "Implement and test: Everybody, friends & family, friends, family or just me maps to original request parameters.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.flickr-delete",
@@ -27959,7 +28067,9 @@
         "Delete uploaded photo by ID and open user's Flickr page."
       ],
       "next_action": "Implement and test: Delete uploaded photo by ID and open user's Flickr page.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-login",
@@ -27993,7 +28103,9 @@
         "Show login/free account controls and current account label; logout clears selected account correctly."
       ],
       "next_action": "Implement and test: Show login/free account controls and current account label; logout clears selected account correctly.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-register",
@@ -28025,7 +28137,9 @@
         "Username/email/password form, terms and field annotations."
       ],
       "next_action": "Implement and test: Username/email/password form, terms and field annotations.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-reset",
@@ -28056,7 +28170,9 @@
         "Email-or-username reset form with validation/progress/result states."
       ],
       "next_action": "Implement and test: Email-or-username reset form with validation/progress/result states.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-notebook",
@@ -28090,7 +28206,9 @@
         "Choose notebook and retain ID/name/default selection."
       ],
       "next_action": "Implement and test: Choose notebook and retain ID/name/default selection.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-create",
@@ -28121,7 +28239,9 @@
         "Create new notebook with original name validation and cancellation."
       ],
       "next_action": "Implement and test: Create new notebook with original name validation and cancellation.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-save",
@@ -28153,7 +28273,9 @@
         "Set title and save image/note resources into chosen notebook."
       ],
       "next_action": "Implement and test: Set title and save image/note resources into chosen notebook.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-link",
@@ -28184,7 +28306,9 @@
         "Create shared note URL and copy via confirmation/details UI."
       ],
       "next_action": "Implement and test: Create shared note URL and copy via confirmation/details UI.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "providers.evernote-errors",
@@ -28214,7 +28338,9 @@
         "Auth/data/conflict/quota/permission/network responses map to original messages."
       ],
       "next_action": "Implement and test: Auth/data/conflict/quota/permission/network responses map to original messages.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
     },
     {
       "id": "preferences.panel",
@@ -28782,7 +28908,9 @@
         "Apply original window-all-Spaces preference and availability rules."
       ],
       "next_action": "Implement and test: Apply original window-all-Spaces preference and availability rules.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "preferences.overlays",
@@ -29347,7 +29475,9 @@
         "Retain Show Crash Reporter after a crash and original startup suppression state."
       ],
       "next_action": "Implement and test: Retain Show Crash Reporter after a crash and original startup suppression state.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Crash reporter endpoint is retired; not reconstructed."
     },
     {
       "id": "preferences.watermark",
@@ -29384,7 +29514,9 @@
         "Recover watermark geometry/style/render/export scope and preference storage."
       ],
       "next_action": "Implement and test: Recover watermark geometry/style/render/export scope and preference storage.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Not part of the 0.3.0 scope; deferred past 0.3.0."
     },
     {
       "id": "preferences.hotkey-fullscreen",
@@ -29602,7 +29734,9 @@
         "Current native GlobalHotkeyAction provides screen/window/fullscreen/frame/camera; original Upload and Show actions remain unmapped."
       ],
       "next_action": "Implement and test: Capture then upload via saved global shortcut.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-15 (global hotkeys) in this cycle."
     },
     {
       "id": "preferences.hotkey-frame",
@@ -29730,7 +29864,9 @@
         "Current native GlobalHotkeyAction provides screen/window/fullscreen/frame/camera; original Upload and Show actions remain unmapped."
       ],
       "next_action": "Implement and test: Global shortcut restores editor visibility.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-15 (global hotkeys) in this cycle."
     },
     {
       "id": "preferences.hotkey-validation",
@@ -31010,7 +31146,9 @@
         "Retain original Services menu; actual registered service functions require call-site evidence."
       ],
       "next_action": "Implement and test: Retain original Services menu; actual registered service functions require call-site evidence.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "System Services menu integration is deferred past 0.3.0."
     },
     {
       "id": "shell.help",
@@ -31047,7 +31185,9 @@
         "Expose help/book/topics through menus and toolbox."
       ],
       "next_action": "Implement and test: Expose help/book/topics through menus and toolbox.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Original help book content is not reconstructed; deferred past 0.3.0."
     },
     {
       "id": "shell.feedback",
@@ -31085,7 +31225,9 @@
         "Retain feedback webpage loading and Retry states despite retired endpoint."
       ],
       "next_action": "Implement and test: Retain feedback webpage loading and Retry states despite retired endpoint.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "The original feedback form posted to a retired Skitch service."
     },
     {
       "id": "shell.about",
@@ -31156,7 +31298,9 @@
         "Display original credit resource via recovered action."
       ],
       "next_action": "Implement and test: Display original credit resource via recovered action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Credits panel is cosmetic; deferred past 0.3.0."
     },
     {
       "id": "shell.update",
@@ -31191,7 +31335,9 @@
         "Inventory original Sparkle action/endpoint and UI states without declaring live service availability."
       ],
       "next_action": "Implement and test: Inventory original Sparkle action/endpoint and UI states without declaring live service availability.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Sparkle update feed and its endpoints are retired; no update check is reconstructed."
     },
     {
       "id": "shell.relocation",
@@ -31222,7 +31368,9 @@
         "Offer Move/Cancel and failure explanation when original launch-location criteria match."
       ],
       "next_action": "Implement and test: Offer Move/Cancel and failure explanation when original launch-location criteria match.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Move-to-Applications prompt is deferred past 0.3.0; the app runs from any location."
     },
     {
       "id": "shell.display",
@@ -31307,7 +31455,9 @@
         "Application capture, URL capture, image shadow, transparent background, crop snap and wipe snap retain original gate evidence."
       ],
       "next_action": "Implement and test: Application capture, URL capture, image shadow, transparent background, crop snap and wipe snap retain original gate evidence.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Plus-only selector gates belong to the retired Plus store; every feature is available."
     },
     {
       "id": "edition.license",
@@ -31338,7 +31488,9 @@
         "Recover license state, entitlement update, title/annotation visibility and offline/error behavior."
       ],
       "next_action": "Implement and test: Recover license state, entitlement update, title/annotation visibility and offline/error behavior.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Cached/online Plus licence state belongs to the retired Plus store."
     },
     {
       "id": "edition.upgrade",
@@ -31373,7 +31525,9 @@
         "Retain original upgrade prompts and store-disable flags as original affordances."
       ],
       "next_action": "Implement and test: Retain original upgrade prompts and store-disable flags as original affordances.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Plus prompts and the embedded store are retired; not reconstructed."
     },
     {
       "id": "presets.ad-rectangle-large",
@@ -32956,7 +33110,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.addshadow",
@@ -32993,7 +33149,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "planned",
+      "disposition_reason": "Covered by WP-18 (Add Shadow to Image) in this cycle."
     },
     {
       "id": "unresolved_action.afterreskitchactionchanged",
@@ -33029,7 +33187,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.aftershareactionchanged",
@@ -33065,7 +33225,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.arrangeinfront",
@@ -33101,7 +33263,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Standard Window menu selector; AppKit handling is not yet mapped, deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.cancelnewlocation",
@@ -33137,7 +33301,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "New-location sheet cancel is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.changebaseurl",
@@ -33237,7 +33403,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Clipboard-format preference selector is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.changepassword",
@@ -33517,7 +33685,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Clipboard-style preference selector is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.copy",
@@ -33648,7 +33818,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.createevernote",
@@ -33684,7 +33856,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.createnotebook",
@@ -33720,7 +33894,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.cropsnap",
@@ -34094,7 +34270,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Generic sheet dismiss selector is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.duplicate",
@@ -34279,7 +34457,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.forgotpassword",
@@ -34315,7 +34495,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.getaccount",
@@ -34351,7 +34533,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.hideotherapplications",
@@ -34387,7 +34571,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Standard Application menu selector; deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.hidepreferences",
@@ -34531,7 +34717,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.login",
@@ -34567,7 +34755,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.mail",
@@ -34604,7 +34794,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.makevisible",
@@ -34641,7 +34833,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Window-visibility selector is not yet mapped; deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.new",
@@ -34787,7 +34981,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.orderfrontcustomaboutpanel",
@@ -34863,7 +35059,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Placeholder selector with no recovered behavior; deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.print",
@@ -34946,7 +35144,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.register",
@@ -34982,7 +35182,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.relocatetoapplicationsfoldercancel",
@@ -35018,7 +35220,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Move-to-Applications prompt is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.relocatetoapplicationsfolderok",
@@ -35054,7 +35258,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Move-to-Applications prompt is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.reset",
@@ -35090,7 +35296,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.rotate90",
@@ -35408,7 +35616,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.selecthistorytab",
@@ -35483,7 +35693,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.selectsettingstab",
@@ -35851,7 +36063,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.snapapplication",
@@ -35901,7 +36115,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Snap Application dialog is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.snapurlcancel",
@@ -35937,7 +36153,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Snap URL sheet cancel is deferred with Import URL past 0.3.0."
     },
     {
       "id": "unresolved_action.subscribe",
@@ -35973,7 +36191,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.terminate",
@@ -36357,7 +36577,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Standard Application menu selector; deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.upgrade",
@@ -36393,7 +36615,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.usesystemaccount",
@@ -36429,7 +36653,9 @@
         "Exact action reachability and semantics are not runtime verified."
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false
+      "full_original_parity_claimed": false,
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
     }
   ],
   "next_actions": [

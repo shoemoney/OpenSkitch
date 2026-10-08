@@ -78,6 +78,30 @@ Screen selection now uses an owned native crosshair overlay: drag a region or cl
 General also restores the original Show tool tip overlays and Show keyboard tip overlay controls, including their inverse disableOverlay/disableModtips keys and fresh disabled state. Keyboard help uses the attached top bevel, exact original tool/action copy, immediate-over-hover priority and recovered20ms fades. The native panel stays above the host with40-point side margins, does not intercept input, and clears on focus loss, capture, hide, miniaturization and Quit. Text editing suppresses modifier hints; temporary Space panning has empty Hand help. Control temporarily selects Eraser except for Text, matching the recovered index4 exception; Command still overrides Control. Window fitting uses the recovered overlay-only170-by40 reserve, keyboard-only0-by80 reserve and combined170-by80 reserve. The user readability rule expands wrapped20-point messages instead of reproducing14-point middle truncation. Controlled tests cover these routes, delayed/stale work, geometry and fades. Native checks cover checkbox actions, reopening, restored values and an untouched saved editor. The desktop tool captures the parent window only, so actual child-strip presentation/fades remain unverified. The visible UI governed by disableOverlay is still unproven beyond fitting; cursor overlay images are ungated colorization masks. Universal250ms hover timing and selected-tool canvas help are explicit adaptations until exact per-control behavior is recovered.
 
 
+## Not reconstructed
+
+Every `unimplemented` row in `analysis/reconstruction-progress.json` carries a `disposition` and a `disposition_reason` (statuses are unchanged). `python3 tools/check-dispositions.py` fails if a row lacks one, and `tools/test.py` runs it.
+
+| Disposition | Rows | Meaning |
+| --- | --- | --- |
+| `not_reconstructed_retired_service` | 58 | Skitch.com, Evernote, Flickr, MobileMe, TFTP, Sparkle updates, feedback, crash reporting, Doozla and the Plus store are retired services, so their rows and menu selectors are intentionally not rebuilt. Covers `providers.*`, `sharing.*` (destination flow), `edition.*` and the matching `unresolved_action.*` selectors. |
+| `deferred_post_0_3_0` | 37 | Real original behavior, deliberately left for after 0.3.0. |
+| `needs_user_artifact` | 1 | Cannot be reconstructed without a real legacy file the user must supply (`document.migration`). |
+| `planned` | 17 | Covered by a work package in the current completion cycle. |
+
+Retired-service rows by area:
+
+| Area | Rows |
+| --- | --- |
+| `capture.*` | 1 |
+| `export.*` | 1 |
+| `sharing.*` | 8 |
+| `providers.*` | 20 |
+| `preferences.*` | 1 |
+| `shell.*` | 2 |
+| `edition.*` | 3 |
+| `unresolved_action.*` | 22 |
+
 ## Original analysis
 
 `analysis/` contains the Ghidra project, Objective-C metadata, disassembly, drawing/document recovery and a feature inventory traced to original resources. Ghidra exported 11,977 functions without function-export failures. The pseudocode does not compile as original source; the application is reconstructed Swift/AppKit code. The original i386 executable has not been run on this Mac.
