@@ -341,6 +341,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if CommandLine.arguments.contains("--smoke-test") {
             DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runSmokeTest() }
         }
+        if let dumpDirectory = AppDelegate.eyeDumpDirectory() {
+            DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runEyeDump(to: dumpDirectory) }
+        }
         if CommandLine.arguments.contains("--relaunch-smoke") {
             DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runRelaunchSmoke() }
         }
