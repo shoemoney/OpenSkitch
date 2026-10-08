@@ -127,9 +127,9 @@ private enum WindowSizingTests {
                  CGSize(width: 880, height: 660), "Opposing equal relative deltas still use width")
         try size(WindowSizingPolicy.cornerOutput(initial: source, delta: CGPoint(x: -80, y: 120), corner: .bottomRight),
                  CGSize(width: 720, height: 540), "Width contraction wins despite vertical expansion")
-        try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 16_384, height: 1),
-                 delta: CGPoint(x: -8192, y: 0), corner: .bottomRight), CGSize(width: 8192, height: 1),
-                 "Derived half pixel rounds up to minimum legal height")
+        try expect(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 16_384, height: 1),
+                   delta: CGPoint(x: -8192, y: 0), corner: .bottomRight) == nil,
+                   "ActionCropResize minimum width floor(w/h+0.5)=16384 for a 16384x1 canvas (decompiled.c:311400)")
         try expect(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 16_384, height: 1),
                    delta: CGPoint(x: -8193, y: 0), corner: .bottomRight) == nil,
                    "Derived height that rounds to zero is rejected")
@@ -289,6 +289,75 @@ private enum WindowSizingTests {
                            edge: edge, symmetric: symmetric, zoom: 1) == nil, "\(edge): output below one pixel rejected")
             }
         }
+        // ActionCropResize rules (ADR 0001).
+        let ids: [(CanvasCorner, Int, Int, Int)] = [(.topLeft, 0, -1, -1), (.topRight, 2, 1, -1),
+                                                    (.bottomRight, 4, 1, 1), (.bottomLeft, 6, -1, 1)]
+        for (corner, id, dirX, dirY) in ids {
+            try expect(WindowSizingPolicy.cropID(corner: corner) == id, "ActionCropResize id for \(corner)")
+            let dir = WindowSizingPolicy.cropDirection(id: id)
+            try expect(dir?.x == dirX && dir?.y == dirY, "directionVector row \(id)")
+            // dx grows the canvas by dir.x * delta.x (execute adds dScale to the frame width)
+            try size(WindowSizingPolicy.cornerOutput(initial: source, delta: CGPoint(x: 10, y: 10), corner: corner,
+                     proportional: false), CGSize(width: 800 + CGFloat(dirX) * 10, height: 600 + CGFloat(dirY) * 10),
+                     "ActionCropResize \(corner) signs follow directionVector")
+        }
+        let edgeIDs: [(CanvasEdge, Int, Int, Int)] = [(.top, 1, 0, -1), (.right, 3, 1, 0),
+                                                      (.bottom, 5, 0, 1), (.left, 7, -1, 0)]
+        for (edge, id, dirX, dirY) in edgeIDs {
+            try expect(WindowSizingPolicy.cropID(edge: edge) == id, "ActionCropResize id for \(edge)")
+            let dir = WindowSizingPolicy.cropDirection(id: id)
+            try expect(dir?.x == dirX && dir?.y == dirY, "directionVector row \(id)")
+        }
+        let centre = WindowSizingPolicy.cropDirection(id: 8)
+        try expect(centre?.x == 0 && centre?.y == 0, "directionVector row 8 is the centre")
+        let about = WindowSizingPolicy.cropDirection(id: -1)
+        try expect(about?.x == 1 && about?.y == 1, "id -1 reads row 4")
+        try expect(WindowSizingPolicy.cropDirection(id: 9) == nil && WindowSizingPolicy.cropDirection(id: -2) == nil,
+                   "directionVector has exactly rows 0...8")
+        // centered = modifierFlags >> 19 & 1 (SkitchCropView.mouseDragged)
+        try expect(WindowSizingPolicy.isCenteredCrop(modifierFlags: 1 << 19), "Option (bit 19) centres the crop")
+        for bit in [16, 17, 18, 20, 23] {
+            try expect(!WindowSizingPolicy.isCenteredCrop(modifierFlags: 1 << UInt(bit)), "bit \(bit) does not centre")
+        }
+        try expect(WindowSizingPolicy.isCenteredCrop(modifierFlags: 0x1A0000 | 0x80000), "Option among other flags")
+        // resizeProportionally
+        try expect(WindowSizingPolicy.resizesProportionally(snapMode: 1, shiftHeld: true, frameMode: false, hasContent: false),
+                   "snapMode 1 + Shift is proportional")
+        try expect(!WindowSizingPolicy.resizesProportionally(snapMode: 1, shiftHeld: false, frameMode: false, hasContent: true),
+                   "snapMode 1 without Shift is free")
+        for mode in [0, 3] {
+            try expect(WindowSizingPolicy.resizesProportionally(snapMode: mode, shiftHeld: false, frameMode: false, hasContent: true),
+                       "snapMode \(mode) with content is proportional")
+            try expect(!WindowSizingPolicy.resizesProportionally(snapMode: mode, shiftHeld: true, frameMode: false, hasContent: false),
+                       "snapMode \(mode) empty is free")
+        }
+        try expect(!WindowSizingPolicy.resizesProportionally(snapMode: 2, shiftHeld: true, frameMode: false, hasContent: true),
+                   "other snap modes are never proportional")
+        try expect(WindowSizingPolicy.resizesProportionally(snapMode: 2, shiftHeld: false, frameMode: true, hasContent: false),
+                   "frame mode forces proportional")
+        // floor(x + 0.5) rounding and width-driven height
+        try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 3, height: 2), delta: CGPoint(x: 1, y: 99),
+                 corner: .bottomRight), CGSize(width: 4, height: 3), "ActionCropResize floor(4*2/3+0.5)=3, dy ignored")
+        try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 4, height: 1), delta: CGPoint(x: 2, y: 0),
+                 corner: .bottomRight), CGSize(width: 6, height: 2), "ActionCropResize floor(1.5+0.5)=2 rounds half up")
+        try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 5, height: 2), delta: CGPoint(x: 1, y: 0),
+                 corner: .bottomRight), CGSize(width: 6, height: 2), "ActionCropResize floor(2.4+0.5)=2")
+        // minimum clamp: 1 on the shorter-ratio axis, floor(ratio + 0.5) on the other
+        try size(WindowSizingPolicy.minimumProportionalCanvas(initial: CGSize(width: 400, height: 100)),
+                 CGSize(width: 4, height: 1), "ActionCropResize wide minimum")
+        try size(WindowSizingPolicy.minimumProportionalCanvas(initial: CGSize(width: 100, height: 250)),
+                 CGSize(width: 1, height: 3), "ActionCropResize tall minimum floor(2.5+0.5)")
+        try size(WindowSizingPolicy.minimumProportionalCanvas(initial: CGSize(width: 50, height: 50)),
+                 CGSize(width: 1, height: 1), "ActionCropResize square minimum")
+        try expect(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 400, height: 100), delta: CGPoint(x: -397, y: 0),
+                   corner: .bottomRight) == nil, "ActionCropResize wide canvas below its minimum width 4")
+        try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 400, height: 100), delta: CGPoint(x: -396, y: 0),
+                 corner: .bottomRight), CGSize(width: 4, height: 1), "ActionCropResize wide canvas at its minimum width")
+        // SkitchBorderView
+        try size(WindowSizingPolicy.maxViewSize(bounds: CGSize(width: 640, height: 480)),
+                 CGSize(width: 632, height: 472), "SkitchBorderView.maxViewSize is bounds - 8")
+        try expect(WindowSizingPolicy.cropViewsExist(inActualMode: false) && !WindowSizingPolicy.cropViewsExist(inActualMode: true),
+                   "SkitchBorderView.awakeFromNib builds crop views only outside actual mode")
         print("WindowSizingTests: \(checks) checks passed (pure geometry; no desktop UI)")
     }
 }

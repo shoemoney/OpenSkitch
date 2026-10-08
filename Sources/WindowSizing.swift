@@ -65,11 +65,13 @@ public enum WindowSizingPolicy {
 
     /// `corner` names the dragged corner; its opposite remains anchored by the caller.
     /// Deltas use top-left canvas coordinates: positive X right, positive Y down.
-    /// Recovered original proportional resizing is width-driven: vertical delta is
-    /// ignored and height is floor(width * initial.height / initial.width + 0.5).
+    /// ActionCropResize::_frameForCropResize (decompiled.c:311318-311440): proportional resizing is
+    /// width-driven: vertical delta is ignored and height is floor(width * initial.height / initial.width + 0.5).
+    /// The proportional minimum is minimumProportionalCanvas; the original clamps by recursing with a
+    /// corrected delta, while this returns nil so the caller keeps its last valid preview.
     /// Empty canvases use independent axes when the caller chooses proportional: false.
-    /// The API's flag does not assert which original keyboard modifier controls
-    /// proportional scaling. That mapping remains unresolved.
+    /// Which gesture state asks for proportional is resizesProportionally: it is NOT a keyboard
+    /// modifier on every snap mode (PlatformController.resizeProportionally, decompiled.c:3756).
     public static func cornerOutput(initial: CGSize, delta: CGPoint, corner: CanvasCorner,
                                     proportional: Bool = true) -> CGSize? {
         guard validSize(initial), delta.x.isFinite, delta.y.isFinite else { return nil }
@@ -84,7 +86,8 @@ public enum WindowSizingPolicy {
         let output: CGSize
         if proportional {
             let width = initial.width + dx
-            guard width.isFinite, (1...maximumDimension).contains(width) else { return nil }
+            guard width.isFinite, (1...maximumDimension).contains(width),
+                  width >= minimumProportionalCanvas(initial: initial).width else { return nil }
             output = CGSize(width: width, height: floor(width * initial.height / initial.width + 0.5))
         } else {
             output = CGSize(width: initial.width + dx, height: initial.height + dy)
@@ -132,4 +135,64 @@ public enum WindowSizingPolicy {
         guard validSize(result) else { return nil }
         return CanvasCropPreview(rect: rect, outputSize: result)
     }
+
+    // MARK: ActionCropResize rules (docs/adr/0001-crop-resize-original-rules.md)
+
+    /// ActionCropResize crop ids. Corners and edges index the original `directionVector` table
+    /// (decompiled.c:307215-307240): 0 TL, 1 top, 2 TR, 3 right, 4 BR, 5 bottom, 6 BL, 7 left, 8 centre.
+    /// -1 is "resize about the centre": the ctor reads row 4 and always mirrors the delta (311318).
+    public static func cropID(corner: CanvasCorner) -> Int {
+        switch corner { case .topLeft: return 0; case .topRight: return 2
+        case .bottomRight: return 4; case .bottomLeft: return 6 }
+    }
+
+    public static func cropID(edge: CanvasEdge) -> Int {
+        switch edge { case .top: return 1; case .right: return 3; case .bottom: return 5; case .left: return 7 }
+    }
+
+    /// `directionVector[id]`: -1 moves the left/top edge, +1 the right/bottom edge, 0 leaves the axis alone.
+    /// Id -1 uses row 4. Returns nil outside -1...8.
+    public static func cropDirection(id: Int) -> (x: Int, y: Int)? {
+        let table: [(Int, Int)] = [(-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (0, 0)]
+        let row = id == -1 ? 4 : id
+        guard table.indices.contains(row) else { return nil }
+        return (table[row].0, table[row].1)
+    }
+
+    /// SkitchCropView.mouseDragged passes `centered = modifierFlags >> 19 & 1` (decompiled.c:9990);
+    /// bit 19 (0x80000) is NSEventModifierFlagOption.
+    public static func isCenteredCrop(modifierFlags: UInt) -> Bool { modifierFlags >> 19 & 1 == 1 }
+
+    /// PlatformController.resizeProportionally (decompiled.c:3756-3790). snapMode 1 follows Shift
+    /// (flag 0x20000); snapModes 0 and 3 are proportional unless the document is empty without a
+    /// background; every other snapMode is false; frame mode (+0x74 != 0) forces true.
+    /// Unresolved: which Swift state maps to the original snapMode integers; the caller must supply them.
+    public static func resizesProportionally(snapMode: Int, shiftHeld: Bool, frameMode: Bool,
+                                             hasContent: Bool) -> Bool {
+        if frameMode { return true }
+        switch snapMode {
+        case 1: return shiftHeld
+        case 0, 3: return hasContent
+        default: return false
+        }
+    }
+
+    /// Smallest proportional canvas: 1 on the shorter-ratio axis, the other axis floor(ratio + 0.5)
+    /// (_frameForCropResize 311400-311412, kMinDocumentSize = 1.0).
+    public static func minimumProportionalCanvas(initial: CGSize) -> CGSize {
+        guard initial.width > 0, initial.height > 0 else { return CGSize(width: 1, height: 1) }
+        if initial.width <= initial.height {
+            return CGSize(width: 1, height: floor(initial.height / initial.width + 0.5))
+        }
+        return CGSize(width: floor(initial.width / initial.height + 0.5), height: 1)
+    }
+
+    /// SkitchBorderView.maxViewSize (decompiled.c:13944): bounds plus DAT_002606a8 = -8 on each axis.
+    public static func maxViewSize(bounds: CGSize) -> CGSize {
+        CGSize(width: bounds.width - 8, height: bounds.height - 8)
+    }
+
+    /// SkitchBorderView.awakeFromNib (decompiled.c:14164-14175) builds the 12 crop views only when
+    /// inActualMode is false.
+    public static func cropViewsExist(inActualMode: Bool) -> Bool { !inActualMode }
 }
