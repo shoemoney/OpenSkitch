@@ -317,13 +317,17 @@ enum AppSafetyTests {
     @MainActor
     final class Fixture {
         let app = AppDelegate()
-        init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil) throws {
+        init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil, firstLaunchDocument: URL? = nil, firstLaunchDone: Bool = true) throws {
             let expected = ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!
             try expect(app.support.path == expected, "App support must be isolated")
             for name in ["Recovery.skitch", "Recovery.skitchredux"] {
                 let recovery = app.support.appendingPathComponent(name)
                 if FileManager.default.fileExists(atPath: recovery.path) { try FileManager.default.removeItem(at: recovery) }
             }
+            try FileManager.default.createDirectory(at: app.support, withIntermediateDirectories: true)
+            if FileManager.default.fileExists(atPath: app.firstLaunchMarker.path) { try FileManager.default.removeItem(at: app.firstLaunchMarker) }
+            if firstLaunchDone { try Data().write(to: app.firstLaunchMarker, options: .atomic) }
+            app.firstLaunchDocumentURL = firstLaunchDocument
             if let nativeRecovery { try nativeRecovery.write(to: app.support.appendingPathComponent("Recovery.skitch"), options: .atomic) }
             if let legacyRecovery { try legacyRecovery.write(to: app.support.appendingPathComponent("Recovery.skitchredux"), options: .atomic) }
             // Use the real launch method to test onChange and onOpenDocument wiring.
@@ -532,6 +536,32 @@ enum AppSafetyTests {
             try expect(decoded.document == fallback && !FileManager.default.fileExists(atPath: app.support.appendingPathComponent("Recovery.skitchredux").path),
                        "Legacy JSON recovery must migrate to native recovery without changing the drawing")
         }
+    }
+    static func firstLaunchWelcome() throws {
+        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        let welcome = root.appendingPathComponent("original/Skitch.app/Contents/Resources/firstlaunch.skitch")
+        try expect(FileManager.default.fileExists(atPath: welcome.path), "Original firstlaunch.skitch must be available")
+        let before = try Data(contentsOf: welcome)
+        try autoreleasepool {
+            let first = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: false), app = first.app
+            try expect(app.nameField.stringValue == "Welcome" && app.currentURL == nil && !app.dirty && !app.window.isDocumentEdited,
+                       "First launch must open the welcome document unsaved and clean")
+            try expect(app.canvas.document.elements.count > 0 || app.canvas.document.size != CGSize(width: 1000, height: 700), "First launch must load the bundled document content")
+            try expect(FileManager.default.fileExists(atPath: app.firstLaunchMarker.path), "First launch must write its marker")
+        }
+        try autoreleasepool {
+            let again = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: true), app = again.app
+            try expect(app.nameField.stringValue != "Welcome", "Later launches must not reopen the welcome document")
+        }
+        try autoreleasepool {
+            let saved = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: false)
+            saved.app.canvas.setBackgroundColor(.yellow)
+            saved.app.saveRecovery()
+            let data = try Data(contentsOf: saved.app.support.appendingPathComponent("Recovery.skitch"))
+            let restored = try Fixture(nativeRecovery: data, firstLaunchDocument: welcome, firstLaunchDone: false)
+            try expect(restored.app.nameField.stringValue == "Recovered drawing", "Recovery must win over the welcome document")
+        }
+        try expect(try Data(contentsOf: welcome) == before, "Bundled welcome file must stay intact")
     }
     static func acceptedDrop() throws {
         let fixture = try Fixture(), app = fixture.app
@@ -3240,6 +3270,7 @@ enum AppSafetyTests {
             ("active editor Undo/Redo and menu validation", typingUndo),
             ("recovery includes pending text without committing", recoverySnapshot),
             ("pending text remains protected with a stale dirty flag", pendingTextFallback),
+            ("First launch with an empty app-support directory opens the bundled firstlaunch.skitch welcome document unsaved, and later launches do not", firstLaunchWelcome),
             ("original metadata survives native recovery, startup preference and legacy JSON migration", originalMetadataRecovery),
             ("accepted document drop saves to B and preserves A", acceptedDrop),
             ("cancelled document drop preserves pending typing", cancelledDrop),

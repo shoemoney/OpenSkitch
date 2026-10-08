@@ -40,6 +40,7 @@ cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchTitle.png" "$APP/Contents
 cp "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider.png" "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider-indicator.png" "$APP/Contents/Resources/"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/SkitchCount*.png "$APP/Contents/Resources/"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/*.m4a "$APP/Contents/Resources/"
+cp "$ROOT/original/Skitch.app/Contents/Resources/firstlaunch.skitch" "$APP/Contents/Resources/"
 # Font Awesome Pro is optional and never committed: with your own token the
 # fetch step builds glyph subsets under build/fonts; without them Modern
 # falls back to SF Symbols. A failed fetch must not fail the build.
