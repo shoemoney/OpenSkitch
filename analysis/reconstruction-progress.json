@@ -2646,26 +2646,42 @@
         "ev-01f91210f41e8d54"
       ],
       "required_original_behavior": "Opening another native/history document is undoable via loadFromFileTA transactions.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/DocumentModel.swift",
-          "Sources/LegacySkitch.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Opening another native/history document is undoable via loadFromFileTA transactions."
+      "status": "implemented_partial",
+      "implemented_scope": "New and Open register one Undo (named Open or New) that restores the previous document through restoreHistoryEditorState.",
+      "source_evidence": [
+        {
+          "path": "Sources/App.swift",
+          "line": 1399,
+          "anchor": "func restoreHistoryEditorState(",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 1263,
+          "anchor": "actionName: \"Open\", resetDrawingDefaults: native",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Opening another native/history document is undoable via loadFromFileTA transactions.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-16 (document replacement Undo) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 1672,
+          "anchor": "static func newAndOpenUndo(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "New and Open register one Undo that restores the previous document",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Original loadFromFileTA transaction granularity and Undo menu naming are unverified.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Original loadFromFileTA transaction granularity and Undo menu naming are unverified.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "document.welcome",
@@ -2685,26 +2701,42 @@
         "ev-219d3df4fe811a76"
       ],
       "required_original_behavior": "Display firstlaunch.skitch through welcome/introduction flow.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/DocumentModel.swift",
-          "Sources/LegacySkitch.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Display firstlaunch.skitch through welcome/introduction flow."
+      "status": "implemented_partial",
+      "implemented_scope": "First launch loads the bundled original firstlaunch.skitch as an unsaved, clean 'Welcome' document once; later launches and saved state do not reopen it.",
+      "source_evidence": [
+        {
+          "path": "Sources/App.swift",
+          "line": 288,
+          "anchor": "var firstLaunchDocumentURL",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 326,
+          "anchor": "if let welcome = firstLaunchDocumentURL",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Display firstlaunch.skitch through welcome/introduction flow.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-16 (welcome document) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 543,
+          "anchor": "static func firstLaunchWelcome(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "first launch opens the welcome document once, unsaved and clean",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Original welcome window sizing and introduction flow beyond loading firstlaunch.skitch are unverified; no live first-launch run recorded.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Original welcome window sizing and introduction flow beyond loading firstlaunch.skitch are unverified; no live first-launch run recorded.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "capture.region",
@@ -3996,7 +4028,7 @@
       ],
       "required_original_behavior": "Shift activates delayed capture to allow transient menus and application switching.",
       "status": "implemented_partial",
-      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks.",
+      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks. A new Snap during a running capture cancels it silently and restarts.",
       "source_evidence": [
         {
           "path": "Sources/App.swift",
@@ -4047,6 +4079,13 @@
           "anchor": "func snapButtonPressed()",
           "sha256": "e2df26023819be16b0039c31e4e2d5959ddad3736daf5d7fcb328ac6eec06840",
           "line": 1574
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 1672,
+          "anchor": "func startCapture(_ mode: String",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         }
       ],
       "test_evidence": [
@@ -4228,13 +4267,22 @@
           "raw_logs": {
             "arm64": "build/interface-verification/arm64.log"
           }
+        },
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 762,
+          "anchor": "static func newSnapCancelsRunningCapture(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "a new Snap during a running capture cancels it and starts the new snap",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
         }
       ],
       "remaining_fidelity_gaps": [
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -4430,7 +4478,7 @@
       ],
       "required_original_behavior": "Cancel crosshair, frame, camera and timed capture without losing the prior document.",
       "status": "implemented_partial",
-      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks.",
+      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks. A new Snap during a running capture cancels it silently and restarts.",
       "source_evidence": [
         {
           "path": "Sources/Capture.swift",
@@ -4488,6 +4536,13 @@
           "anchor": "func snapButtonPressed()",
           "sha256": "e2df26023819be16b0039c31e4e2d5959ddad3736daf5d7fcb328ac6eec06840",
           "line": 1574
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 1672,
+          "anchor": "func startCapture(_ mode: String",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         }
       ],
       "test_evidence": [
@@ -4669,13 +4724,22 @@
           "raw_logs": {
             "arm64": "build/interface-verification/arm64.log"
           }
+        },
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 762,
+          "anchor": "static func newSnapCancelsRunningCapture(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "a new Snap during a running capture cancels it and starts the new snap",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
         }
       ],
       "remaining_fidelity_gaps": [
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -5019,25 +5083,42 @@
         "ev-bcc1bbad5d461612"
       ],
       "required_original_behavior": "Magnify screen pixels while choosing crosshair capture area.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Capture.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Magnify screen pixels while choosing crosshair capture area."
+      "status": "implemented_partial",
+      "implemented_scope": "The crosshair picker feeds the magnifier from a screenImage provider (native screen grab by default); tests inject images and check the provider is asked.",
+      "source_evidence": [
+        {
+          "path": "Sources/OriginalCapturePicker.swift",
+          "line": 46,
+          "anchor": "typealias ScreenImage",
+          "sha256": "fe80170c222400f407b3ada4174c824700e1c495904ec4b93b4ae9036bae0f49",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/OriginalCapturePicker.swift",
+          "line": 226,
+          "anchor": "private static func nativeScreenImage(",
+          "sha256": "fe80170c222400f407b3ada4174c824700e1c495904ec4b93b4ae9036bae0f49",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Magnify screen pixels while choosing crosshair capture area.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-08 (crosshair magnifier) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/OriginalCapturePickerTests.swift",
+          "line": 166,
+          "anchor": "screenImage: { asked.append($0)",
+          "sha256": "add4e79bc4a68d72749e18f258171ac63acdb8c80a1bc2a923ded96cabd46334",
+          "suite": "capture-picker",
+          "test_group": "magnifier requests and uses screen pixels",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Live magnifier pixels need Screen Recording permission and are unverified live on this host.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Live magnifier pixels need Screen Recording permission and are unverified live on this host.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "capture.cursor",
@@ -5055,25 +5136,52 @@
         "ev-b6a15e68112e7e9b"
       ],
       "required_original_behavior": "Recover user trigger for showMouse paths and cursor-hotspot placement.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Capture.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Recover user trigger for showMouse paths and cursor-hotspot placement."
+      "status": "implemented_partial",
+      "implemented_scope": "The helper receives -C (cursor included) only for timed captures and never for immediate ones, matching snapSkitchItself showMouse 0 immediate / 1 timed (decompiled.c:22455-22490).",
+      "source_evidence": [
+        {
+          "path": "Sources/Capture.swift",
+          "line": 760,
+          "anchor": "if chosenDelay > 0 { args += [\"-C\"] }",
+          "sha256": "c542795278920c5c630f04b8bd706f338ba67bb1454d1f8aff4ac0a05e477e2e",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Capture.swift",
+          "line": 775,
+          "anchor": "if delay > 0, mode == \"fullscreen\" || mode == \"frame\" { args += [\"-C\"] }",
+          "sha256": "c542795278920c5c630f04b8bd706f338ba67bb1454d1f8aff4ac0a05e477e2e",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Recover user trigger for showMouse paths and cursor-hotspot placement.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-11 (cursor inclusion policy) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CaptureTests.swift",
+          "line": 648,
+          "anchor": "// Independent expected outcomes: selected Shift means six seconds;",
+          "sha256": "71bc1e362e7bd364b66445c27742ef6b1831091f0d967d0acbd658c7f8a2cd88",
+          "suite": "capture",
+          "test_group": "selected window/region and timed cursor inclusion reach the helper",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        },
+        {
+          "path": "tests/CaptureTests.swift",
+          "line": 909,
+          "anchor": "timed fullscreen/frame must retain its mode and include the cursor",
+          "sha256": "71bc1e362e7bd364b66445c27742ef6b1831091f0d967d0acbd658c7f8a2cd88",
+          "suite": "capture",
+          "test_group": "timed fullscreen/frame include the cursor",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Cursor hotspot placement and the forced arrow raster are not reproduced; the modern helper draws its own cursor.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Cursor hotspot placement and the forced arrow raster are not reproduced; the modern helper draws its own cursor.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "capture.flash",
@@ -5089,25 +5197,49 @@
         "ev-f853f17d73de3e98"
       ],
       "required_original_behavior": "Flash the captured screen region with original duration and preference behavior.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Capture.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Flash the captured screen region with original duration and preference behavior."
+      "status": "implemented_partial",
+      "implemented_scope": "White flash panel after each successful capture with the recovered 0.1 s (0.2 s camera) timings and per-source flash rect; never played for failed or cancelled captures.",
+      "source_evidence": [
+        {
+          "path": "Sources/OriginalCaptureFlash.swift",
+          "line": 6,
+          "anchor": "enum OriginalCaptureFlashTiming",
+          "sha256": "69285ec0f89a79a9e954cb62199a79a23d6cfc5a05e6d9383aa2a47a7fd62714",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/OriginalCaptureFlash.swift",
+          "line": 61,
+          "anchor": "struct OriginalCaptureFlashPlan",
+          "sha256": "69285ec0f89a79a9e954cb62199a79a23d6cfc5a05e6d9383aa2a47a7fd62714",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Capture.swift",
+          "line": 667,
+          "anchor": "private func flashPlan(",
+          "sha256": "c542795278920c5c630f04b8bd706f338ba67bb1454d1f8aff4ac0a05e477e2e",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Flash the captured screen region with original duration and preference behavior.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-10 (capture flash feedback) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CaptureTests.swift",
+          "line": 508,
+          "anchor": "static func captureFlashOnlyAfterSuccess(",
+          "sha256": "71bc1e362e7bd364b66445c27742ef6b1831091f0d967d0acbd658c7f8a2cd88",
+          "suite": "capture",
+          "test_group": "flash plays only after a successful capture",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Controlled tests with a fake presenter only; the live flash panel on a real display is unverified (Screen Recording not verified on this host).",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Controlled tests with a fake presenter only; the live flash panel on a real display is unverified (Screen Recording not verified on this host).",
+      "full_original_parity_claimed": false
     },
     {
       "id": "capture.displays",
@@ -5365,7 +5497,7 @@
       ],
       "required_original_behavior": "Default camera snapshot counts down; Shift bypasses countdown.",
       "status": "implemented_partial",
-      "implemented_scope": "AVFoundation camera permission, session, live preview sheet, photo delegate, errors and cleanup.",
+      "implemented_scope": "AVFoundation camera permission, session, live preview sheet, photo delegate, errors and cleanup. Camera snapshot counts down 3 s before the camera path; Shift bypasses the countdown.",
       "source_evidence": [
         {
           "path": "Sources/Capture.swift",
@@ -5387,13 +5519,55 @@
           "anchor": "func takePhoto(",
           "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
           "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Capture.swift",
+          "line": 529,
+          "anchor": "nonisolated func captureCamera(delay: Double,",
+          "sha256": "c542795278920c5c630f04b8bd706f338ba67bb1454d1f8aff4ac0a05e477e2e",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 1881,
+          "anchor": "let delay = OriginalCaptureTiming.cameraDelay(flags: flags)",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/OriginalCaptureTiming.swift",
+          "line": 21,
+          "anchor": "static func cameraDelay(",
+          "sha256": "0953a5c37dc2e4558fe30ffaea116091db998106a60ae2495f47c48cdf766806",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         }
       ],
-      "test_evidence": [],
-      "remaining_fidelity_gaps": [
-        "No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing."
+      "test_evidence": [
+        {
+          "path": "tests/CaptureTests.swift",
+          "line": 701,
+          "anchor": "static func cameraCountdownDelay(",
+          "sha256": "71bc1e362e7bd364b66445c27742ef6b1831091f0d967d0acbd658c7f8a2cd88",
+          "suite": "capture",
+          "test_group": "camera countdown runs 3 s first",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        },
+        {
+          "path": "tests/OriginalCaptureTimingTests.swift",
+          "line": 30,
+          "anchor": "Camera normally counts down three seconds",
+          "sha256": "786616a73d61ab7c7498d5c4c7bb1074b3664c7028584a3b5bd081e50481c1b0",
+          "suite": "capture-timing",
+          "test_group": "camera delay is 3 s, 0 with Shift",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
       ],
-      "next_action": "Close fidelity gaps and verify: No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing.",
+      "remaining_fidelity_gaps": [
+        "No physical-camera execution here. Preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing."
+      ],
+      "next_action": "Close fidelity gaps and verify: No physical-camera execution here. Preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing.",
       "full_original_parity_claimed": false
     },
     {
@@ -8866,25 +9040,42 @@
         "ev-db04babb1f3d936b"
       ],
       "required_original_behavior": "Cursor plus Option copies selected graphics while dragging.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Canvas.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Cursor plus Option copies selected graphics while dragging."
+      "status": "implemented_partial",
+      "implemented_scope": "Option-drag of a selection duplicates the selected graphics while dragging, as one undoable edit.",
+      "source_evidence": [
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 368,
+          "anchor": "private var copyOnDrag",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 1758,
+          "anchor": "if copyOnDrag && !copiesCreated",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Cursor plus Option copies selected graphics while dragging.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CanvasTests.swift",
+          "line": 2275,
+          "anchor": "static func optionDragCopy(",
+          "sha256": "b8082231a42a84a346b3f38d8842ad70200818efc944643f7bdf8c213cc88b75",
+          "suite": "canvas",
+          "test_group": "Option drag copies groups as one undoable edit",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Original runtime drag-copy feedback and cursor are unverified.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Original runtime drag-copy feedback and cursor are unverified.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "gestures.shift-select",
@@ -9448,25 +9639,42 @@
         "ev-d1cebffb22dd1ad1"
       ],
       "required_original_behavior": "Create continuous connected line/polygon segments with Option.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Canvas.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Create continuous connected line/polygon segments with Option."
+      "status": "implemented_partial",
+      "implemented_scope": "With the Line tool, Option arms polygon mode: each click adds a connected vertex (Shift constrains), release commits one element and one Undo step, Escape discards, tool change commits.",
+      "source_evidence": [
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 391,
+          "anchor": "private var polygonArmed",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 1460,
+          "anchor": "private func polygonPoint(",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Create continuous connected line/polygon segments with Option.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CanvasTests.swift",
+          "line": 2331,
+          "anchor": "static func linePolygon(",
+          "sha256": "b8082231a42a84a346b3f38d8842ad70200818efc944643f7bdf8c213cc88b75",
+          "suite": "canvas",
+          "test_group": "Option key arms the Line polygon, release commits one element and one Undo step",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Exact original vertex preview and Shift constraint rounding are unverified against the original runtime.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Exact original vertex preview and Shift constraint rounding are unverified against the original runtime.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "gestures.option-arrow",
@@ -9740,25 +9948,35 @@
         "ev-e62b01261ee30982"
       ],
       "required_original_behavior": "Shift-click swatch changes backdrop rather than current annotation color.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Canvas.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Shift-click swatch changes backdrop rather than current annotation color."
+      "status": "implemented_partial",
+      "implemented_scope": "Shift-choosing a palette colour sets the document backdrop (one exact Undo/Redo) instead of the annotation colour; unshifted choice styles the pen and selection.",
+      "source_evidence": [
+        {
+          "path": "Sources/App.swift",
+          "line": 984,
+          "anchor": "func applyChosenColor(",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Shift-click swatch changes backdrop rather than current annotation color.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 1377,
+          "anchor": "static func shiftPaletteBackground(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "Shift palette changes undoable backdrop; normal palette styles selected annotations",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Only the colour-choice entry point is covered; Shift-click on every original swatch control is not driven live.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Only the colour-choice entry point is covered; Shift-click on every original swatch control is not driven live.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "gestures.option-crop",
@@ -9999,25 +10217,42 @@
         "ev-98af66c18be7e671"
       ],
       "required_original_behavior": "Recover target control for Shift-click return to original size.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Canvas.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Recover target control for Shift-click return to original size."
+      "status": "implemented_partial",
+      "implemented_scope": "Shift-dragging a normal-window corner border handle resets to Normal (100%) size via setSnapToNormalSize and sizes the window to the canvas before the gesture begins.",
+      "source_evidence": [
+        {
+          "path": "Sources/AppViewport.swift",
+          "line": 235,
+          "anchor": "func beginWindowGesture(",
+          "sha256": "1fb7af398cbbcb09cc2148d5908f3fd61b01a33a7fa2ab2104026cddc8281e25",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 650,
+          "anchor": "func setSnapToNormalSize(",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Recover target control for Shift-click return to original size.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-19 (modifier gesture gaps) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 2956,
+          "anchor": "static func shiftCornerResetBaseline(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "Shift corner resets the baseline to Normal size",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "The original control that carries Shift-click return to original size was not recovered; the corner handle is an adaptation.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: The original control that carries Shift-click return to original size was not recovered; the corner handle is an adaptation.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "gestures.control-share",
@@ -17026,26 +17261,35 @@
         "ev-5d7d55de4fa4318a"
       ],
       "required_original_behavior": "Eyedrop vector path color when hit, otherwise renderer pixel color.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/Canvas.swift",
-          "Sources/DocumentModel.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Eyedrop vector path color when hit, otherwise renderer pixel color."
+      "status": "implemented_partial",
+      "implemented_scope": "Option eyedropper samples the editable graphic colour when a non-raster, non-text element is hit, otherwise the rendered pixel colour, including while dragging.",
+      "source_evidence": [
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 1520,
+          "anchor": "private func sampleColor(",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Eyedrop vector path color when hit, otherwise renderer pixel color.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-18 (colour sample precedence) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CanvasTests.swift",
+          "line": 2243,
+          "anchor": "static func toolAndColorGestures(",
+          "sha256": "b8082231a42a84a346b3f38d8842ad70200818efc944643f7bdf8c213cc88b75",
+          "suite": "canvas",
+          "test_group": "Tab Pencil toggle and Option eyedropper only notify UI",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Shift+Command eyedropper is not implemented (evidence supports Shift+Command cursor selection only).",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Shift+Command eyedropper is not implemented (evidence supports Shift+Command cursor selection only).",
+      "full_original_parity_claimed": false
     },
     {
       "id": "canvas.wysiwyg",
@@ -17289,7 +17533,7 @@
       ],
       "required_original_behavior": "Resize editor corners to scale snapshot and annotations for visible output size.",
       "status": "implemented_partial",
-      "implemented_scope": "Custom normal corner handles support width-driven proportional output for content and independent axes on blank canvas, fixed opposite window corner and one cancellable Undo transaction; keyboard/menu Undo callback refits complete visible output while preserving top-left.",
+      "implemented_scope": "Custom normal corner handles support width-driven proportional output for content and independent axes on blank canvas, fixed opposite window corner and one cancellable Undo transaction; keyboard/menu Undo callback refits complete visible output while preserving top-left. Crop ids, direction vectors, proportional rounding and minimums follow the recovered ActionCropResize rules (docs/adr/0001-crop-resize-original-rules.md).",
       "source_evidence": [
         {
           "path": "Sources/AppViewport.swift",
@@ -17339,6 +17583,13 @@
           "anchor": "func undo()",
           "sha256": "22f4abaaadd8b028638f214496f795d4e76f25541d17f1d82166a6e19c6c0c3a",
           "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/WindowSizing.swift",
+          "line": 197,
+          "anchor": "public static func cropViewsExist(",
+          "sha256": "3aa8716e4db3fb4f9aec373f4f587b9f2fd6dc474e7f667f665eadecb317bc62",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         }
       ],
       "test_evidence": [
@@ -17451,13 +17702,23 @@
             "arm64": "build/interface-verification/arm64.log"
           },
           "validation_sha256": "855b1128b8ad1b3915a4f9f30ea8b3949ea50e1b135f1efa5b8eccb743f13ca0"
+        },
+        {
+          "path": "tests/WindowSizingTests.swift",
+          "line": 296,
+          "anchor": "\"ActionCropResize id for",
+          "sha256": "526e400bf49db4c99ab4921db0cba805d7264c24059817569dd73e050af01bf6",
+          "suite": "window-sizing",
+          "test_group": "ActionCropResize ids, signs, rounding and minimums",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
         }
       ],
       "remaining_fidelity_gaps": [
-        "Current final native corner/keyboard window proof pending. Generic OS window resize stays viewport-only; original modifier/anchor/rounding/max-window parity unverified.",
+        "Current final native corner/keyboard window proof pending. Generic OS window resize stays viewport-only; ADR 0001 leaves snap-mode 1 + Shift proportional routing, edge-handle rounding and the frame-vs-document clamp unresolved.",
         "Original1.0.12 runtime parity remains unverified."
       ],
-      "next_action": "Verify remaining scope: Current final native corner/keyboard window proof pending. Generic OS window resize stays viewport-only; original modifier/anchor/rounding/max-window parity unverified.",
+      "next_action": "Verify remaining scope: Current final native corner/keyboard window proof pending. Generic OS window resize stays viewport-only; ADR 0001 leaves snap-mode 1 + Shift proportional routing, edge-handle rounding and the frame-vs-document clamp unresolved.",
       "full_original_parity_claimed": false
     },
     {
@@ -18325,25 +18586,49 @@
         "ev-905e55248faf7d89"
       ],
       "required_original_behavior": "Add background drop shadow with expanded image bounds.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/Canvas.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Add background drop shadow with expanded image bounds."
+      "status": "implemented_partial",
+      "implemented_scope": "Image > Add Shadow grows the snapshot canvas 27 x 27 (picture at 14,6; black 0.8 shadow, offset 8, blur 27), shifts annotations with it, is a no-op without a snapshot and is one Undo step.",
+      "source_evidence": [
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 681,
+          "anchor": "func addShadow()",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 900,
+          "anchor": "\"Add Shadow\", #selector(addShadow)",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 2032,
+          "anchor": "@objc func addShadow",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Add background drop shadow with expanded image bounds.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-01 (shadow direction) and WP-18 (Add Shadow) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CanvasTests.swift",
+          "line": 257,
+          "anchor": "static func addShadow(",
+          "sha256": "b8082231a42a84a346b3f38d8842ad70200818efc944643f7bdf8c213cc88b75",
+          "suite": "canvas",
+          "test_group": "add shadow grows the canvas 27 x 27 with the picture at 14,6 in one undo",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Shadow rendering is modelled on MacImage::addShadow constants; pixel-level parity with the original is unverified.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Shadow rendering is modelled on MacImage::addShadow constants; pixel-level parity with the original is unverified.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "canvas.crop-snap",
@@ -20358,71 +20643,66 @@
         "ev-4e2b43ebdaede883"
       ],
       "required_original_behavior": "Recover crop borders and geometry in full-resolution view.",
-      "status": "unimplemented",
-      "implemented_scope": "Current Actual presentation intentionally disables normal border/corner and numeric Resize/Crop; original full-resolution crop-control reachability remains unresolved.",
+      "status": "implemented_partial",
+      "implemented_scope": "Matches the original: crop views are built only when not in Actual mode (awakeFromNib decompiled.c:14164-14175, ADR 0001), so Actual presentation exposes no border/corner crop handles; current Actual mode disables normal border/corner and numeric Resize/Crop.",
       "source_evidence": [
         {
           "path": "Sources/AppViewport.swift",
           "line": 235,
           "anchor": "func beginWindowGesture(",
           "sha256": "1fb7af398cbbcb09cc2148d5908f3fd61b01a33a7fa2ab2104026cddc8281e25",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         },
         {
           "path": "Sources/AppViewport.swift",
           "line": 173,
-          "anchor": "func updateViewportChrome()",
+          "anchor": "func updateViewportChrome(",
           "sha256": "1fb7af398cbbcb09cc2148d5908f3fd61b01a33a7fa2ab2104026cddc8281e25",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/WindowSizing.swift",
+          "line": 197,
+          "anchor": "public static func cropViewsExist(",
+          "sha256": "3aa8716e4db3fb4f9aec373f4f587b9f2fd6dc474e7f667f665eadecb317bc62",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         },
         {
           "path": "Sources/App.swift",
-          "line": 1845,
+          "line": 2001,
           "anchor": "func resize()",
-          "sha256": "e2df26023819be16b0039c31e4e2d5959ddad3736daf5d7fcb328ac6eec06840",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         }
       ],
       "test_evidence": [
         {
-          "path": "tests/AppSafetyTests.swift",
-          "line": 2487,
-          "anchor": "static func actualRejectedReplacement()",
-          "sha256": "98dd104876f4537055cf6ef43bc5c9d8f6ec9b6b8263e5494359c9ba433911e2",
-          "suite": "app-safety",
-          "test_group": "static func actualRejectedReplacement()",
+          "path": "tests/WindowSizingTests.swift",
+          "line": 359,
+          "anchor": "WindowSizingPolicy.cropViewsExist(inActualMode: false)",
+          "sha256": "526e400bf49db4c99ab4921db0cba805d7264c24059817569dd73e050af01bf6",
+          "suite": "window-sizing",
+          "test_group": "crop views exist only outside Actual mode",
           "result": "passed",
-          "verification_kind": "executed_full_arm64_suites",
-          "checkpoint_scope": "current_build_regressions_only",
-          "previous_execution_checkpoint": "actual-final-e4f568549f",
-          "run_id": "interface-896edbdebc",
-          "executed_source_sha256": "98dd104876f4537055cf6ef43bc5c9d8f6ec9b6b8263e5494359c9ba433911e2",
-          "validation_path": "analysis/build-validation.json",
-          "architectures": [
-            "arm64"
-          ],
-          "raw_logs": {
-            "arm64": "build/interface-verification/arm64.log"
-          },
-          "validation_sha256": "855b1128b8ad1b3915a4f9f30ea8b3949ea50e1b135f1efa5b8eccb743f13ca0"
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        },
+        {
+          "path": "tests/AppSafetyTests.swift",
+          "line": 2747,
+          "anchor": "static func actualRejectedReplacement(",
+          "sha256": "9176dce6f19a1df12e01248a86ddebded74042c24392121435bc2a8702e41da2",
+          "suite": "app-safety",
+          "test_group": "Actual mode preserved across rejected replacement",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
         }
       ],
-      "negative_evidence": {
-        "source_snapshot_id": "actual-final-e4f568549f",
-        "inspected_paths": [
-          "Sources/AppViewport.swift",
-          "Sources/App.swift"
-        ],
-        "conclusion": "Actual mode gates normal border/corner and numeric Resize/Crop; original Actual crop controls remain unresolved."
-      },
       "remaining_fidelity_gaps": [
-        "No matching original full-resolution interactive crop is implemented/proven; recover original Actual crop reachability and semantics.",
-        "Original1.0.12 runtime parity remains unverified."
+        "The original rule is inferred from the awakeFromNib branch; no live original run confirms Actual mode has no crop reachability.",
+        "Original 1.0.12 runtime parity remains unverified."
       ],
-      "next_action": "Verify remaining scope: No matching original full-resolution interactive crop is implemented/proven; recover original Actual crop reachability and semantics.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-14a/WP-14b (corner and edge handles) in this cycle."
+      "next_action": "Close fidelity gaps and verify: The original rule is inferred from the awakeFromNib branch; no live original run confirms Actual mode has no crop reachability.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "import.drag",
@@ -29715,28 +29995,49 @@
         "ev-adb3db5f05af3894"
       ],
       "required_original_behavior": "Capture then upload via saved global shortcut.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/Publishing.swift",
-          "Sources/Capture.swift",
-          "Sources/GlobalHotkeys.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Capture then upload via saved global shortcut.",
-        "Current native GlobalHotkeyAction provides screen/window/fullscreen/frame/camera; original Upload and Show actions remain unmapped."
+      "status": "implemented_partial",
+      "implemented_scope": "Upload is a bindable global shortcut action (original Cmd+Shift+Ctrl chord available, none by default) that runs a crosshair capture and publishes only an installed result; legacy preferences still load.",
+      "source_evidence": [
+        {
+          "path": "Sources/GlobalHotkeys.swift",
+          "line": 7,
+          "anchor": "case screen, window, fullscreen, frame, camera, upload, show",
+          "sha256": "bf9320ba88bff30a6b5b4aad44ba93459f8647a44b82184eabbdef17d3ea4fee",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 1669,
+          "anchor": "func snapAndUpload(",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 338,
+          "anchor": "globalUpload: { [weak self] in self?.snapAndUpload()",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Capture then upload via saved global shortcut.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-15 (global hotkeys) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/GlobalHotkeysTests.swift",
+          "line": 116,
+          "anchor": "let originalUpload = GlobalHotkeySettings.originalBindings[.upload]!",
+          "sha256": "6280530a100c2a0cf09b6cd39cf3607a059546c6805a9d485fc67d945c446803",
+          "suite": "global-hotkeys",
+          "test_group": "Upload binding defaults, raw values and legacy preferences",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Real Carbon hotkey delivery and the Snap-and-Upload result path are not exercised live; upload destinations are retired services.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Real Carbon hotkey delivery and the Snap-and-Upload result path are not exercised live; upload destinations are retired services.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "preferences.hotkey-frame",
@@ -29845,28 +30146,42 @@
         "ev-eb7e697241bf2542"
       ],
       "required_original_behavior": "Global shortcut restores editor visibility.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/Publishing.swift",
-          "Sources/Capture.swift",
-          "Sources/GlobalHotkeys.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Global shortcut restores editor visibility.",
-        "Current native GlobalHotkeyAction provides screen/window/fullscreen/frame/camera; original Upload and Show actions remain unmapped."
+      "status": "implemented_partial",
+      "implemented_scope": "Show Skitch is a bindable global shortcut action (no default) wired to makeVisible; legacy preferences still load.",
+      "source_evidence": [
+        {
+          "path": "Sources/GlobalHotkeys.swift",
+          "line": 7,
+          "anchor": "case screen, window, fullscreen, frame, camera, upload, show",
+          "sha256": "bf9320ba88bff30a6b5b4aad44ba93459f8647a44b82184eabbdef17d3ea4fee",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 338,
+          "anchor": "globalShow: { [weak self] in self?.makeVisible() }",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Global shortcut restores editor visibility.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-15 (global hotkeys) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/GlobalHotkeysTests.swift",
+          "line": 121,
+          "anchor": "GlobalHotkeyAction.upload.title == \"Upload\" && GlobalHotkeyAction.show.title == \"Show Skitch\"",
+          "sha256": "6280530a100c2a0cf09b6cd39cf3607a059546c6805a9d485fc67d945c446803",
+          "suite": "global-hotkeys",
+          "test_group": "Show binding titles, defaults and legacy preferences",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Real Carbon hotkey delivery and window restoration from a hidden app are not exercised live.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Real Carbon hotkey delivery and window restoration from a hidden app are not exercised live.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "preferences.hotkey-validation",
@@ -33126,32 +33441,49 @@
         "ev-75185038a241c5fe"
       ],
       "required_original_behavior": "Original nib connects addShadow:; exact user-visible state and handler behavior need mapping.",
-      "status": "unimplemented",
-      "implemented_scope": null,
-      "source_evidence": [],
-      "test_evidence": [],
-      "negative_evidence": {
-        "source_snapshot_id": "current-source-scan",
-        "inspected_paths": [
-          "Sources/App.swift",
-          "Sources/Canvas.swift",
-          "Sources/Capture.swift",
-          "Sources/Publishing.swift",
-          "Sources/DocumentModel.swift",
-          "Sources/LegacySkitch.swift",
-          "Sources/SVGExport.swift"
-        ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
-      },
-      "remaining_fidelity_gaps": [
-        "Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-        "Original nib connects addShadow:; exact user-visible state and handler behavior need mapping.",
-        "Exact action reachability and semantics are not runtime verified."
+      "status": "implemented_partial",
+      "implemented_scope": "addShadow: resolves to the Image > Add Shadow menu action, which calls Canvas.addShadow (addShadowTA decompiled.c:301554 mapping).",
+      "source_evidence": [
+        {
+          "path": "Sources/Canvas.swift",
+          "line": 681,
+          "anchor": "func addShadow()",
+          "sha256": "33e98e4c045a971f811ad50c3443e10ea797550c290467c5a058f0c8a09a22f7",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 900,
+          "anchor": "\"Add Shadow\", #selector(addShadow)",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        },
+        {
+          "path": "Sources/App.swift",
+          "line": 2032,
+          "anchor": "@objc func addShadow",
+          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
+          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
+        }
       ],
-      "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
-      "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-18 (Add Shadow to Image) in this cycle."
+      "test_evidence": [
+        {
+          "path": "tests/CanvasTests.swift",
+          "line": 257,
+          "anchor": "static func addShadow(",
+          "sha256": "b8082231a42a84a346b3f38d8842ad70200818efc944643f7bdf8c213cc88b75",
+          "suite": "canvas",
+          "test_group": "add shadow grows the canvas 27 x 27 with the picture at 14,6 in one undo",
+          "result": "passed",
+          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
+        }
+      ],
+      "remaining_fidelity_gaps": [
+        "Original nib control/reachability for addShadow: is mapped to the Image menu item only; not runtime verified.",
+        "Original 1.0.12 runtime parity remains unverified."
+      ],
+      "next_action": "Close fidelity gaps and verify: Original nib control/reachability for addShadow: is mapped to the Image menu item only; not runtime verified.",
+      "full_original_parity_claimed": false
     },
     {
       "id": "unresolved_action.afterreskitchactionchanged",

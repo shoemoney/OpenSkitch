@@ -122,7 +122,7 @@ Every `unimplemented` row in `analysis/reconstruction-progress.json` carries a `
 | `not_reconstructed_retired_service` | 56 | Skitch.com, Evernote, Flickr, MobileMe, TFTP, Sparkle updates, feedback, crash reporting, Doozla and the Plus store are retired services, so their rows and menu selectors are intentionally not rebuilt. Covers `providers.*`, `sharing.*` (destination flow), `edition.*` and the matching `unresolved_action.*` selectors. |
 | `deferred_post_0_3_0` | 39 | Real original behavior, deliberately left for after 0.3.0. |
 | `needs_user_artifact` | 1 | Cannot be reconstructed without a real legacy file the user must supply (`document.migration`). |
-| `planned` | 17 | Covered by a work package in the current completion cycle. |
+| `planned` | 2 | Covered by a work package in the current completion cycle. |
 
 Retired-service rows by area:
 
