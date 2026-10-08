@@ -914,21 +914,6 @@ public final class PublishingCoordinator: NSObject {
 
     public static var settingsFileURL: URL { PublishingStorage.file }
 
-    /// Installs a secret-free keyed-SFTP default only if the user has no destination yet.
-    /// No SSH connection, folder creation, upload, or Keychain access occurs here.
-    @discardableResult
-    public func setDefaultSFTPDestination(sshAlias: String, remoteRoot: String, publicBaseURL: String,
-                                          port: Int? = nil) throws -> Bool {
-        guard !isShuttingDown else { throw publishingCancellationError() }
-        guard !PublishingStorage.exists else { return false }
-        var settings = PublishingSettings()
-        settings.transport = .sftp; settings.sshAlias = sshAlias; settings.sftpRemoteRoot = remoteRoot
-        settings.publicBaseURL = publicBaseURL; settings.sftpPort = port
-        _ = try PublishingPlan(settings: settings, fileName: "validation.png", capabilities: nil, sftpAvailable: PublishingSFTP.available)
-        try PublishingStorage.save(settings, password: "")
-        return true
-    }
-
     /// Settings never start a network request. Passwords are saved only in macOS Keychain.
     public func showSettings(relativeTo window: NSWindow) {
         if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.showSettings(relativeTo: window) }; return }
