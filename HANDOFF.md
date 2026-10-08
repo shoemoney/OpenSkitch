@@ -57,7 +57,7 @@ Evidence paths below are relative to the actual repository:
 - Startup log: `build/interface-layout-verification/startup.log`, terminal exit 0.
 - AppSafety temporary evidence: `/var/folders/_5/kk_5dshn1zx_mn3ftl5dl7g40000gp/T/skitch-app-safety.mTlIgJ`.
 
-The earlier AVFoundation deprecation warnings no longer appear in a full typecheck. The remaining deprecation warnings are only the TextStyleForm uses of NSToolbarItem minSize/maxSize and NSBrowser matrix(inColumn:); they are warnings, not build failures.
+`Sources/TextStyleForm.swift` has zero deprecation warnings: it sizes toolbar popups with Auto Layout floors instead of `NSToolbarItem.minSize/maxSize` and styles `NSBrowser` through `cellPrototype`. `swiftc -typecheck Sources/*.swift` reports no deprecations.
 
 The tracked `analysis/*.json` checkpoint metadata still describes **8bd0e32 / binary 896edbdebc**, not the current build. Do not confuse historical evidence with the current patch.
 
