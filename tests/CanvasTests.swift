@@ -220,6 +220,7 @@ struct CanvasTests {
             ("frame preview retains annotation pixels and capture boundary only", framePreview),
             ("Justype focus, native typing/recovery/undo, Escape commit and pointer clamp", justype),
             ("shadows fall down-right on screen and in export", shadowDirection),
+            ("text editor group shadow and grip chrome shadow fall downward", editorShadowDirection),
             ("native canvas visual proof", visualProof)
         ]
         let selectedTests = tests.filter { name, _ in
@@ -2583,6 +2584,58 @@ struct CanvasTests {
             let dx = addedX / added - inkX / ink, dy = addedY / added - inkY / ink
             try expect(dy > 0.5 && abs(dx) < 1.5, "Text shadow \(name) must fall below the glyphs, offset from ink (\(dx), \(dy))")
         }
+    }
+    /// While a text annotation is being edited its glyphs (SketchTextLayoutManager) and the grip chrome
+    /// draw their own shadows; both must fall down the page like the committed text.
+    static func editorShadowDirection() throws {
+        func capture(_ view: NSView, _ w: Int, _ h: Int) throws -> [UInt8] {
+            view.displayIfNeeded()
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
+                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)
+            else { throw Failure(description: "Native view capture") }
+            rep.size = view.bounds.size
+            view.cacheDisplay(in: view.bounds, to: rep)
+            guard let bytes = rgbaBytes(rep, width: w, height: h) else { throw Failure(description: "Native view bytes") }
+            return bytes
+        }
+        func editing(shadowed: Bool) throws -> (bytes: [UInt8], grip: [UInt8], gripSize: (Int, Int), glyphs: CGRect) {
+            let c = canvas(NSSize(width: 300, height: 150)); let window = host(c); defer { window.close() }
+            window.setContentSize(c.canvasSize)
+            c.tool = .arrow; c.shadowed = shadowed; c.strokeColor = .black; c.outlined = false
+            try expect(window.makeFirstResponder(c), "Editor shadow canvas focus")
+            c.mouseMoved(with: try mouse(c, .mouseMoved, CGPoint(x: 60, y: 50)))
+            c.keyDown(with: NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.shift], timestamp: 0,
+                windowNumber: window.windowNumber, context: nil, characters: "H", charactersIgnoringModifiers: "H",
+                isARepeat: false, keyCode: 4)!)
+            guard let editor = c.subviews.compactMap({ $0 as? NSTextView }).first else { throw Failure(description: "Editor shadow native editor") }
+            editor.insertText("HHHH", replacementRange: editor.selectedRange())
+            editor.insertionPointColor = .clear
+            guard let grip = c.subviews.first(where: { String(describing: type(of: $0)).contains("SketchTextGrip") }) else {
+                throw Failure(description: "Editor shadow grip chrome")
+            }
+            let gw = Int(ceil(grip.bounds.width)), gh = Int(ceil(grip.bounds.height))
+            return (try capture(c, 300, 150), try capture(grip, gw, gh), (gw, gh), editor.frame.insetBy(dx: 2, dy: 2))
+        }
+        let shadowed = try editing(shadowed: true), plain = try editing(shadowed: false)
+        var added: CGFloat = 0, addedY: CGFloat = 0, ink: CGFloat = 0, inkY: CGFloat = 0
+        for y in 0..<150 { for x in 0..<300 where shadowed.glyphs.contains(CGPoint(x: x, y: y)) {
+            let i = (y * 300 + x) * 4
+            let extra = CGFloat(Int(plain.bytes[i]) - Int(shadowed.bytes[i])) / 255
+            if extra > 0 { added += extra; addedY += extra * CGFloat(y) }
+            let dark = 1 - CGFloat(plain.bytes[i]) / 255
+            ink += dark; inkY += dark * CGFloat(y)
+        } }
+        try expect(added > 1 && ink > 1, "Editing text shadow cast no pixels (added \(added), ink \(ink))")
+        let dy = addedY / added - inkY / ink
+        try expect(dy > 0.5, "Editing text group shadow must fall below the glyphs, offset from ink \(dy)")
+        // Grip chrome: the five-point margin outside the border holds only its shadow.
+        let (gw, gh) = shadowed.gripSize
+        var top: Int = 0, bottom: Int = 0
+        for x in 8..<(gw - 8) {
+            for y in 0..<4 { top += Int(shadowed.grip[(y * gw + x) * 4 + 3]) }
+            for y in (gh - 4)..<gh { bottom += Int(shadowed.grip[(y * gw + x) * 4 + 3]) }
+        }
+        try expect(bottom > top, "Grip chrome shadow must fall below the border (alpha above \(top), below \(bottom))")
     }
     /// Top-down premultiplied sRGB RGBA bytes of a bitmap, drawn 1:1 at the given pixel size.
     static func rgbaBytes(_ bitmap: NSBitmapImageRep, width: Int, height: Int) -> [UInt8]? {

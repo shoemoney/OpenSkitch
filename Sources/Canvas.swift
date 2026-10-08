@@ -16,7 +16,7 @@ private final class SketchTextLayoutManager: NSLayoutManager {
         context.setAlpha(annotationAlpha)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         context.setAlpha(1)
-        if annotationShadowed { OriginalTextEffects.shadow().cast(in: context, onViewSurface: true) }
+        if annotationShadowed { OriginalTextEffects.shadow().set() }
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         // Rendering attributes are temporary: typing history and staged style
@@ -192,7 +192,7 @@ private final class SketchTextGrip: NSView {
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
         shadow.shadowOffset = CGSize(width: 0, height: -1); shadow.shadowBlurRadius = 3
-        shadow.set()
+        if let cg = NSGraphicsContext.current?.cgContext { shadow.cast(in: cg, inFlippedView: true) }
         let inner = bounds.insetBy(dx: 5, dy: 5)
         let border = inner.insetBy(dx: 0.5, dy: 0.5)
         color.withAlphaComponent(1).setStroke()
@@ -1339,8 +1339,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if !framePreview { drawCheckerboard(in: document.canvasRect) }
         var visible = documentIncludingPendingText()
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
-        SketchRenderer.draw(visible, includeBackground: !framePreview, onViewSurface: true)
-        if let preview { SketchRenderer.draw(preview, onViewSurface: true) }
+        SketchRenderer.draw(visible, includeBackground: !framePreview, inFlippedView: true)
+        if let preview { SketchRenderer.draw(preview, inFlippedView: true) }
         NSGraphicsContext.restoreGraphicsState()
         drawSelectionChrome()
         if framePreview {
