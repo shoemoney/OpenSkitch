@@ -64,8 +64,10 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     private var payloads: [ObjectIdentifier: Export] = [:]
     private var sessions: [ObjectIdentifier: ObjectIdentifier] = [:]
     private var activeProvider: ObjectIdentifier?
+    /// Modern lets the glass surface behind the view be the plate.
+    var drawsBackground = true { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill()
+        if drawsBackground { NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill() }
         if let overview { overview.draw(in: bounds.insetBy(dx: 4, dy: 4), from: .zero, operation: .sourceOver, fraction: 0.2) }
         let title = "Drag Me"
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 20), .foregroundColor: NSColor.labelColor]
@@ -236,6 +238,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var applyingFontChange = false
     var activeResizeSession: ResizePanelSession?
     var toolButtons: [SketchTool: NSButton] = [:]
+    var modernChrome: NSView?
+    /// Launches a fresh instance; only `OpenSkitchMain` installs one, so tests and tools never spawn an app.
+    var relaunchRequest: ((URL) -> Void)?
+    var pendingRelaunch: URL?
     var currentURL: URL?
     var documentGeneration = UUID()
     var legacyMetadata = LegacyBridge.Metadata()
@@ -344,7 +350,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func finishShutdownDecision() -> Bool {
         guard let failure = shutdownError else { return true }
-        terminationStarted = false
+        terminationStarted = false; pendingRelaunch = nil
         if discardedForTermination { dirty = true; window.isDocumentEdited = true }
         discardedForTermination = false; saveRecovery(); updateStatus()
         // Reply to AppKit before presenting an error about incomplete cleanup.
@@ -495,6 +501,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let hintEventMonitor { NSEvent.removeMonitor(hintEventMonitor); self.hintEventMonitor = nil }
         removeDragThumbnail(); activeDragID = nil; visibilityZoomOrigin = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
+        if let url = pendingRelaunch { pendingRelaunch = nil; relaunchRequest?(url) }
     }
     static func dragThumbnailRect(windowFrame: NSRect, controlRect: NSRect) -> NSRect {
         guard windowFrame.width > 0, windowFrame.height > 0 else { return .zero }
@@ -651,6 +658,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1024, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "OpenSkitch"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
+        if #available(macOS 26, *), Appearance.isModern { buildModernWindowContent(); return }
         window.contentView = FrameChromeView(frame: window.contentView?.bounds ?? .zero)
         guard let content = window.contentView else { return }
         content.appearance = NSAppearance(named: .aqua)
@@ -769,27 +777,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:)); zoomControl.setAccessibilityLabel("Canvas zoom")
         zoomControl.widthAnchor.constraint(equalToConstant: 160).isActive = true
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
-        drag.prepare = { [weak self] in
-            guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return nil }
-            self.canvas.commitPendingTextEditing()
-            self.updateDragPreview()
-            guard let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragAtOriginalSize, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
-            let name = self.safeName(), generation = self.documentGeneration
-            return DragExportView.Payload(data: data, name: name, format: self.dragFormat, delivered: { [weak self] url in
-                guard let self, !self.terminationStarted else { return }
-                self.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
-            })
-        }
-        drag.onBegin = { [weak self] id in self?.activeDragID = id }
-        drag.onLeaveControl = { [weak self] id in self?.iconifyDrag(id) }
-        drag.onEnd = { [weak self] id, succeeded in self?.endDrag(id, succeeded: succeeded) }
-        drag.onDeliveryFailure = { [weak self] id in
-            guard let self, !self.terminationStarted else { return }
-            if self.activeDragID == id { self.activeDragID = nil }
-            self.restoreDragThumbnail(id)
-        }
-        drag.setAccessibilityElement(true); drag.setAccessibilityLabel("Drag Me"); drag.toolTip = "Drag the drawing into Finder or another application"
-        trackHint(drag, owner: "drag-me") { OriginalHintMessages.hover(actionTag: 40) }
+        configureDragExport(drag)
         let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Share drawing")
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
@@ -814,6 +802,33 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), options.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 30)
         ])
         content.addSubview(canvasBorder)
+        wireEditorChrome(scroll: scroll)
+        setTool(.arrow)
+    }
+    func configureDragExport(_ drag: DragExportView) {
+        drag.prepare = { [weak self] in
+            guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return nil }
+            self.canvas.commitPendingTextEditing()
+            self.updateDragPreview()
+            guard let data = try? self.exportData(format: self.dragFormat, originalSize: self.dragAtOriginalSize, jpegQuality: self.dragQuality), let snapshot = try? self.historySnapshot() else { return nil }
+            let name = self.safeName(), generation = self.documentGeneration
+            return DragExportView.Payload(data: data, name: name, format: self.dragFormat, delivered: { [weak self] url in
+                guard let self, !self.terminationStarted else { return }
+                self.archive(snapshot, name: name, action: .exported, destination: url.path, generation: generation)
+            })
+        }
+        drag.onBegin = { [weak self] id in self?.activeDragID = id }
+        drag.onLeaveControl = { [weak self] id in self?.iconifyDrag(id) }
+        drag.onEnd = { [weak self] id, succeeded in self?.endDrag(id, succeeded: succeeded) }
+        drag.onDeliveryFailure = { [weak self] id in
+            guard let self, !self.terminationStarted else { return }
+            if self.activeDragID == id { self.activeDragID = nil }
+            self.restoreDragThumbnail(id)
+        }
+        drag.setAccessibilityElement(true); drag.setAccessibilityLabel("Drag Me"); drag.toolTip = "Drag the drawing into Finder or another application"
+        trackHint(drag, owner: "drag-me") { OriginalHintMessages.hover(actionTag: 40) }
+    }
+    func wireEditorChrome(scroll: NSScrollView) {
         canvasBorder.onBegin = { [weak self] handle, flags in self?.beginWindowGesture(handle, flags: flags) ?? false }
         canvasBorder.onDrag = { [weak self] delta, flags in self?.previewBorderGesture(delta: delta, flags: flags) }
         canvasBorder.onEnd = { [weak self] cancelled in self?.endWindowGesture(cancelled: cancelled) }
@@ -837,7 +852,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if entered { self.helpBevel?.hover(owner: "canvas", message: OriginalHintMessages.hover(tool: self.canvas.tool)) }
             else { self.helpBevel?.exit(owner: "canvas") }
         }
-        setTool(.arrow)
     }
     func menu(_ title: String, items: [(String, Selector?, String)]) -> NSMenu {
         let m = NSMenu(title: title); m.font = .systemFont(ofSize: 20)
@@ -891,6 +905,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let minimize = NSMenuItem(title: "Minimize", action: #selector(vanish), keyEquivalent: "m")
         minimize.target = self; windows.insertItem(minimize, at: 0)
         for m in [appMenu, file, edit, image, drawing, text, snap, windows] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }
+        if #available(macOS 26, *), Appearance.isModern { MenuSymbols.apply(to: bar) }
         NSApp.mainMenu = bar; NSApp.windowsMenu = windows
     }
     @objc func changeSmoothing(_ sender: NSMenuItem) {
@@ -1020,7 +1035,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         colorOpenedByHover = hover
         let view = BezelHoverPaletteView(frame: NSRect(x: 0, y: 0, width: 246, height: 140))
         view.onHover = { [weak self] inside in self?.drawingColorHover(inside, palette: true) }
-        view.appearance = NSAppearance(named: .aqua)
+        if modernChrome == nil { view.appearance = NSAppearance(named: .aqua) }
         let title = label("Drawing colors"); title.frame = NSRect(x: 12, y: 108, width: 222, height: 25); view.addSubview(title)
         presetColorButtons.removeAll()
         for (index, preset) in OriginalDrawingControls.presets.enumerated() {
@@ -1036,7 +1051,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         custom.frame = NSRect(x: 12, y: 2, width: 222, height: 30); custom.tag = 110; view.addSubview(custom)
         let controller = NSViewController(); controller.view = view
         let popover = NSPopover(); popover.behavior = .transient; popover.contentViewController = controller
-        popover.appearance = NSAppearance(named: .aqua)
+        if modernChrome == nil { popover.appearance = NSAppearance(named: .aqua) }
         colorPopover = popover; syncDrawingControls()
         popover.show(relativeTo: paletteButton.bounds, of: paletteButton, preferredEdge: .minX)
         writeLayoutEvidence()
@@ -1151,6 +1166,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let scale = min(1, 128 / max(document.size.width, document.size.height))
             dragExportView?.overview = ImageExport.image(document: document, size: CGSize(width: max(1, ceil(document.size.width * scale)), height: max(1, ceil(document.size.height * scale))))
         }
+        feedCanvasBleed()
     }
     func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
     func error(_ error: Error) { let a = NSAlert(error: error); a.runModal() }
@@ -1509,6 +1525,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let form = GeneralPreferencesForm(state: generalPreferences.state)
             form.onChange = { [weak self] in self?.applyGeneralPreferences($0) }
             form.onDone = { [weak self] in self?.closePreferences() }
+            form.onRelaunch = { [weak self] in self?.relaunch() }
             form.onShortcuts = { [weak self] in
                 guard let self, !self.terminationStarted else { return }
                 self.hotkeys.showSettings(attachedTo: self.preferencesWindow)
@@ -1534,6 +1551,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if saved.statusMenu != previous.statusMenu { applyPresencePolicy() }
         if !saved.playSounds { soundEffects.stop() }
         helpBevel?.enabled = saved.showKeyboardTips
+    }
+    /// Quits through the normal Save/Discard decision; the fresh instance starts only once this one has released its global shortcuts.
+    func relaunch() {
+        guard !terminationStarted, allowDiscard(discardingForTermination: true) else { return }
+        saveRecovery()
+        pendingRelaunch = Bundle.main.bundleURL
+        NSApp.terminate(nil)
     }
     func closePreferences() {
         guard let panel = preferencesWindow, panel.attachedSheet == nil else { return }
@@ -1669,10 +1693,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.framePreview = true
         snapButton.cancelOperation(nil)
         snapButton.title = "Snap Frame"
-        snapButton.image = recoveredImage("SnapSnap"); snapButton.imageScaling = .scaleProportionallyDown
+        if modernChrome == nil { snapButton.image = recoveredImage("SnapSnap"); snapButton.imageScaling = .scaleProportionallyDown }
         (snapButton as? OriginalActionButton)?.alternateAction = nil
         snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
         cameraButton.isHidden = true; cancelFrameButton.isHidden = false
+        setModernFrameMode(true)
         status.stringValue = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
     }
     @objc func cancelFrame() {
@@ -1689,10 +1714,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
         snapButton.title = "Snap"
-        snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imageScaling = .scaleNone
+        if modernChrome == nil { snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imageScaling = .scaleNone }
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
         cameraButton.isHidden = false; cancelFrameButton.isHidden = true
+        setModernFrameMode(false)
         updateStatus()
     }
     func performFrameSnap(delay: Double = 0) {
@@ -1957,6 +1983,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                   "frames": windowZoom?.frameCount ?? 0,
                                   "restoring": windowZoom?.direction == .restore]
         evidence["visibilityZoomOrigin"] = NSStringFromRect(visibilityZoomOrigin ?? .zero)
+        evidence["appearance"] = ["style": Appearance.current.rawValue, "modernChrome": modernChrome != nil]
         evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,
@@ -1990,7 +2017,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                            "hoverOpened": colorOpenedByHover, "controlHovered": colorControlHovered, "paletteHovered": colorPaletteHovered]
             evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize),
                                        "recoveredArtwork": (content as? FrameChromeView)?.usesRecoveredBezel ?? false]
-            if let header = content.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
+            if let header = (modernChrome ?? content).subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
                let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) {
                 let frame = brand.convert(brand.bounds, to: content)
                 evidence["bezelHeader"] = ["brandFrame": NSStringFromRect(frame), "windowCenterX": content.bounds.midX,
@@ -2019,6 +2046,11 @@ enum OpenSkitchMain {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let delegate = AppDelegate()
+        delegate.relaunchRequest = { url in
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.createsNewApplicationInstance = true
+            NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: nil)
+        }
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
     }

@@ -3055,7 +3055,7 @@ enum AppSafetyTests {
             withExtendedLifetime(delegate) { NSApp.run() }
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
-        let tests: [(String, () throws -> Void)] = [
+        let classicCases: [(String, () throws -> Void)] = [
             ("Native Preferences routes original defaults without disturbing pending text or history", generalPreferencesIntegration),
             ("Original hint shell routes modifiers, suppression, lifecycle and screen-fit reserves", hintShellRouting),
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
@@ -3693,6 +3693,7 @@ enum AppSafetyTests {
                 try expect(ToolButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
             })
         ]
+        let tests = ProcessInfo.processInfo.environment["SKITCH_APPEARANCE"] == "modern" ? Self.modernCases : classicCases
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []
