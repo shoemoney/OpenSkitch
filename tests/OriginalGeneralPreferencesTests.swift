@@ -2,6 +2,7 @@
 //   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/DocumentModel.swift Sources/Appearance.swift \
 //   Sources/GeneralPreferencesForm.swift Sources/OriginalGeneralPreferences.swift tests/OriginalGeneralPreferencesTests.swift \
 //   -o build/original-general-preferences-tests
+// The audio decode checks need the git-ignored original/ archive; without it they print a SKIP line and the rest still run.
 #if ORIGINAL_GENERAL_PREFERENCES_TESTS
 import AppKit
 
@@ -93,10 +94,17 @@ enum OriginalGeneralPreferencesTests {
         audio.play("wipe_brushlayer", enabled: true); audio.play("snap", enabled: true)
         try expect(resolutions == ["wipe_brushlayer", "snap"] && playback.map(\.lastPathComponent) == ["wipe_brushlayer.m4a"], "Allowed original assets route playback; a missing resource is harmless")
         audio.stop()
+        // The git-ignored original/ archive is absent on a fresh clone: skip only the audio decode checks.
         let resources = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("original/Skitch.app/Contents/Resources")
-        for name in OriginalSoundEffects.names.sorted() {
-            let sound = NSSound(contentsOf: resources.appendingPathComponent(name + ".m4a"), byReference: false)
-            try expect(sound != nil && sound!.duration > 0, "Original \(name) audio decodes with positive duration without playing it")
+        var skipped = false
+        if FileManager.default.fileExists(atPath: resources.path) {
+            for name in OriginalSoundEffects.names.sorted() {
+                let sound = NSSound(contentsOf: resources.appendingPathComponent(name + ".m4a"), byReference: false)
+                try expect(sound != nil && sound!.duration > 0, "Original \(name) audio decodes with positive duration without playing it")
+            }
+        } else {
+            print("SKIP OriginalGeneralPreferencesTests original audio decode: \(resources.path) not present (original/ is git-ignored)")
+            skipped = true
         }
 
         // Appearance is a reconstruction key (no original Skitch binding), resolved by AppearanceResolver.
@@ -173,7 +181,7 @@ enum OriginalGeneralPreferencesTests {
         form.synchronize(appearanceStore.state)
         try expect(modernRadio.state == (osDefault == .modern ? .on : .off) && classicRadio.state == (osDefault == .classic ? .on : .off),
                    "Removing the key shows the OS default in the form")
-        print("OriginalGeneralPreferencesTests: \(checks) checks passed")
+        print("OriginalGeneralPreferencesTests: \(checks) checks passed" + (skipped ? "; original audio decode skipped" : ""))
     }
 }
 #endif

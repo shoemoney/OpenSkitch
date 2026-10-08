@@ -3,6 +3,7 @@
 //   -target arm64-apple-macosx13.0 -D TOOL_BUTTON_TESTS \
 //   Sources/OriginalActionButton.swift Sources/ToolButton.swift tests/ToolButtonTests.swift -o build/tool-button-tests
 // rtk proxy build/tool-button-tests
+// The original-artwork pairs need the git-ignored original/ archive; without it they print a SKIP line and the rest still run.
 #if TOOL_BUTTON_TESTS
 import AppKit
 
@@ -27,6 +28,7 @@ private final class NonorderingButtonWindow: NSWindow {
 @MainActor
 private enum ToolButtonTests {
     private static var checks = 0
+    private static var skippedArtwork = false
     private static func expect(_ value: @autoclosure () -> Bool, _ message: String) {
         precondition(value(), message)
         checks += 1
@@ -84,7 +86,7 @@ private enum ToolButtonTests {
         secondaryActions()
         keyboardFocus()
         contrast()
-        print("ToolButtonTests: \(checks) checks passed")
+        print("ToolButtonTests: \(checks) checks passed" + (skippedArtwork ? "; original artwork pairs skipped" : ""))
     }
 
     private static func appearanceAndRendering() {
@@ -162,11 +164,19 @@ private enum ToolButtonTests {
 
         // The aggregate runner compiles a frozen snapshot under build/, but
         // runs each suite from the repository root like the standalone command.
+        // The git-ignored original/ archive is absent on a fresh clone: skip only the artwork pairs.
         let resources = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
             .appendingPathComponent("original/Skitch.app/Contents/Resources", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: resources.path) else {
+            print("SKIP ToolButtonTests original artwork pairs: \(resources.path) not present (original/ is git-ignored)")
+            skippedArtwork = true
+            return
+        }
         for name in ["Arrow", "Brush", "Circle", "Cursor", "Eraser", "Fill", "Line", "Rect", "Text"] {
-            let off = NSImage(contentsOf: resources.appendingPathComponent("ToolOff" + name + ".png"))!
-            let on = NSImage(contentsOf: resources.appendingPathComponent("ToolOn" + name + ".png"))!
+            guard let off = NSImage(contentsOf: resources.appendingPathComponent("ToolOff" + name + ".png")),
+                  let on = NSImage(contentsOf: resources.appendingPathComponent("ToolOn" + name + ".png")) else {
+                preconditionFailure("Original ToolOff\(name)/ToolOn\(name) PNG missing from the archive")
+            }
             button.isEnabled = true; button.highlight(false)
             button.image = off; button.alternateImage = on; button.state = .off
             let normal = raster(button)
