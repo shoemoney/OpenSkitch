@@ -15,3 +15,5 @@ build/
 node_modules/
 package-lock.json
 fortawesome-fontawesome-pro-*.tgz
+.claude/worktrees/
+.todo-worktrees/
