@@ -1,3 +1,7 @@
+// rtk proxy xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -framework AppKit -D ORIGINAL_GENERAL_PREFERENCES_TESTS \
+//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/DocumentModel.swift Sources/Appearance.swift \
+//   Sources/GeneralPreferencesForm.swift Sources/OriginalGeneralPreferences.swift tests/OriginalGeneralPreferencesTests.swift \
+//   -o build/original-general-preferences-tests
 #if ORIGINAL_GENERAL_PREFERENCES_TESTS
 import AppKit
 
@@ -9,6 +13,9 @@ enum OriginalGeneralPreferencesTests {
     static func expect(_ condition: @autoclosure () -> Bool, _ message: String) throws {
         checks += 1
         if !condition() { throw Failure(message: message) }
+    }
+    static func descendants(_ view: NSView) -> [NSView] {
+        [view] + view.subviews.flatMap { descendants($0) }
     }
     static func main() throws {
         _ = NSApplication.shared
@@ -91,6 +98,81 @@ enum OriginalGeneralPreferencesTests {
             let sound = NSSound(contentsOf: resources.appendingPathComponent(name + ".m4a"), byReference: false)
             try expect(sound != nil && sound!.duration > 0, "Original \(name) audio decodes with positive duration without playing it")
         }
+
+        // Appearance is a reconstruction key (no original Skitch binding), resolved by AppearanceResolver.
+        let appearanceDomain = domain + ".appearance"
+        let appearanceDefaults = UserDefaults(suiteName: appearanceDomain)!
+        defer { appearanceDefaults.removePersistentDomain(forName: appearanceDomain) }
+        let appearanceStore = OriginalGeneralPreferences(defaults: appearanceDefaults)
+        let resolver = AppearanceResolver(defaults: appearanceDefaults)
+        let osDefault: AppearanceStyle = resolver.supportsModern ? .modern : .classic
+        let other: AppearanceStyle = osDefault == .modern ? .classic : .modern
+        try expect(OriginalGeneralPreferences.appearanceKey == "appearanceStyle" && OriginalGeneralPreferences.appearanceKey == AppearanceResolver.defaultsKey,
+                   "Appearance uses the resolver's reconstruction key")
+        let originalKeys = [OriginalGeneralPreferences.precisionKey, OriginalGeneralPreferences.captureKey, OriginalGeneralPreferences.soundsKey,
+                            OriginalGeneralPreferences.presenceKey, OriginalGeneralPreferences.overlaysKey, OriginalGeneralPreferences.keyboardTipsKey]
+        try expect(!originalKeys.contains(OriginalGeneralPreferences.appearanceKey), "Appearance is not mistaken for an original Skitch key")
+        let freshAppearance = appearanceStore.state
+        try expect(freshAppearance.appearance == osDefault, "A fresh store follows the OS default: Modern on macOS 26 and later, Classic below")
+        appearanceStore.apply(freshAppearance)
+        try expect(appearanceDefaults.persistentDomain(forName: appearanceDomain)?.isEmpty != false, "Reading and applying the default appearance writes nothing")
+        var quiet = appearanceStore.state; quiet.playSounds = false
+        appearanceStore.apply(quiet)
+        try expect(appearanceDefaults.object(forKey: AppearanceResolver.defaultsKey) == nil && appearanceDefaults.bool(forKey: "disableSounds"),
+                   "An unrelated edit never persists the default appearance")
+        var chosen = appearanceStore.state; chosen.appearance = other
+        let beforeChoice = appearanceDefaults.persistentDomain(forName: appearanceDomain)!
+        appearanceStore.apply(chosen)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == other.rawValue && resolver.storedChoice == other, "An explicit choice persists as its word")
+        var afterChoice = appearanceDefaults.persistentDomain(forName: appearanceDomain)!
+        afterChoice.removeValue(forKey: AppearanceResolver.defaultsKey)
+        try expect(NSDictionary(dictionary: afterChoice).isEqual(to: beforeChoice), "Choosing an appearance touches no other preference")
+        try expect(OriginalGeneralPreferences(defaults: UserDefaults(suiteName: appearanceDomain)!).state.appearance == other, "The choice reloads through another store")
+        chosen.appearance = osDefault
+        appearanceStore.apply(chosen)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == osDefault.rawValue && appearanceStore.state.appearance == osDefault,
+                   "Choosing the OS default again is still an explicit, persisted choice")
+        resolver.store(nil)
+        try expect(appearanceDefaults.object(forKey: AppearanceResolver.defaultsKey) == nil && appearanceStore.state.appearance == osDefault,
+                   "Removing the key returns to the OS default")
+        appearanceDefaults.set("glass", forKey: AppearanceResolver.defaultsKey)
+        try expect(appearanceStore.state.appearance == osDefault, "A malformed stored appearance reads as the OS default")
+        var neutral = appearanceStore.state; neutral.arrowHead = neutral.arrowHead == 1 ? 2 : 1
+        appearanceStore.apply(neutral)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == "glass", "Reading or unrelated edits leave a malformed value untouched")
+        neutral.appearance = other
+        appearanceStore.apply(neutral)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == other.rawValue, "An explicit choice replaces a malformed value")
+        resolver.store(nil)
+
+        // The real form drives the store: radios persist the key, Relaunch persists nothing.
+        let form = GeneralPreferencesForm(state: appearanceStore.state, modernAvailable: true)
+        form.onChange = { appearanceStore.apply($0); form.synchronize(appearanceStore.state) }
+        var relaunches = 0
+        form.onRelaunch = { relaunches += 1 }
+        let formButtons = descendants(form).compactMap { $0 as? NSTabView }.first!.tabViewItems.flatMap { descendants($0.view!) }.compactMap { $0 as? NSButton }
+        func control(_ identifier: String) throws -> NSButton {
+            let matches = formButtons.filter { $0.identifier?.rawValue == identifier }
+            try expect(matches.count == 1, "Exactly one \(identifier) control")
+            return matches[0]
+        }
+        let modernRadio = try control("appearanceModern"), classicRadio = try control("appearanceClassic"), relaunch = try control("appearanceRelaunch")
+        try expect(modernRadio.state == (osDefault == .modern ? .on : .off) && classicRadio.state == (osDefault == .classic ? .on : .off),
+                   "The form opens on the stored or default appearance")
+        classicRadio.performClick(nil)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == "classic" && classicRadio.state == .on && modernRadio.state == .off,
+                   "Classic radio persists classic")
+        modernRadio.performClick(nil)
+        try expect(appearanceDefaults.string(forKey: AppearanceResolver.defaultsKey) == "modern" && modernRadio.state == .on && classicRadio.state == .off,
+                   "Modern radio persists modern")
+        let beforeRelaunch = appearanceDefaults.persistentDomain(forName: appearanceDomain)!
+        relaunch.performClick(nil)
+        try expect(relaunches == 1 && NSDictionary(dictionary: appearanceDefaults.persistentDomain(forName: appearanceDomain)!).isEqual(to: beforeRelaunch),
+                   "Relaunch calls back once and writes no preference")
+        resolver.store(nil)
+        form.synchronize(appearanceStore.state)
+        try expect(modernRadio.state == (osDefault == .modern ? .on : .off) && classicRadio.state == (osDefault == .classic ? .on : .off),
+                   "Removing the key shows the OS default in the form")
         print("OriginalGeneralPreferencesTests: \(checks) checks passed")
     }
 }

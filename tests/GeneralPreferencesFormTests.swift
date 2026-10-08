@@ -1,7 +1,7 @@
 // Standalone native tests; no windows or desktop automation.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete \
 //   -target arm64-apple-macosx13.0 -framework AppKit -D GENERAL_PREFERENCES_FORM_TESTS \
-//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/GeneralPreferencesForm.swift \
+//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/Appearance.swift Sources/GeneralPreferencesForm.swift \
 //   tests/GeneralPreferencesFormTests.swift -o build/general-preferences-form-tests
 // rtk proxy build/general-preferences-form-tests
 #if GENERAL_PREFERENCES_FORM_TESTS
@@ -33,7 +33,11 @@ private enum GeneralPreferencesFormTests {
         expect(!keyboardOnly.showToolTips && keyboardOnly.showKeyboardTips, "Tool tips default independently")
         expect(initial != toolOnly && initial != keyboardOnly && toolOnly != keyboardOnly,
                "Equatable includes each tip preference")
-        let form = GeneralPreferencesForm(state: initial)
+        expect(initial.appearance == .classic && toolOnly.appearance == .classic, "Existing initializer call sites default to Classic")
+        let modernOnly = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
+                         includeSkitch: true, playSounds: false, statusMenu: 0, appearance: .modern)
+        expect(modernOnly.appearance == .modern && !modernOnly.showToolTips && modernOnly != initial, "Equatable includes the appearance choice")
+        let form = GeneralPreferencesForm(state: initial, modernAvailable: true)
         if CommandLine.arguments.contains("--render") {
             form.appearance = NSAppearance(named: .aqua)
         }
@@ -60,15 +64,29 @@ private enum GeneralPreferencesFormTests {
         let toolTips = button("Show tool tip overlays")
         let keyboardTips = button("Show keyboard tip overlay")
         let done = button("Done"), shortcuts = button("Capture Shortcuts…"), sharing = button("Sharing Settings…")
-        let groups = [[precise, medium, loose], [end, start], [dock, menu, both]]
-        let tabButtons = [[sounds, toolTips, keyboardTips, dock, menu, both],
+        let modern = button("Modern"), classic = button("Classic"), relaunch = button("Relaunch OpenSkitch")
+        let groups = [[precise, medium, loose], [end, start], [dock, menu, both], [modern, classic]]
+        let tabButtons = [[sounds, toolTips, keyboardTips, dock, menu, both, modern, classic, relaunch],
                           [precise, medium, loose, end, start], [snap, shortcuts]]
         for (index, controls) in tabButtons.enumerated() {
             expect(controls.allSatisfy { $0.isDescendant(of: tabs.tabViewItems[index].view!) },
                    "Controls belong to recovered tab \(tabs.tabViewItems[index].label)")
         }
         expect(!sharing.isDescendant(of: tabs) && !done.isDescendant(of: tabs), "Sharing and Done stay in footer")
-        expect(buttons.count == 15, "Only the supported controls")
+        expect(buttons.count == 18 && buttons.filter { ![modern, classic, relaunch].contains($0) }.count == 15, "Only the supported controls")
+        expect(modern.identifier?.rawValue == "appearanceModern" && classic.identifier?.rawValue == "appearanceClassic", "Appearance radios are addressable")
+        expect(modern.accessibilityLabel() == "Modern appearance" && classic.accessibilityLabel() == "Classic appearance",
+               "Appearance radios say what they choose")
+        expect(modern.tag == 1 && classic.tag == 0, "Appearance tags follow AppearanceStyle order")
+        expect(modern.accessibilityHelp() == "Takes effect the next time OpenSkitch opens." && classic.accessibilityHelp() == modern.accessibilityHelp(),
+               "Radios carry the relaunch note for VoiceOver")
+        expect(modern.state == .off && classic.state == .on, "Classic is the initial appearance")
+        let appearanceLabel = views.compactMap { $0 as? NSTextField }.filter { $0.stringValue == "Appearance:" }
+        let appearanceNote = views.compactMap { $0 as? NSTextField }.filter { $0.stringValue == "Takes effect the next time OpenSkitch opens." }
+        expect(appearanceLabel.count == 1 && appearanceNote.count == 1, "Appearance row has its label and relaunch note")
+        expect(appearanceLabel[0].font?.pointSize == 20 && appearanceNote[0].font!.pointSize >= 18, "Appearance row text is readable")
+        expect(relaunch.identifier?.rawValue == "appearanceRelaunch" && relaunch.bezelStyle == .rounded, "Relaunch is a standard push button")
+        expect(appearanceNote[0].identifier?.rawValue == "appearanceNote", "Relaunch note is addressable")
         expect(precise.tag == 0 && medium.tag == 1 && loose.tag == 2, "Original precision tags")
         expect(end.tag == 2 && start.tag == 1, "Original arrow tags")
         expect(dock.tag == 2 && menu.tag == 1 && both.tag == 0, "Original visibility tags")
@@ -117,11 +135,29 @@ private enum GeneralPreferencesFormTests {
         click(keyboardTips) { $0.showKeyboardTips = true }
         click(toolTips) { $0.showToolTips = false }
         click(keyboardTips) { $0.showKeyboardTips = false }
+        click(modern) { $0.appearance = .modern }
+        expect(modern.state == .on && classic.state == .off, "Modern radio shows the choice")
+        click(modern) { $0.appearance = .modern }
+        click(classic) { $0.appearance = .classic }
+        expect(modern.state == .off && classic.state == .on, "Classic radio shows the choice")
+        click(classic) { $0.appearance = .classic }
+        click(modern) { $0.appearance = .modern }
+        var relaunches = 0
+        form.onRelaunch = { relaunches += 1 }
+        let beforeRelaunch = delivered.count
+        relaunch.performClick(nil)
+        expect(relaunches == 1 && delivered.count == beforeRelaunch, "Relaunch calls its callback once and publishes no edit")
+        relaunch.performClick(nil)
+        expect(relaunches == 2 && modern.state == .on && delivered.last == expected, "Relaunch keeps the chosen appearance")
+        form.onRelaunch = nil
+        relaunch.performClick(nil)
+        expect(relaunches == 2 && delivered.count == beforeRelaunch, "An unbound relaunch callback is safe")
+        click(classic) { $0.appearance = .classic }
 
         let count = delivered.count
         expected = GeneralPreferencesState(drawingPrecision: .loose, arrowHead: 1,
                                           includeSkitch: false, playSounds: true, statusMenu: 1,
-                                          showToolTips: true, showKeyboardTips: true)
+                                          showToolTips: true, showKeyboardTips: true, appearance: .modern)
         reveal(precise) // Synchronize tips while the General tab is not visible.
         let selectedBeforeSync = tabs.selectedTabViewItem
         form.synchronize(expected)
@@ -130,6 +166,7 @@ private enum GeneralPreferencesFormTests {
         expect(loose.state == .on && start.state == .on && menu.state == .on
                && snap.state == .off && sounds.state == .on && toolTips.state == .on
                && keyboardTips.state == .on, "Synchronization updates every field, including hidden tips")
+        expect(modern.state == .on && classic.state == .off, "Synchronization updates the appearance radios")
         click(precise) { $0.drawingPrecision = .precise }
 
         for (tool, keyboard) in [(false, false), (true, false), (false, true), (true, true)] {
@@ -162,6 +199,55 @@ private enum GeneralPreferencesFormTests {
         let initialButtons = malformedTabs.tabViewItems.flatMap { descendants($0.view!) }.compactMap { $0 as? NSButton }
         expect(initialButtons.first { $0.title == "End" }?.state == .on
                && initialButtons.first { $0.title == "Both" }?.state == .on, "Initialization also normalizes tags")
+
+        // The Appearance row only exists where Modern can run; elsewhere Classic is forced and nothing is reachable.
+        func appearanceControls(in form: GeneralPreferencesForm) -> [NSView] {
+            let tabs = descendants(form).compactMap { $0 as? NSTabView }.first!
+            return tabs.tabViewItems.flatMap { descendants($0.view!) }.filter {
+                ["appearanceModern", "appearanceClassic", "appearanceRelaunch", "appearanceNote"].contains($0.identifier?.rawValue ?? "")
+                    || ($0 as? NSTextField)?.stringValue == "Appearance:"
+                    || ($0 as? NSButton)?.title == "Modern" || ($0 as? NSButton)?.title == "Classic"
+                    || ($0 as? NSButton)?.title == "Relaunch OpenSkitch"
+            }
+        }
+        expect(appearanceControls(in: form).count == 5, "Available form shows label, two radios, note and Relaunch")
+        let modernState = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2, includeSkitch: true,
+                                                  playSounds: false, statusMenu: 0, appearance: .modern)
+        let availableModern = GeneralPreferencesForm(state: modernState, modernAvailable: true)
+        let availableButtons = descendants(availableModern).compactMap { $0 as? NSTabView }.first!.tabViewItems
+            .flatMap { descendants($0.view!) }.compactMap { $0 as? NSButton }
+        expect(availableButtons.first { $0.title == "Modern" }?.state == .on && availableButtons.first { $0.title == "Classic" }?.state == .off,
+               "Initialization selects the stored appearance")
+        let unavailable = GeneralPreferencesForm(state: modernState, modernAvailable: false)
+        expect(appearanceControls(in: unavailable).isEmpty, "No Appearance row, radios, note or Relaunch where Modern cannot run")
+        var unavailableDelivered: [GeneralPreferencesState] = []
+        unavailable.onChange = { unavailableDelivered.append($0) }
+        let unavailableTabs = descendants(unavailable).compactMap { $0 as? NSTabView }.first!
+        let unavailableButtons = unavailableTabs.tabViewItems.flatMap { descendants($0.view!) }.compactMap { $0 as? NSButton }
+        expect(unavailableButtons.count == 13, "Unavailable form keeps exactly the original tab controls")
+        unavailableButtons.first { $0.title == "Play sounds" }!.performClick(nil)
+        expect(unavailableDelivered.count == 1 && unavailableDelivered[0].appearance == .classic && unavailableDelivered[0].playSounds,
+               "Classic is forced even when the stored state asks for Modern")
+        unavailable.synchronize(modernState)
+        expect(appearanceControls(in: unavailable).isEmpty && unavailableDelivered.count == 1, "Synchronizing Modern never reveals the row or publishes")
+        unavailableButtons.first { $0.title == "Play sounds" }!.performClick(nil)
+        expect(unavailableDelivered.count == 2 && unavailableDelivered[1].appearance == .classic, "Forced Classic persists across edits")
+        for size in [NSSize(width: 650, height: 500), NSSize(width: 780, height: 570)] {
+            unavailable.setFrameSize(size)
+            for item in unavailableTabs.tabViewItems {
+                unavailableTabs.selectTabViewItem(item)
+                unavailable.needsLayout = true
+                unavailable.layoutSubtreeIfNeeded()
+                for control in descendants(unavailable).compactMap({ $0 as? NSControl }) {
+                    let frame = control.convert(control.bounds, to: unavailable)
+                    expect(!control.hasAmbiguousLayout && unavailable.bounds.insetBy(dx: -1, dy: -1).contains(frame),
+                           "Unavailable form still lays out at \(size)")
+                }
+            }
+        }
+        let automatic = GeneralPreferencesForm(state: initial)
+        expect(appearanceControls(in: automatic).isEmpty == !AppearanceResolver().supportsModern,
+               "Default availability follows the running macOS")
 
         // A parent may immediately refresh the form from its persisted state.
         var reentrant = 0
@@ -226,10 +312,13 @@ private enum GeneralPreferencesFormTests {
                 form.needsLayout = true
                 form.layoutSubtreeIfNeeded()
                 expect(tabs.selectedTabViewItem === item && item.view!.isDescendant(of: form), "Native tab switching shows its content")
+                let fitted = tabs.alignmentRect(forFrame: tabs.frame)
+                expect(fitted.minX >= 23 && fitted.maxX <= form.bounds.maxX - 23 && fitted.minY >= 79 && fitted.maxY <= form.bounds.maxY - 23,
+                       "Tabs keep the form's margins at \(size) on \(item.label): \(fitted)")
                 expect(delivered.count == tabCount, "Tab selection does not publish preference edits")
                 expect(medium.state == .on && end.state == .on && both.state == .on
                        && snap.state == .on && sounds.state == .off && toolTips.state == .off
-                       && keyboardTips.state == .off, "Tab changes preserve every preference")
+                       && keyboardTips.state == .off && classic.state == .on && modern.state == .off, "Tab changes preserve every preference")
                 let controls = descendants(form).compactMap { $0 as? NSControl }
                 for control in controls {
                     let frame = control.convert(control.bounds, to: form)
@@ -247,7 +336,7 @@ private enum GeneralPreferencesFormTests {
                                "Title fits without clipping at \(width): \(button.title), needed \(needed), available \(available)")
                     }
                 }
-                for all in groups + [[sharing, done], [sounds, toolTips, keyboardTips]] {
+                for all in groups + [[sharing, done], [sounds, toolTips, keyboardTips], [modern, classic, relaunch], [toolTips, keyboardTips, modern, relaunch]] {
                     let group = all.filter { $0.isDescendant(of: form) }
                     for index in group.indices {
                         for other in group.indices where index < other {
@@ -257,14 +346,17 @@ private enum GeneralPreferencesFormTests {
                     }
                 }
                 if item.label == "General" {
-                    for control in [toolTips, keyboardTips] {
+                    for control in [toolTips, keyboardTips, modern, classic, relaunch] {
                         let frame = control.convert(control.bounds, to: item.view!)
-                        expect(item.view!.bounds.contains(frame), "Tip checkbox fits inside General at \(size)")
+                        expect(item.view!.bounds.contains(frame), "\(control.title) fits inside General at \(size)")
                     }
+                    let note = appearanceNote[0].convert(appearanceNote[0].bounds, to: item.view!)
+                    expect(item.view!.bounds.contains(note) && !note.intersects(relaunch.convert(relaunch.bounds, to: item.view!)),
+                           "Relaunch note fits inside General and stays clear of the button at \(size)")
                 }
                 for field in controls.compactMap({ $0 as? NSTextField }) {
-                    let minimum: CGFloat = field.stringValue.hasPrefix("Holding Option") ? 18 : 20
-                    expect((field.font?.pointSize ?? 0) >= minimum, "Body labels are 20pt; Option help is at least 18pt")
+                    let minimum: CGFloat = field.stringValue.hasPrefix("Holding Option") || field.stringValue.hasPrefix("Takes effect") ? 18 : 20
+                    expect((field.font?.pointSize ?? 0) >= minimum, "Body labels are 20pt; Option help and the relaunch note are at least 18pt")
                     let needed = field.cell!.cellSize(forBounds: field.bounds)
                     expect(needed.width <= field.bounds.width + 1 && needed.height <= field.bounds.height + 1,
                            "Label/help fits at \(width): \(field.stringValue)")
