@@ -2,7 +2,7 @@
 """Run independent native regression suites against a consistent source snapshot."""
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import argparse, hashlib, json, os, platform, re, subprocess, tempfile
+import argparse, hashlib, json, os, platform, re, subprocess, sys, tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64"], default=platform.machine())
@@ -107,6 +107,13 @@ optional_suites = [
     ("menu-symbols-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift", "MenuSymbols.swift"], "MenuSymbolsTests.swift", "MENU_SYMBOLS_TESTS", ()),
     ("glass-chrome-tests", ["Appearance.swift", "OriginalActionButton.swift", "ToolButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "DocumentModel.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
 ]
+# Every unimplemented progress row must carry a disposition; the checker must also reject a row without one.
+subprocess.run([sys.executable, str(root / "tools" / "check-dispositions.py")], cwd=root, check=True)
+with tempfile.TemporaryDirectory() as scratch:
+    bad = Path(scratch) / "progress.json"
+    bad.write_text(json.dumps({"features": [{"id": "x.y", "status": "unimplemented"}]}))
+    if subprocess.run([sys.executable, str(root / "tools" / "check-dispositions.py"), str(bad)], capture_output=True).returncode == 0:
+        raise SystemExit("check-dispositions accepted an unimplemented row without a disposition")
 with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as executor:
     futures = [executor.submit(suite, *args) for args in suites]
     futures += [executor.submit(suite, *args, optional=True) for args in optional_suites]
