@@ -151,6 +151,24 @@ final class TextStyleForm: NSView {
         return matched
     }
 
+    /// Floors a toolbar item view with Auto Layout (NSToolbarItem.minSize/maxSize are deprecated) and
+    /// never sets a maximum, so AppKit keeps its flexible allocation. Constraints are found by
+    /// identifier and updated in place, so repeated preparation never stacks duplicates.
+    private static func constrainToolbarView(_ view: NSView, minimum: NSSize) {
+        // Frame-derived (autoresizing-mask) constraints would pin the size and make the floors inert.
+        if view.translatesAutoresizingMaskIntoConstraints { view.translatesAutoresizingMaskIntoConstraints = false }
+        for (identifier, anchor, constant) in [("skitch.toolbar.minWidth", view.widthAnchor, minimum.width),
+                                               ("skitch.toolbar.minHeight", view.heightAnchor, minimum.height)] {
+            if let existing = view.constraints.first(where: { $0.identifier == identifier }) {
+                if existing.constant != constant { existing.constant = constant }
+            } else {
+                let floor = anchor.constraint(greaterThanOrEqualToConstant: constant)
+                floor.identifier = identifier
+                floor.isActive = true
+            }
+        }
+    }
+
     static func prepareFontPanel(_ panel: NSFontPanel) {
         func visit(_ view: NSView) {
             if let control = view as? NSControl, let font = control.font, font.pointSize < 20 {
@@ -168,14 +186,12 @@ final class TextStyleForm: NSView {
                 if !updates.isEmpty { field.attributedStringValue = value }
             }
             if let browser = view as? NSBrowser {
-                (browser.cellPrototype as? NSCell)?.font = .systemFont(ofSize: 20)
                 browser.rowHeight = max(32, browser.rowHeight)
-                if browser.lastColumn >= 0 {
-                    for column in 0...browser.lastColumn {
-                        if let matrix = browser.matrix(inColumn: column) {
-                            for cell in matrix.cells { cell.font = .systemFont(ofSize: 20) }
-                        }
-                    }
+                // Columns copy their cells from the prototype: restyle it, then rebuild the loaded
+                // columns once (the guard keeps later refreshes from reloading and moving the selection).
+                if let prototype = browser.cellPrototype as? NSCell, prototype.font != .systemFont(ofSize: 20) {
+                    prototype.font = .systemFont(ofSize: 20)
+                    if browser.lastColumn >= 0 { for column in 0...browser.lastColumn { browser.reloadColumn(column) } }
                 }
             }
             if let table = view as? NSTableView {
@@ -209,13 +225,7 @@ final class TextStyleForm: NSView {
                         for (range, font) in updates { title.addAttribute(.font, value: font, range: range) }
                         if !updates.isEmpty { choice.attributedTitle = title }
                     }
-                    let measured = popup.intrinsicContentSize
-                    let minimum = NSSize(width: max(item.minSize.width, 220),
-                                         height: max(item.minSize.height, max(32, measured.height)))
-                    let maximum = NSSize(width: max(item.maxSize.width, minimum.width),
-                                         height: max(item.maxSize.height, minimum.height))
-                    if item.minSize != minimum { item.minSize = minimum }
-                    if item.maxSize != maximum { item.maxSize = maximum }
+                    constrainToolbarView(popup, minimum: NSSize(width: 220, height: max(32, popup.intrinsicContentSize.height)))
                 }
             }
             if let search = item as? NSSearchToolbarItem { visit(search.searchField) }
