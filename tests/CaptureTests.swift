@@ -531,8 +531,8 @@ private enum CaptureTests {
             let region = NSRect(x: 40, y: 60, width: 120, height: 80)
             picker.requests[0].completion(.success(OriginalCaptureSelection(rect: region, windowID: mode == "window" ? 7 : nil, modifiers: [])))
             try await wait { record.results.count == 1 }
-            try expect(flash.plays.last?.frame == region && flash.plays.last?.deflash == quick,
-                       "\(mode) flashes only the snapped rect with the 0.1s deflash")
+            try expect(flash.plays.last?.frame == NSRect(x: 40, y: 1860, width: 120, height: 80) && flash.plays.last?.deflash == quick,
+                       "\(mode) flashes only the snapped rect (flipped from CG top-left to Cocoa) with the 0.1s deflash")
         }
         let camera = OriginalCaptureFlashPlan.make(source: "camera", requested: nil, captured: nil, mainScreen: display)
         try expect(camera?.frame == .zero && camera?.deflashDuration == OriginalCaptureFlashTiming.cameraDeflashDuration,

@@ -57,7 +57,7 @@ final class OriginalCaptureFlashWindow: NSPanel {
 
 /// What the original flashed per source: snapped rect (0.1s) for crosshair/window/frame,
 /// the main screen (0.1s) for fullscreen, NSZeroRect (0.2s) for the camera, nothing for URL snaps.
-/// Rects are returned in Cocoa (bottom-left) coordinates; frame rects arrive top-left.
+/// Rects are returned in Cocoa (bottom-left) coordinates; crosshair/window/frame rects arrive top-left (CG) and are flipped.
 struct OriginalCaptureFlashPlan: Equatable {
     let frame: NSRect
     let deflashDuration: Float32
@@ -69,10 +69,9 @@ struct OriginalCaptureFlashPlan: Equatable {
             return OriginalCaptureFlashPlan(frame: .zero, deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
         case "fullscreen":
             return mainScreen.map { OriginalCaptureFlashPlan(frame: $0, deflashDuration: quick) }
-        case "crosshair", "window":
-            return requested.map { OriginalCaptureFlashPlan(frame: $0, deflashDuration: quick) }
-        case "frame":
-            guard let rect = captured ?? requested, let screen = mainScreen else { return nil }
+        case "crosshair", "window", "frame":
+            let rect = source == "frame" ? (captured ?? requested) : requested
+            guard let rect, let screen = mainScreen else { return nil }
             let flipped = NSRect(x: rect.minX, y: screen.maxY - rect.maxY, width: rect.width, height: rect.height)
             return OriginalCaptureFlashPlan(frame: flipped, deflashDuration: quick)
         default:
