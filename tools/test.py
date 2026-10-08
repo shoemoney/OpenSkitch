@@ -6,6 +6,8 @@ import argparse, hashlib, json, os, platform, re, subprocess, tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64"], default=platform.machine())
+parser.add_argument("--concurrent-app-safety", action="store_true",
+                    help="also run Classic and Modern app-safety in parallel and require both to pass")
 options = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 build = root / "build"
@@ -128,6 +130,9 @@ else:
 for style in safety_runs:
     print("== app-safety", style, flush=True)
     subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root, check=True)
+if options.concurrent_app_safety:
+    print("== app-safety concurrent", flush=True)
+    subprocess.run([str(root / "tools" / "test-app-safety-concurrent.sh"), "--arch", options.arch], cwd=root, check=True)
 if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")
 print("All suites passed on", options.arch, "with no source drift. Evidence:", snapshot, flush=True)
