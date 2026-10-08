@@ -231,6 +231,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var textStyleForm: TextStyleForm?
     var fontPanelRefreshTimer: Timer?
     var fontPanelRecordedTypography = false
+    var fontPanelOpeningLayoutApplied = false
+    var fontPanelVisibleFrameOverride: (() -> NSRect?)?
     var applyingFontChange = false
     var activeResizeSession: ResizePanelSession?
     var toolButtons: [SketchTool: NSButton] = [:]
@@ -1799,31 +1801,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         syncFontPanelSelection()
         panel.orderFront(nil)
         // AppKit restores the shared panel's saved small frame when first shown.
-        // Size the loaded panel, then keep all readable controls on this screen.
-        panel.setContentSize(NSSize(width: 940, height: 720))
-        if let main = window, let screen = main.screen {
-            let visible = screen.visibleFrame.insetBy(dx: 12, dy: 12)
-            var frame = panel.frame
-            frame.origin = CGPoint(x: min(max(main.frame.midX - frame.width / 2, visible.minX), visible.maxX - frame.width),
-                                   y: min(max(main.frame.midY - frame.height / 2, visible.minY), visible.maxY - frame.height))
-            panel.setFrame(frame, display: true)
-        }
-        TextStyleForm.prepareFontPanelLayout(panel)
+        // Size the loaded panel, bounded to the usable display (the accessory scrolls
+        // when constrained), then keep it centered on this screen.
+        let content = NSRect(x: 0, y: 0, width: 940, height: 720)
+        if let main = window, let usable = fontPanelVisibleFrameOverride?() ?? main.screen?.visibleFrame {
+            panel.setFrame(TextStyleForm.fontPanelFrame(size: panel.frameRect(forContentRect: content).size,
+                                                        visible: usable.insetBy(dx: 12, dy: 12), anchor: main.frame), display: true)
+        } else { panel.setContentSize(content.size) }
+        fontPanelOpeningLayoutApplied = TextStyleForm.prepareFontPanelLayout(panel)
         TextStyleForm.prepareFontPanel(panel)
         if window != nil { writeLayoutEvidence() }
         fontPanelRefreshTimer?.invalidate()
         fontPanelRecordedTypography = false
         fontPanelRefreshTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self, let panel = self.fontPanel, panel.isVisible else { self?.fontPanelRefreshTimer?.invalidate(); return }
-                // The modern shared panel creates its split views after Show.
-                // Apply the opening layout once those native views are loaded.
-                if !self.fontPanelRecordedTypography { TextStyleForm.prepareFontPanelLayout(panel) }
-                TextStyleForm.prepareFontPanel(panel)
-                if self.window != nil, !self.fontPanelRecordedTypography {
-                    self.writeLayoutEvidence(); self.fontPanelRecordedTypography = true
-                }
-            }
+            Task { @MainActor in self?.refreshFontPanel() }
+        }
+    }
+    func refreshFontPanel() {
+        guard let panel = fontPanel, panel.isVisible else { fontPanelRefreshTimer?.invalidate(); return }
+        // The modern shared panel creates its split views after Show. Retry the
+        // opening layout until those native views are loaded, then never again for
+        // this presentation: later refreshes must not fight a dragged divider.
+        if !fontPanelOpeningLayoutApplied { fontPanelOpeningLayoutApplied = TextStyleForm.prepareFontPanelLayout(panel) }
+        TextStyleForm.prepareFontPanel(panel)
+        if window != nil, !fontPanelRecordedTypography {
+            writeLayoutEvidence(); fontPanelRecordedTypography = true
         }
     }
     func validModesForFontPanel(_ fontPanel: NSFontPanel) -> NSFontPanel.ModeMask { NSFontPanel.ModeMask(rawValue: 7) }
@@ -1870,7 +1872,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         fontPanelRefreshTimer?.invalidate(); fontPanelRefreshTimer = nil
         fontPanel?.orderOut(nil); fontPanel?.delegate = nil; fontPanel?.accessoryView = nil
         if NSFontManager.shared.target === self { NSFontManager.shared.target = nil }
-        fontPanel = nil; textStyleForm = nil
+        fontPanel = nil; textStyleForm = nil; fontPanelOpeningLayoutApplied = false
     }
     @objc func defaultTextStyle() { guard !terminationStarted else { return }; canvas.restoreDefaultTextStyle(); syncFontPanelSelection() }
     @objc func toggleTextShadow() {

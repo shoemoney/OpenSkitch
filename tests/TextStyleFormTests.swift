@@ -53,7 +53,7 @@ struct TextStyleFormTests {
         unrelated.addArrangedSubview(NSView()); unrelated.addArrangedSubview(NSView())
         root.addSubview(unrelated); unrelated.adjustSubviews(); unrelated.setPosition(180, ofDividerAt: 0)
         let unrelatedBefore = unrelated.arrangedSubviews.map { $0.frame }
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(!TextStyleForm.prepareFontPanelLayout(panel), "Unrelated hierarchy without an accessory reports no native structure")
         expect(unrelated.arrangedSubviews.map { $0.frame } == unrelatedBefore,
                "Unrelated wide split retains its divider")
         let constrained = TextStyleForm(outlined: nil, shadowed: false)
@@ -89,29 +89,29 @@ struct TextStyleFormTests {
         family.addSubview(outlineView); detail.addSubview(tableView); detail.addSubview(form)
         split.addArrangedSubview(family); split.addArrangedSubview(detail)
         root.addSubview(split); split.adjustSubviews(); split.setPosition(180, ofDividerAt: 0)
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(TextStyleForm.prepareFontPanelLayout(panel), "Matching native structure reports that the opening layout was applied")
         expect(abs(family.frame.width - 360) <= 1, "Only the evidenced native family/detail split widens")
         split.setPosition(400, ofDividerAt: 0)
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(TextStyleForm.prepareFontPanelLayout(panel), "Matching structure still reports success when no widening is needed")
         expect(abs(family.frame.width - 400) <= 1, "Opening preparation preserves an already wider divider")
         let nested = NSSplitView(frame: NSRect(x: 0, y: 0, width: 900, height: 300))
         nested.isVertical = true; nested.addArrangedSubview(NSView()); nested.addArrangedSubview(NSView())
         detail.addSubview(nested); nested.adjustSubviews(); nested.setPosition(180, ofDividerAt: 0)
         let nestedBefore = nested.arrangedSubviews.map { $0.frame }
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(TextStyleForm.prepareFontPanelLayout(panel), "Nested preview splits do not hide the outer native structure")
         expect(nested.arrangedSubviews.map { $0.frame } == nestedBefore, "Nested wide preview split is not touched")
         form.removeFromSuperview()
         split.setPosition(180, ofDividerAt: 0)
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(!TextStyleForm.prepareFontPanelLayout(panel), "Detached accessory reports an unloaded native structure")
         expect(abs(family.frame.width - 180) <= 1, "Incomplete/detached native accessory does not match layout")
         detail.addSubview(form)
         split.frame.size.width = 700; split.adjustSubviews(); split.setPosition(180, ofDividerAt: 0)
         let narrowBefore = split.arrangedSubviews.map { $0.frame }
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(!TextStyleForm.prepareFontPanelLayout(panel), "Narrow font panel does not report the wide native structure")
         expect(split.arrangedSubviews.map { $0.frame } == narrowBefore, "Narrow font panel retains native divider allocation")
         split.frame.size.width = 940; split.addArrangedSubview(NSView()); split.adjustSubviews()
         let additionalPaneBefore = split.arrangedSubviews.map { $0.frame }
-        TextStyleForm.prepareFontPanelLayout(panel)
+        expect(!TextStyleForm.prepareFontPanelLayout(panel), "Unknown three-pane hierarchy does not report a match")
         expect(split.arrangedSubviews.map { $0.frame } == additionalPaneBefore,
                "Unknown native three-pane hierarchy is left untouched")
         let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 320, height: 40))
@@ -189,6 +189,52 @@ struct TextStyleFormTests {
                 }
             }
         }
+        // Fonts panel frame: bound the SIZE to the usable area first, then center on the
+        // anchor and clamp the origin. Chrome (title bar and toolbar) is part of the frame size.
+        let chrome = NSSize(width: 0, height: 52)
+        let desiredFrame = NSSize(width: 940 + chrome.width, height: 720 + chrome.height)
+        func inside(_ frame: NSRect, _ area: NSRect) -> Bool {
+            frame.minX >= area.minX - 0.001 && frame.maxX <= area.maxX + 0.001
+                && frame.minY >= area.minY - 0.001 && frame.maxY <= area.maxY + 0.001
+        }
+        let roomy = NSRect(x: 0, y: 93, width: 2056, height: 1197).insetBy(dx: 12, dy: 12)
+        let main = NSRect(x: 500, y: 400, width: 800, height: 600)
+        let centered = TextStyleForm.fontPanelFrame(size: desiredFrame, visible: roomy, anchor: main)
+        expect(centered.size == desiredFrame && abs(centered.midX - main.midX) < 0.001 && abs(centered.midY - main.midY) < 0.001,
+               "Large display keeps the full requested panel centered on the main window")
+        let corner = TextStyleForm.fontPanelFrame(size: desiredFrame, visible: roomy, anchor: NSRect(x: 1900, y: 1200, width: 120, height: 80))
+        expect(corner.size == desiredFrame && inside(corner, roomy) && corner.maxX == roomy.maxX && corner.maxY == roomy.maxY,
+               "A main window near the corner clamps the origin without shrinking the panel")
+        let lowCorner = TextStyleForm.fontPanelFrame(size: desiredFrame, visible: roomy, anchor: NSRect(x: -200, y: 0, width: 100, height: 60))
+        expect(lowCorner.size == desiredFrame && inside(lowCorner, roomy) && lowCorner.minX == roomy.minX && lowCorner.minY == roomy.minY,
+               "A main window past the origin clamps to the opposite edge")
+        for display in [NSSize(width: 1024, height: 640), NSSize(width: 1280, height: 720), NSSize(width: 800, height: 500), NSSize(width: 600, height: 400)] {
+            let area = NSRect(origin: CGPoint(x: 0, y: 25), size: display).insetBy(dx: 12, dy: 12)
+            for anchor in [main, NSRect(x: -400, y: -300, width: 200, height: 100), NSRect(x: 3000, y: 2000, width: 200, height: 100), area] {
+                let frame = TextStyleForm.fontPanelFrame(size: desiredFrame, visible: area, anchor: anchor)
+                expect(inside(frame, area), "Small \(Int(display.width))x\(Int(display.height)) display keeps the whole panel on screen")
+                expect(frame.width == min(desiredFrame.width, area.width) && frame.height == min(desiredFrame.height, area.height),
+                       "Panel shrinks only in the dimension that does not fit \(Int(display.width))x\(Int(display.height))")
+            }
+        }
+        let secondary = NSRect(x: -1920, y: 200, width: 1920, height: 1080).insetBy(dx: 12, dy: 12)
+        let onSecondary = TextStyleForm.fontPanelFrame(size: desiredFrame, visible: secondary, anchor: NSRect(x: -1500, y: 600, width: 400, height: 300))
+        expect(inside(onSecondary, secondary) && onSecondary.size == desiredFrame, "Secondary displays with a negative origin are bounded the same way")
+        let exact = NSRect(origin: CGPoint(x: 40, y: 60), size: desiredFrame)
+        expect(TextStyleForm.fontPanelFrame(size: desiredFrame, visible: exact, anchor: main) == exact, "A display exactly the panel size places it exactly")
+        // Convert between content and frame with the panel itself so title-bar chrome is honored.
+        let geometryPanel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 300, height: 200),
+                                    styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        let wantedContent = NSSize(width: 940, height: 720)
+        let wantedFrame = geometryPanel.frameRect(forContentRect: NSRect(origin: .zero, size: wantedContent)).size
+        expect(wantedFrame.height > wantedContent.height, "Titled panel frame includes chrome beyond its content")
+        let tight = NSRect(x: 0, y: 0, width: 1024, height: 640).insetBy(dx: 12, dy: 12)
+        let placed = TextStyleForm.fontPanelFrame(size: wantedFrame, visible: tight, anchor: main)
+        geometryPanel.setFrame(placed, display: false)
+        let content = geometryPanel.contentRect(forFrameRect: geometryPanel.frame)
+        expect(inside(geometryPanel.frame, tight) && content.width <= wantedContent.width && content.height > 0
+               && abs(content.height - (placed.height - (wantedFrame.height - wantedContent.height))) < 0.5,
+               "Bounded frame converts back to a smaller content area on a short display")
         precondition(failures.isEmpty, failures.joined(separator: "; "))
         print("TextStyleFormTests: \(checks) checks passed (native accessory controls; no desktop input)")
     }

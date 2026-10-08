@@ -2336,6 +2336,120 @@ enum AppSafetyTests {
         app.changeFont(NSFontManager.shared); form.outline.performClick(nil)
         try expect(app.canvas.fontName == future && app.canvas.document.elements.isEmpty, "Termination blocks late panel and accessory actions")
     }
+    /// Controlled stand-in for the loaded native Fonts structure: family outline | font table (+ accessory).
+    static func installNativeFontPanelStructure(_ panel: NSFontPanel) -> (split: NSSplitView, family: NSView, detail: NSView) {
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 940, height: 720))
+        let split = NSSplitView(frame: root.bounds); split.isVertical = true
+        let family = NSView(), detail = NSView()
+        family.addSubview(NSOutlineView(frame: NSRect(x: 0, y: 0, width: 180, height: 700)))
+        detail.addSubview(NSTableView(frame: NSRect(x: 0, y: 0, width: 600, height: 500)))
+        split.addArrangedSubview(family); split.addArrangedSubview(detail)
+        root.addSubview(split); split.adjustSubviews(); split.setPosition(180, ofDividerAt: 0)
+        panel.contentView = root
+        return (split, family, detail)
+    }
+    static func recordedFontPanelPaneWidths(_ app: AppDelegate) throws -> [CGFloat] {
+        let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? app.support.path
+        let data = try Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent("layout.json"))
+        let evidence = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        let layout = (evidence?["fontPanel"] as? [String: Any])?["layout"] as? [[String: Any]] ?? []
+        return (layout.first { ($0["class"] as? String) == "NSSplitView" }?["paneWidths"] as? [Double] ?? []).map { CGFloat($0) }
+    }
+    static func fontPanelOpeningLayoutOncePerPresentation() throws {
+        let fixture = try Fixture(), app = fixture.app
+        var text = SketchElement(kind: .text); text.text = "Divider"; text.fontName = "Helvetica-Bold"; text.fontSize = 30
+        text.rect = CGRect(x: 20, y: 20, width: 250, height: 80)
+        app.canvas.document.elements = [text]; app.canvas.selection = [text.id]
+        app.fontPanelVisibleFrameOverride = { NSRect(x: 0, y: 0, width: 2560, height: 1440) }
+        guard let panel = NSFontManager.shared.fontPanel(true) as? AppSafetyFontPanel else { throw Failure(description: "Native Font Panel factory") }
+        let originalContent = panel.contentView
+        defer { panel.contentView = originalContent }
+        let (split, family, detail) = installNativeFontPanelStructure(panel)
+        app.chooseFont()
+        guard app.fontPanel === panel, let form = app.textStyleForm else { throw Failure(description: "Fonts presenter did not use the controlled panel") }
+        try expect(!app.fontPanelOpeningLayoutApplied && abs(family.frame.width - 180) <= 1,
+                   "Opening layout is pending while the native accessory structure has not loaded")
+        try waitForMain("Evidence refresh runs on the first timer tick") { app.fontPanelRecordedTypography }
+        try expect(!app.fontPanelOpeningLayoutApplied && abs(family.frame.width - 180) <= 1,
+                   "Evidence refresh does not apply or consume the opening layout")
+        detail.addSubview(form)
+        try waitForMain("Native structure that appears after the first tick still receives the opening layout") { app.fontPanelOpeningLayoutApplied }
+        try expect(abs(family.frame.width - 360) <= 1, "Late structure is widened to the opening divider position")
+        // The user drags the divider narrower than the opening position, then chooses fonts.
+        split.setPosition(250, ofDividerAt: 0)
+        panel.conversion = { NSFontManager.shared.convert($0, toFamily: "Courier") }
+        for _ in 0..<3 {
+            app.changeFont(NSFontManager.shared)
+            try expect(!app.fontPanelRecordedTypography && app.fontPanelOpeningLayoutApplied, "A font change refreshes evidence only, never the opening layout state")
+            try waitForMain("Evidence refresh follows each font change") { app.fontPanelRecordedTypography }
+            app.refreshFontPanel()
+            try expect(abs(family.frame.width - 250) <= 1, "A font change preserves the divider the user dragged")
+        }
+        try expect(NSFont(name: app.canvas.document.elements[0].fontName, size: 30)?.familyName == "Courier",
+                   "Font changes are still applied to the selected text")
+        let recorded = try recordedFontPanelPaneWidths(app)
+        try expect(recorded.count == 2 && abs(recorded[0] - 250) <= 1, "Refreshed layout evidence records the user's divider position")
+        // A new presentation is the only thing that re-arms the opening layout.
+        app.chooseFont(); try expect(!panel.isVisible, "Show/Hide toggle hides the panel")
+        app.chooseFont()
+        if form.superview !== detail { detail.addSubview(form) }
+        app.refreshFontPanel()
+        try expect(app.fontPanelOpeningLayoutApplied && abs(family.frame.width - 360) <= 1, "A new presentation applies the opening layout again")
+        split.setPosition(300, ofDividerAt: 0)
+        app.closeFontPanel()
+        try expect(!app.fontPanelOpeningLayoutApplied, "Closing the Fonts panel ends the presentation")
+    }
+    static func fontPanelFitsSmallDisplays() throws {
+        let fixture = try Fixture(), app = fixture.app
+        guard let panel = NSFontManager.shared.fontPanel(true) as? AppSafetyFontPanel else { throw Failure(description: "Native Font Panel factory") }
+        // The controlled panel is full-size-content; restore a titled chrome so content and frame differ.
+        let originalStyle = panel.styleMask
+        panel.styleMask.remove(.fullSizeContentView)
+        defer { panel.styleMask = originalStyle }
+        let chrome = panel.frameRect(forContentRect: NSRect(x: 0, y: 0, width: 940, height: 720)).height - 720
+        try expect(chrome > 0, "Controlled panel exposes title-bar chrome")
+        func within(_ frame: NSRect, _ area: NSRect) -> Bool {
+            frame.minX >= area.minX - 0.5 && frame.maxX <= area.maxX + 0.5 && frame.minY >= area.minY - 0.5 && frame.maxY <= area.maxY + 0.5
+        }
+        func present(_ visible: NSRect, main: NSRect) throws -> NSRect {
+            app.window.setFrame(main, display: false)
+            app.fontPanelVisibleFrameOverride = { visible }
+            if app.fontPanel?.isVisible == true { app.chooseFont() }
+            app.chooseFont()
+            try expect(app.fontPanel === panel && panel.isVisible, "Fonts panel presented")
+            return panel.frame
+        }
+        let roomy = NSRect(x: 0, y: 100, width: 2560, height: 1340)
+        let mainWindow = NSRect(x: 900, y: 500, width: 700, height: 400)
+        let large = try present(roomy, main: mainWindow)
+        let anchor = app.window.frame
+        try expect(panel.contentRect(forFrameRect: large).size == NSSize(width: 940, height: 720), "Large display keeps the full 940x720 content area")
+        try expect(abs(large.midX - anchor.midX) < 0.5 && abs(large.midY - anchor.midY) < 0.5, "Large display centers the panel on the main window")
+        for display in [NSSize(width: 1024, height: 640), NSSize(width: 1280, height: 720), NSSize(width: 800, height: 500)] {
+            let visible = NSRect(x: 0, y: 25, width: display.width, height: display.height)
+            let usable = visible.insetBy(dx: 12, dy: 12)
+            for anchor in [mainWindow, NSRect(x: -300, y: -200, width: 200, height: 100), NSRect(x: 5000, y: 4000, width: 200, height: 100)] {
+                let frame = try present(visible, main: anchor)
+                let content = panel.contentRect(forFrameRect: frame).size
+                try expect(within(frame, usable), "\(Int(display.width))x\(Int(display.height)) display keeps the whole Fonts panel on screen")
+                try expect(content.width <= 940 && content.height <= 720 && content.height > 0 && abs(content.height - (frame.height - chrome)) < 0.5,
+                           "Short display bounds content through the panel's own chrome")
+                try expect(abs(frame.width - min(940, usable.width)) < 0.5 && abs(frame.height - min(720 + chrome, usable.height)) < 0.5,
+                           "Panel shrinks only as far as the usable display requires")
+            }
+        }
+        // Presenting must not disturb pending text editing.
+        let small = NSRect(x: 0, y: 25, width: 1024, height: 640)
+        app.fontPanelVisibleFrameOverride = { small }
+        if app.fontPanel?.isVisible == true { app.chooseFont() }
+        let field = try editor(app, text: "Typing")
+        let typing = field.undoManager, caret = field.selectedRange(), document = app.canvas.document
+        app.chooseFont()
+        try expect(within(panel.frame, small.insetBy(dx: 12, dy: 12)) && panel.isVisible, "Fonts opens on the small display during editing")
+        try expect(field.superview === app.canvas && app.window.firstResponder === field && field.undoManager === typing
+                   && field.selectedRange() == caret && field.string == "Typing" && app.canvas.document == document,
+                   "Small-display presentation leaves pending text editing untouched")
+    }
     static func resizeSheetPreviewLifecycle() throws {
         let fixture = try Fixture(), app = fixture.app
         try viewportFixture(app)
@@ -2951,6 +3065,8 @@ enum AppSafetyTests {
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
             ("Modeless Fonts follows mixed selections scale pending editors and document replacement", fontPanelContextAndPending),
+            ("Fonts opening layout applies once per presentation, even when native views load late, and font changes keep a dragged divider", fontPanelOpeningLayoutOncePerPresentation),
+            ("Fonts panel is bounded to the usable display before positioning without disturbing pending text", fontPanelFitsSmallDisplays),
             ("Resize Apply previews from one baseline; Cancel restores all state; OK commits one crop Undo", resizeSheetPreviewLifecycle),
             ("Resize first-Apply baseline, native Save and independent edits prevent stale preview rollback", resizePreviewInterruptionAndSave),
             ("Resize previews cannot overwrite recovery/History or enter Open History Undo", resizePreviewRecoveryAndHistory),

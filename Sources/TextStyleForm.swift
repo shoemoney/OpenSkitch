@@ -116,24 +116,39 @@ final class TextStyleForm: NSView {
         return records
     }
 
+    /// Fonts panel frame for a desired FRAME size (convert content with `frameRect(forContentRect:)`).
+    /// The size is bounded to `visible` first, so the origin clamp can always keep the whole frame on screen.
+    static func fontPanelFrame(size: NSSize, visible: NSRect, anchor: NSRect) -> NSRect {
+        let fitted = NSSize(width: min(size.width, visible.width), height: min(size.height, visible.height))
+        return NSRect(origin: CGPoint(x: min(max(anchor.midX - fitted.width / 2, visible.minX), visible.maxX - fitted.width),
+                                      y: min(max(anchor.midY - fitted.height / 2, visible.minY), visible.maxY - fitted.height)),
+                      size: fitted)
+    }
+
     /// Leave room for the collection title and full family names at readable sizes.
-    /// Apply on Show only; subsequent refreshes must not fight a user's divider drag.
-    static func prepareFontPanelLayout(_ panel: NSFontPanel) {
-        guard let content = panel.contentView, let accessory = panel.accessoryView else { return }
+    /// Returns true once the matching loaded native structure was found and checked.
+    /// The presenter applies this until it succeeds, then never again for that
+    /// presentation, so later refreshes cannot fight a user's divider drag.
+    @discardableResult
+    static func prepareFontPanelLayout(_ panel: NSFontPanel) -> Bool {
+        guard let content = panel.contentView, let accessory = panel.accessoryView else { return false }
         func contains(_ root: NSView, matching predicate: (NSView) -> Bool) -> Bool {
             predicate(root) || root.subviews.contains { contains($0, matching: predicate) }
         }
         // The loaded native panel has one outer vertical split: the family
         // outline on the left, and font table plus accessory on the right.
         // Do not touch nested preview/accessory splits or unknown hierarchies.
+        var matched = false
         for case let split as NSSplitView in content.subviews {
             let panes = split.arrangedSubviews.sorted { $0.frame.minX < $1.frame.minX }
             guard split.isVertical, panes.count == 2, split.bounds.width >= 800,
                   contains(panes[0], matching: { $0 is NSOutlineView }),
                   contains(panes[1], matching: { $0 is NSTableView && !($0 is NSOutlineView) }),
                   contains(panes[1], matching: { $0 === accessory }) else { continue }
+            matched = true
             if panes[0].frame.width < 360 { split.setPosition(360, ofDividerAt: 0) }
         }
+        return matched
     }
 
     static func prepareFontPanel(_ panel: NSFontPanel) {
