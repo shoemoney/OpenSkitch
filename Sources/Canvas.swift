@@ -690,9 +690,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
             shadow.shadowBlurRadius = 27
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
             shadow.set()
-            // A single Gaussian pass at alpha 0.8 is too faint at the far corners to read as the original's
-            // heavy filter shadow, so the cast is stacked (the picture itself is opaque and covers the repeats).
-            for _ in 0..<4 { SketchRenderer.drawImage(image, in: CGRect(origin: origin, size: document.size)) }
+            SketchRenderer.drawImage(image, in: CGRect(origin: origin, size: document.size))
         })?.representation(using: .png, properties: [:]) else { return }
         endActualPresentation()
         edit("Add Shadow") {

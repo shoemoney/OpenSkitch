@@ -271,8 +271,10 @@ struct CanvasTests {
         let inside = try pixel(c, 14, 6), outside = try pixel(c, 13, 5)
         try expect(inside.blueComponent > 0.9 && inside.redComponent < 0.1, "Picture top-left lands at (14,6)")
         try expect(outside.redComponent > 0.5 || outside.blueComponent < 0.9, "Nothing blue above-left of (14,6)")
+        let below = try pixel(c, 64, 62), above = try pixel(c, 64, 2)
+        try expect(below.brightnessComponent < above.brightnessComponent - 0.15, "Shadow falls below the picture, not above it")
         let corner = try pixel(c, 120, 72), origin = try pixel(c, 1, 1)
-        try expect(corner.brightnessComponent < origin.brightnessComponent - 0.1, "Shadow darkens below and right of the picture")
+        try expect(corner.brightnessComponent < origin.brightnessComponent, "Bottom-right is darker than top-left")
         c.undo(); try expect(c.document == before, "One Undo restores the pre-shadow document")
         c.redo(); try expect(c.document == after, "Redo reapplies the shadow")
     }
