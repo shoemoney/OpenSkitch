@@ -274,6 +274,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var frameTimedSnap = false
     var activeFrameScreenSize: NSSize?
     var frameWindowWasOpaque = true
+    var frameWindowHadShadow = true
+    var frameWindowAlpha: CGFloat = 1
+    var frameWindowLevel = NSWindow.Level.normal
     var frameWindowBackground: NSColor?
     var frameScrollDrewBackground = true
     var frameTitlebarBackdrop: FrameChromeView?
@@ -1688,12 +1691,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.commitPendingTextEditing()
         if !frameMode {
             frameWindowWasOpaque = window.isOpaque
+            frameWindowHadShadow = window.hasShadow
+            frameWindowAlpha = window.alphaValue
+            frameWindowLevel = window.level
             frameWindowBackground = window.backgroundColor
             frameScrollDrewBackground = canvas.enclosingScrollView?.drawsBackground ?? true
         }
         frameTimedSnap = frameTimedSnap || (manualFlags ?? NSApp.currentEvent?.modifierFlags ?? []).contains(.shift)
         frameMode = true; frameKeepsAnnotations = keepingAnnotations
         window.isOpaque = false; window.backgroundColor = .clear
+        // Recovered -[PlatformController(snap) setSnapMode:] (decompiled.c:20481): shadow off, screen-saver level, alpha 0x3f4ccccd (0.8f).
+        window.hasShadow = false
+        window.alphaValue = CGFloat(Float32(bitPattern: 0x3f4ccccd))
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
         window.titlebarAppearsTransparent = false
         // A clear window also clears AppKit's titlebar on recent macOS. Keep
         // its adaptive white title readable without filling the canvas hole.
@@ -1728,6 +1738,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.framePreview = false
         (window.contentView as? FrameChromeView)?.showsCanvasHole = false
         window.isOpaque = frameWindowWasOpaque
+        window.hasShadow = frameWindowHadShadow
+        window.alphaValue = frameWindowAlpha
+        window.level = frameWindowLevel
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
         snapButton.title = "Snap"
