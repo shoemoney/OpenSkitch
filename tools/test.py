@@ -2,7 +2,7 @@
 """Run independent native regression suites against a consistent source snapshot."""
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-import argparse, hashlib, json, platform, subprocess, tempfile
+import argparse, hashlib, json, os, platform, re, subprocess, tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64"], default=platform.machine())
@@ -10,8 +10,28 @@ options = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 build = root / "build"
 build.mkdir(exist_ok=True)
+
+def secrets_guard():
+    """Licensed fonts and registry credentials must never become committable."""
+    forbidden = re.compile(r"\.(ttf|otf|woff2?)$|(^|/)(\.npmrc|package-lock\.json)$|(^|/)node_modules/|(^|/)fortawesome-fontawesome-pro-[^/]*\.tgz$", re.I)
+    listing = subprocess.run(["git", "ls-files", "--cached", "--others", "--exclude-standard"], cwd=root, capture_output=True, text=True)
+    problems = [f"committable licensed/credential file: {name}" for name in listing.stdout.splitlines() if forbidden.search(name)]
+    token = re.compile(rb"_authToken=[0-9A-Fa-f-]{36}")
+    for folder in ("Sources", "tools", "tests"):
+        for path in sorted((root / folder).rglob("*")):
+            if path.is_file() and token.search(path.read_bytes()):
+                problems.append(f"registry auth token in {path.relative_to(root)}")
+    if problems:
+        raise SystemExit("FAIL secrets-guard\n" + "\n".join(problems))
+    return "secrets-guard"
+
+print("PASS", secrets_guard(), flush=True)
 snapshot = Path(tempfile.mkdtemp(prefix="test-snapshot.", dir=build))
-inputs = sorted((root / "Sources").glob("*.swift")) + sorted((root / "tests").glob("*.swift"))
+
+def current_inputs():
+    return sorted((root / "Sources").glob("*.swift")) + sorted((root / "tests").glob("*.swift"))
+
+inputs = current_inputs()
 for attempt in range(3):
     contents = {path: path.read_bytes() for path in inputs}
     if all(path.read_bytes() == data for path, data in contents.items()):
@@ -23,7 +43,11 @@ for path, data in contents.items():
 manifest = {str(path.relative_to(root)): hashlib.sha256(data).hexdigest() for path, data in contents.items()}
 (snapshot / "source-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
-def suite(name, sources, test, define=None, arguments=()):
+def suite(name, sources, test, define=None, arguments=(), environment=None, optional=False):
+    if optional:
+        for needed in [*sources, test]:
+            if not (snapshot / needed).exists():
+                return "SKIP", f"{name}: {needed} not present"
     binary = snapshot / name
     command = ["xcrun", "swiftc", "-swift-version", "5", "-target", options.arch + "-apple-macosx13.0"]
     if define:
@@ -31,8 +55,14 @@ def suite(name, sources, test, define=None, arguments=()):
     command += [str(snapshot / source) for source in sources]
     command += [str(snapshot / test), "-o", str(binary)]
     subprocess.run(command, cwd=root, check=True)
-    subprocess.run([str(binary), *arguments], cwd=root, check=True)
-    return name
+    subprocess.run([str(binary), *arguments], cwd=root, check=True, env=environment)
+    return "PASS", name
+
+# Appearance.swift joins the preference suites once it exists.
+appearance = ["Appearance.swift"] if (snapshot / "Appearance.swift").exists() else []
+# Subsets from tools/fetch-fontawesome.sh are exercised when they have been built.
+fonts = root / "build/fonts"
+font_environment = os.environ | {"OPENSKITCH_FA_FONT_DIR": str(fonts)} if any(fonts.glob("*-subset.ttf")) else None
 
 suites = [
     ("original-action-button-tests", ["OriginalActionButton.swift"], "OriginalActionButtonTests.swift", "ORIGINAL_ACTION_BUTTON_TESTS", ()),
@@ -44,8 +74,8 @@ suites = [
     ("original-help-bevel-tests", ["OriginalHelpBevel.swift"], "OriginalHelpBevelTests.swift", "ORIGINAL_HELP_BEVEL_TESTS", ()),
     ("window-zoom-tests", ["WindowZoom.swift"], "WindowZoomTests.swift", "WINDOW_ZOOM_TESTS", ()),
     ("text-style-form-tests", ["TextStyleForm.swift"], "TextStyleFormTests.swift", "TEXT_STYLE_FORM_TESTS", ()),
-    ("general-preferences-form-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "GeneralPreferencesForm.swift"], "GeneralPreferencesFormTests.swift", "GENERAL_PREFERENCES_FORM_TESTS", ()),
-    ("original-general-preferences-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "DocumentModel.swift", "GeneralPreferencesForm.swift", "OriginalGeneralPreferences.swift"], "OriginalGeneralPreferencesTests.swift", "ORIGINAL_GENERAL_PREFERENCES_TESTS", ()),
+    ("general-preferences-form-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "GeneralPreferencesForm.swift", *appearance], "GeneralPreferencesFormTests.swift", "GENERAL_PREFERENCES_FORM_TESTS", ()),
+    ("original-general-preferences-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "DocumentModel.swift", "GeneralPreferencesForm.swift", "OriginalGeneralPreferences.swift", *appearance], "OriginalGeneralPreferencesTests.swift", "ORIGINAL_GENERAL_PREFERENCES_TESTS", ()),
     ("resize-presets-tests", ["ResizePresets.swift"], "ResizePresetsTests.swift", "RESIZE_PRESETS_TESTS", ()),
     ("window-sizing-tests", ["WindowSizing.swift"], "WindowSizingTests.swift", "WINDOW_SIZING_TESTS", ()),
     ("canvas-navigator-tests", ["CanvasNavigator.swift"], "CanvasNavigatorTests.swift", "CANVAS_NAVIGATOR_TESTS", ()),
@@ -68,18 +98,36 @@ suites = [
     ("capture-tests", ["OriginalCaptureTiming.swift", "OriginalCapturePicker.swift", "OriginalCaptureCountdown.swift", "Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
     ("photo-browser-tests", ["PhotoBrowser.swift"], "PhotoBrowserTests.swift", None, ()),
 ]
-with ThreadPoolExecutor(max_workers=len(suites)) as executor:
+# Modern appearance suites are skipped, not failed, while their files are not in the tree yet.
+optional_suites = [
+    ("appearance-tests", ["Appearance.swift"], "AppearanceTests.swift", "APPEARANCE_TESTS", ()),
+    ("fontawesome-icons-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift"], "FontAwesomeIconsTests.swift", "FONTAWESOME_ICONS_TESTS", (), font_environment),
+    ("menu-symbols-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift", "MenuSymbols.swift"], "MenuSymbolsTests.swift", "MENU_SYMBOLS_TESTS", ()),
+    ("glass-chrome-tests", ["Appearance.swift", "OriginalActionButton.swift", "ToolButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
+]
+with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as executor:
     futures = [executor.submit(suite, *args) for args in suites]
+    futures += [executor.submit(suite, *args, optional=True) for args in optional_suites]
     failures = []
     for future in futures:
         try:
-            print("PASS", future.result(), flush=True)
+            print(*future.result(), flush=True)
         except Exception as error:
             failures.append(str(error))
             print("FAIL", error, flush=True)
 if failures:
     raise SystemExit(1)
-subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch], cwd=root, check=True)
-if not all(path.read_bytes() == data for path, data in contents.items()):
+# Classic is the pinned baseline everywhere; Modern needs macOS 26+ and its integration cases.
+safety_runs = ["classic"]
+if int(platform.mac_ver()[0].split(".")[0] or 0) < 26:
+    print("SKIP app-safety modern: host is older than macOS 26", flush=True)
+elif not (root / "tests/AppSafetyModernCases.swift").exists():
+    print("SKIP app-safety modern: tests/AppSafetyModernCases.swift not present", flush=True)
+else:
+    safety_runs.append("modern")
+for style in safety_runs:
+    print("== app-safety", style, flush=True)
+    subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root, check=True)
+if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")
 print("All suites passed on", options.arch, "with no source drift. Evidence:", snapshot, flush=True)

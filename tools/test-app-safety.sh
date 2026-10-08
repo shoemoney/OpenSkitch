@@ -2,25 +2,29 @@
 # Isolated internal AppKit regression tests; never launches the production app.
 # --arch x86_64 also runs under Rosetta on an Apple Silicon host.
 # --app-source /path/App.swift supports a behavioral counterfactual with old App code.
+# --appearance classic|modern pins SKITCH_APPEARANCE for the run (default classic).
 set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 ARCH=$(uname -m)
 APP_SOURCE="$ROOT/Sources/App.swift"
 EVIDENCE=""
+APPEARANCE=classic
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --arch|--app-source|--evidence-dir)
+        --arch|--app-source|--evidence-dir|--appearance)
             [ "$#" -ge 2 ] || { echo "Missing argument for $1" >&2; exit 2; }
             case "$1" in
                 --arch) ARCH=$2 ;;
                 --app-source) APP_SOURCE=$2 ;;
                 --evidence-dir) EVIDENCE=$2 ;;
+                --appearance) APPEARANCE=$2 ;;
             esac
             shift 2 ;;
-        *) echo "Usage: $0 [--arch arm64|x86_64] [--app-source PATH] [--evidence-dir NEW_DIRECTORY]" >&2; exit 2 ;;
+        *) echo "Usage: $0 [--arch arm64|x86_64] [--app-source PATH] [--evidence-dir NEW_DIRECTORY] [--appearance classic|modern]" >&2; exit 2 ;;
     esac
 done
 case "$ARCH" in arm64|x86_64) ;; *) echo "Unsupported architecture: $ARCH" >&2; exit 2 ;; esac
+case "$APPEARANCE" in classic|modern) ;; *) echo "Unsupported appearance: $APPEARANCE" >&2; exit 2 ;; esac
 if [ -z "$EVIDENCE" ]; then
     EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/skitch-app-safety.XXXXXX")
 else
@@ -32,6 +36,8 @@ python3 - "$ROOT" "$APP_SOURCE" "$EVIDENCE" <<'PY'
 import hashlib, json, pathlib, re, sys
 root, app_source, evidence = map(pathlib.Path, sys.argv[1:])
 paths = sorted((root / 'Sources').glob('*.swift')) + [root / 'tests/AppSafetyTests.swift']
+if (root / 'tests/AppSafetyModernCases.swift').exists():
+    paths.append(root / 'tests/AppSafetyModernCases.swift')
 inputs = [(p.name, app_source if p.name == 'App.swift' else p) for p in paths]
 for attempt in range(3):
     snapshot = {name: (p, p.read_bytes()) for name, p in inputs}
@@ -118,7 +124,7 @@ if ! xcrun swiftc -swift-version 5 -O -D APP_SAFETY_TESTS -sdk "$SDK" \
     exit 1
 fi
 set +e
-env -u SKITCH_FIXTURE SKITCH_APP_SUPPORT="$EVIDENCE/support" \
+env -u SKITCH_FIXTURE SKITCH_APPEARANCE="$APPEARANCE" SKITCH_APP_SUPPORT="$EVIDENCE/support" \
     SKITCH_EVIDENCE_DIR="$EVIDENCE/layout" APP_SAFETY_EVIDENCE="$EVIDENCE" APP_SAFETY_ARCH="$ARCH" \
     /usr/bin/arch "-$ARCH" "$EVIDENCE/AppSafetyTests" >"$EVIDENCE/run.log" 2>&1
 RESULT=$?
@@ -127,12 +133,12 @@ cat "$EVIDENCE/run.log"
 if [ "$RESULT" -eq 0 ]; then
     # Reproduce the real AppKit quit loop without launching a preview app or
     # ordering any window. Bound hangs and terminate only this owned child.
-    python3 - "$EVIDENCE" "$ARCH" <<'PY'
+    python3 - "$EVIDENCE" "$ARCH" "$APPEARANCE" <<'PY'
 import json, os, pathlib, subprocess, sys
-evidence, arch = pathlib.Path(sys.argv[1]), sys.argv[2]
+evidence, arch, appearance = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 env = os.environ.copy()
 env.pop('SKITCH_FIXTURE', None)
-env.update(SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
+env.update(SKITCH_APPEARANCE=appearance, SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
            SKITCH_EVIDENCE_DIR=str(evidence / 'native-layout'),
            APP_SAFETY_EVIDENCE=str(evidence), APP_SAFETY_ARCH=arch)
 (evidence / 'native-layout').mkdir()

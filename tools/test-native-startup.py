@@ -10,6 +10,7 @@ import datetime
 import hashlib
 import json
 import os
+import platform
 import subprocess
 import tempfile
 import xml.etree.ElementTree as ET
@@ -30,11 +31,14 @@ fixture = root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"
 evidence = root / "build" / ("startup-smoke-" + digest[:10])
 results = {"binary_sha256": digest, "verified_at": datetime.datetime.now(datetime.timezone.utc).isoformat()}
 architectures = ["arm64", "x86_64"] if args.arch == "both" else [args.arch]
-for arch in architectures:
-    folder = evidence / arch
+# Modern chrome only exists on macOS 26+; every host also proves the pinned Classic baseline.
+appearances = ["classic", "modern"] if int(platform.mac_ver()[0].split(".")[0] or 0) >= 26 else ["classic"]
+runs = {arch + "-" + style: (arch, style) for arch in architectures for style in appearances}
+for label, (arch, style) in runs.items():
+    folder = evidence / label
     folder.mkdir(parents=True, exist_ok=True)
     support = tempfile.mkdtemp(prefix="support-", dir=folder)
-    env = os.environ | {"SKITCH_APP_SUPPORT": support,
+    env = os.environ | {"SKITCH_APP_SUPPORT": support, "SKITCH_APPEARANCE": style,
                         "SKITCH_EVIDENCE_DIR": str(folder), "SKITCH_FIXTURE": str(fixture)}
     # Do not allow evidence left by an earlier invocation to count as a pass.
     for name in ["smoke-result.txt", "smoke.png", "smoke.skitch", "smoke.skitchredux"]:
@@ -63,9 +67,9 @@ for arch in architectures:
                       editable_sha256=hashlib.sha256(native).hexdigest())
     except Exception as error:
         result["error"] = str(error)
-    results[arch] = result
-    print(arch, "PASS" if result["passed"] else "FAIL", result.get("error", "native save/reopen/render and Quit"), flush=True)
+    results[label] = result
+    print(label, "PASS" if result["passed"] else "FAIL", result.get("error", "native save/reopen/render and Quit"), flush=True)
 evidence.mkdir(parents=True, exist_ok=True)
 (evidence / "results.json").write_text(json.dumps(results, indent=2) + "\n")
 print("Evidence:", evidence, flush=True)
-raise SystemExit(0 if all(results[arch]["passed"] for arch in architectures) else 1)
+raise SystemExit(0 if all(results[label]["passed"] for label in runs) else 1)

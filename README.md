@@ -13,6 +13,12 @@ OpenSkitch was previously named Skitch Redux. Existing document identifiers, app
 
 The original ZIP and extracted bundle must remain in `original/` for original interface artwork and sound resources. The company logo in `Resources/OpenSkitch.png` is the app icon source; the build creates all standard macOS icon sizes and packages `OpenSkitch.icns`, preserving transparency. They are deliberately excluded from Git, along with the decompiled analysis and build outputs. The original ZIP SHA-256 is `b2f4181f5eb40a570547054e8ec22ca9bbe490eca02a28e2389fc5d83fdc6e97`.
 
+## Modern appearance
+
+On macOS 26 and newer OpenSkitch opens in the Modern appearance by default; Classic, the recovered Skitch 1.0.12 interface, stays selectable in Preferences and applies the next time OpenSkitch opens. Earlier systems always use Classic.
+
+Modern draws its icons with Font Awesome Pro when it is available and falls back to SF Symbols when it is not. The Pro fonts are licensed, so they are optional and never committed: with your own Pro token in `FONTAWESOME_TOKEN`, run `OPENSKITCH_FETCH_FONTAWESOME=1 ./tools/build.sh` and the build downloads the package, subsets only the glyphs the app uses into the git-ignored `build/fonts` and bundles them. Without a token the build still succeeds and uses SF Symbols.
+
 ## Current functionality
 
 Native capture controls, editable annotation tools, text, selection, undo, groups, cropping, resizing, rotation, flipping, clipboard import/export, drag export, local history, session recovery, printing, image exports and SVG export are implemented. Actual Size preserves normal output history and restores the normal window on exit, with a native overview navigator for panning. Border drags crop or expand the visible canvas, Option applies symmetry, and corner drags resize output with one Undo step. Raster imports and ordinary captures fit their output to the available screen while retaining full source pixels. The original bundled `firstlaunch.skitch` opens with editable paths and text. Save now uses SVG-native `.skitch` files with original attributes and supplemental editing state; existing `.skitchredux` JSON remains supported. Native save, recovery and history retain background pixels hidden by panning or cropping. Complete historical file interoperability remains unverified.
