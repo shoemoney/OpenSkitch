@@ -13,32 +13,41 @@ if [ "$VERSION" != "$PLIST_VERSION" ]; then
   exit 1
 fi
 
+if ! git -C "$ROOT" diff --quiet HEAD; then
+  echo "release: tracked files differ from HEAD; commit or discard first" >&2
+  exit 1
+fi
+UNTRACKED=$(git -C "$ROOT" ls-files --others --exclude-standard -- Sources Resources Info.plist tools)
+if [ -n "$UNTRACKED" ]; then
+  echo "release: untracked files in release inputs:" >&2
+  echo "$UNTRACKED" >&2
+  exit 1
+fi
+
 unset OPENSKITCH_FETCH_FONTAWESOME
 # build.sh reuses the bundle in place, so start clean or stale resources ship.
 rm -rf "$APP"
 OPENSKITCH_NO_PRO_FONTS=1 sh "$ROOT/tools/build.sh"
 
-# OPENSKITCH_RELEASE_TEST_INJECT_FONT is a test hook that plants a dummy font
-# after the build so the guard below can be proven to fail.
-if [ -n "${OPENSKITCH_RELEASE_TEST_INJECT_FONT:-}" ]; then
-  : > "$APP/Contents/Resources/$OPENSKITCH_RELEASE_TEST_INJECT_FONT"
-fi
+# Everything below works on a private copy so a concurrent build or test run
+# that rewrites build/OpenSkitch.app cannot change what is checked and shipped.
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+ditto "$APP" "$STAGE/OpenSkitch.app"
 
-FONTS=$(find "$APP/Contents/Resources" \( -iname '*.ttf' -o -iname '*.otf' -o -iname '*.woff*' \))
-if [ -n "$FONTS" ]; then
-  echo "release: font files found in the bundle (Font Awesome Pro must never ship):" >&2
-  echo "$FONTS" >&2
+python3 "$ROOT/tools/check-no-fonts.py" "$STAGE/OpenSkitch.app" || {
+  echo "release: font files found in the bundle (Font Awesome Pro must never ship)" >&2
   exit 1
-fi
+}
 
-codesign --verify --deep --strict --verbose=2 "$APP"
-SIGNATURE=$(codesign -dvvv "$APP" 2>&1 | sed -n 's/^Signature=//p')
+codesign --verify --deep --strict --verbose=2 "$STAGE/OpenSkitch.app"
+SIGNATURE=$(codesign -dvvv "$STAGE/OpenSkitch.app" 2>&1 | sed -n 's/^Signature=//p')
 [ -n "$SIGNATURE" ] || SIGNATURE=unknown
 
 rm -f "$ZIP"
-ditto -c -k --keepParent "$APP" "$ZIP"
+ditto -c -k --keepParent "$STAGE/OpenSkitch.app" "$ZIP"
 
-python3 - "$ROOT" "$VERSION" "$APP" "$ZIP" "$SIGNATURE" <<'PYREL'
+python3 - "$ROOT" "$VERSION" "$STAGE/OpenSkitch.app" "$ZIP" "$SIGNATURE" <<'PYREL'
 from pathlib import Path
 import hashlib, json, subprocess, sys
 root, version, app, zip_path, signature = sys.argv[1:]
