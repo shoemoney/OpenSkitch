@@ -285,6 +285,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SkitchRedux", isDirectory: true)
     }()
 
+    var firstLaunchDocumentURL: URL? = Bundle.main.url(forResource: "firstlaunch", withExtension: "skitch")
+    var firstLaunchMarker: URL { support.appendingPathComponent("FirstLaunchDone") }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenus(); buildWindow()
         installMenuPresence()
@@ -311,11 +314,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         try? FileManager.default.createDirectory(at: support.appendingPathComponent("History"), withIntermediateDirectories: true)
         let nativeRecovery = support.appendingPathComponent("Recovery.skitch")
         let recovery = FileManager.default.fileExists(atPath: nativeRecovery.path) ? nativeRecovery : support.appendingPathComponent("Recovery.skitchredux")
-        if let data = try? Data(contentsOf: recovery) {
+        let recoveryData = try? Data(contentsOf: recovery)
+        if let data = recoveryData {
             do { let restored = try SkitchFile.decode(data); restoring = true; try canvas.loadDocument(data: restored.canvasData); legacyMetadata = restored.metadata; restoreDrawingDefaults(); restoring = false; dirty = true; window.isDocumentEdited = true; nameField.stringValue = "Recovered drawing" }
             catch { restoring = false; status.stringValue = "Previous session could not be restored." }
         }
-        if let fixture = ProcessInfo.processInfo.environment["SKITCH_FIXTURE"] { openURL(URL(fileURLWithPath: fixture)) }
+        let fixturePath = ProcessInfo.processInfo.environment["SKITCH_FIXTURE"]
+        if let fixture = fixturePath { openURL(URL(fileURLWithPath: fixture)) }
+        else if recoveryData == nil, !FileManager.default.fileExists(atPath: firstLaunchMarker.path) {
+            // Original launch path (decompiled.c:7880-7893): the bundled firstlaunch.skitch loads once, unsaved.
+            if let welcome = firstLaunchDocumentURL {
+                openURL(welcome)
+                if currentURL != nil || nameField.stringValue != "Welcome" { currentURL = nil; nameField.stringValue = "Welcome" }
+                dirty = false; window.isDocumentEdited = false
+            }
+            try? Data().write(to: firstLaunchMarker, options: .atomic)
+        }
         updateStatus(); updateWipeButton()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in self?.saveRecovery() } }
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
