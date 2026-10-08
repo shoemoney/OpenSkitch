@@ -16,6 +16,7 @@ extension AppSafetyTests {
             ("updateDragPreview feeds the canvas bleed, and Frame mode and Reduce Transparency hide it", modernCanvasBleed),
             ("Injected display options reach every glass surface and clear again", modernAccessibilityInjection),
             ("Header and footer buttons reach the real AppDelegate actions", modernActionRouting),
+            ("Modern rail Wipe presses follow the Blank/Clear/Wipe stages with the dimmed glass and the stage spoken", modernWipeStages),
             ("Preferences Appearance row writes the stored choice without switching the running window", modernPreferencesAppearance),
             ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", modernRelaunch),
             ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", modernRelaunchLauncher),
@@ -79,6 +80,15 @@ extension AppSafetyTests {
         var popoverAppearance: NSAppearance.Name?
     }
 
+    /// The 13 command buttons, each found by the Classic action it sends so both windows are read the same way.
+    private static let commandActions: [(name: String, action: Selector)] = [
+        ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
+        ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)), ("cam", #selector(AppDelegate.cameraSnap)),
+        ("cancel", #selector(AppDelegate.cancelFrame)), ("font", #selector(AppDelegate.chooseFont)), ("undo", #selector(AppDelegate.undo)),
+        ("wipe", #selector(AppDelegate.wipe)), ("actual", #selector(AppDelegate.toggleActualSize)), ("resize", #selector(AppDelegate.resize)),
+        ("share", #selector(AppDelegate.share(_:)))
+    ]
+
     private static func controlFacts(_ app: AppDelegate) -> [String: String] {
         guard let content = app.window.contentView else { return [:] }
         var facts: [String: String] = [:]
@@ -109,6 +119,8 @@ extension AppSafetyTests {
         let plain = collect(NSButton.self, in: content).filter { !($0 is NSPopUpButton) && !tools.contains(ObjectIdentifier($0)) }
         facts["buttons"] = plain.map(\.title).sorted().joined(separator: "|")
         facts["share.label"] = plain.first { $0.title == "Webpost…" }?.accessibilityLabel() ?? "<nil>"
+        // What VoiceOver reads for each command. Classic buttons read their titles; a symbol fallback must not read its own name instead.
+        for (name, action) in commandActions { facts["axLabel.\(name)"] = plain.first { $0.action == action }?.accessibilityLabel() ?? "<nil>" }
         facts["actual.title"] = app.actualButton?.title ?? "<nil>"
         facts["resize.title"] = app.resizeButton?.title ?? "<nil>"
         return facts
@@ -198,6 +210,12 @@ extension AppSafetyTests {
         try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool" && modern["share.label"] == "Share drawing"
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
+        // At launch the rail Wipe reads its Blank stage; every other command reads its title, and Webpost… keeps its explicit label.
+        let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cam": "Cam", "cancel": "Cancel", "font": "Font",
+                      "undo": "Undo", "wipe": "Blank", "actual": "Actual Size", "resize": "Resize…", "share": "Share drawing"]
+        let misread = spoken.keys.sorted().filter { modern["axLabel.\($0)"] != spoken[$0] }
+            .map { "\($0): '\(modern["axLabel.\($0)"] ?? "")' instead of '\(spoken[$0] ?? "")'" }
+        try expect(misread.isEmpty && spoken.count == commandActions.count, "VoiceOver reads the wrong command labels: " + misread.joined(separator: "; "))
         let hinted: [(String, NSView?)] = SketchTool.allCases.map { ("tool " + $0.rawValue, app.toolButtons[$0]) }
             + [("Wipe", collect(NSButton.self, in: app.window.contentView!).first { $0.action == #selector(AppDelegate.wipe) }), ("size slider", app.widthControl), ("Drag Me", app.dragExportView)]
         for (name, view) in hinted {
@@ -251,6 +269,8 @@ extension AppSafetyTests {
         func state(_ label: String, frame: Bool) throws {
             try expect(app.frameMode == frame && chrome.frameMode == frame, "\(label): both layers agree on Frame mode")
             try expect(snap.title == (frame ? "Snap Frame" : "Snap") && snap.icon == (frame ? .cameraViewfinder : .crosshairs), "\(label): Snap title and glyph '\(snap.title)'")
+            try expect(snap.accessibilityLabel() == (frame ? "Snap Frame" : "Snap"), "\(label): VoiceOver reads '\(snap.accessibilityLabel() ?? "nil")' for Snap")
+            try expect(cancel.accessibilityLabel() == "Cancel" && camera.accessibilityLabel() == "Cam", "\(label): Cancel and Cam keep their spoken labels")
             try expect(snap.toolTip == (frame ? ModernEditorChrome.snapFrameToolTip : ModernEditorChrome.snapToolTip), "\(label): Snap tooltip")
             try expect(snap.alternateAction == (frame ? nil : fullscreen), "\(label): the Fullscreen alternate is \(frame ? "cleared" : "restored")")
             try expect(snap.alternateTarget === app, "\(label): the alternate target")
@@ -354,6 +374,68 @@ extension AppSafetyTests {
         chrome.resizeButton.isEnabled = true
     }
 
+    /// The Classic stage cases, driven through the glass button: what the title, the enabled state, the glass and VoiceOver each report.
+    @available(macOS 26, *)
+    private static func modernWipeStages() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app, canvas = app.canvas
+        let button = chrome.wipeButton
+        guard app.wipeRailButton === button, button.action == #selector(AppDelegate.wipe), button.target === app else {
+            throw Failure(description: "The rail Wipe button must be the chrome's, located by its action")
+        }
+        let glass = try surface(chrome, button)
+        var sounds: [String] = []
+        canvas.onSound = { sounds.append($0) }
+        func reads(_ title: String, _ enabled: Bool) -> Bool {
+            button.title == title && button.isEnabled == enabled && button.accessibilityLabel() == title
+                && button.isAccessibilityEnabled() == enabled
+                && glass.isDisabled == !enabled && glass.alphaValue == (enabled ? 1 : 0.5) && glass.currentTint == nil
+        }
+        func detail() -> String {
+            "title '\(button.title)', enabled \(button.isEnabled), VoiceOver '\(button.accessibilityLabel() ?? "nil")' enabled \(button.isAccessibilityEnabled()), "
+                + "glass disabled \(glass.isDisabled), alpha \(glass.alphaValue), tint \(String(describing: glass.currentTint))"
+        }
+        let shape = SketchElement(kind: .rectangle)
+        let untouched = canvas.editingUndoManager.undoActionName
+        try expect(reads("Blank", false), "A fresh drawing reads a dimmed, disabled Blank: " + detail())
+        button.performClick(nil)
+        try expect(sounds.isEmpty && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched, "A disabled Blank button ignores presses")
+        app.wipe()
+        try expect(sounds == ["wipe_already_blank"] && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
+                   "The Wipe menu command on a blank drawing is sound-only")
+        sounds.removeAll()
+
+        canvas.setBackground(try image(size: CGSize(width: 120, height: 80)))
+        try expect(reads("Clear", true) && canvas.document.backgroundPNG != nil, "A snap image alone reads a live Clear: " + detail())
+        canvas.document.elements = [shape]
+        try expect(reads("Wipe", true), "Artwork over a snap reads a live Wipe: " + detail())
+        button.performClick(nil)
+        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.document.backgroundPNG != nil && reads("Clear", true),
+                   "Wipe removes only the artwork and the glass reads Clear: " + detail())
+        button.performClick(nil)
+        try expect(sounds == ["wipe_brushlayer", "wipe_snap"] && canvas.document.backgroundPNG == nil && canvas.document.backgroundColor == .white && reads("Blank", false),
+                   "Clear removes the snap and the glass dims to Blank: " + detail())
+        button.performClick(nil)
+        try expect(sounds.count == 2, "The disabled Blank button stays silent after the last stage")
+
+        sounds.removeAll()
+        canvas.document.elements = [shape]
+        try expect(reads("Wipe", true), "Artwork over a white drawing without a snap reads Wipe: " + detail())
+        button.performClick(nil)
+        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && reads("Blank", false), "Wiping artwork with no snap lands on a dimmed Blank: " + detail())
+
+        sounds.removeAll()
+        canvas.setBackgroundColor(.red)
+        try expect(reads("Clear", true), "A coloured backdrop alone reads Clear: " + detail())
+        app.undo(); try expect(reads("Blank", false), "Undo returns the glass to the dimmed Blank: " + detail())
+        app.redo(); try expect(reads("Clear", true), "Redo brings the live Clear back: " + detail())
+        _ = try editor(app, text: "Typing")
+        try expect(reads("Wipe", true), "Field editing over a coloured backdrop reads Wipe: " + detail())
+        button.performClick(nil)
+        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.subviews.compactMap { $0 as? NSTextView }.isEmpty && reads("Clear", true),
+                   "Wipe commits and removes the field and leaves the coloured backdrop as Clear: " + detail())
+    }
+
     @available(macOS 26, *)
     private static func modernPreferencesAppearance() throws {
         let defaults = UserDefaults.standard, key = AppearanceResolver.defaultsKey
@@ -386,86 +468,19 @@ extension AppSafetyTests {
     @available(macOS 26, *)
     private static func modernRelaunch() throws {
         let (fixture, _) = try modernFixture()
-        let app = fixture.app
-        try expect(app.relaunchRequest == nil, "Only the production entry point installs a launcher")
-        var launched: [URL] = []
-        app.relaunchRequest = { launched.append($0) }
-
-        app.dirty = true
-        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
-        app.relaunch()
-        try expect(AppSafetyTermination.requests == 0 && app.pendingRelaunch == nil && launched.isEmpty, "Cancelling the Save prompt neither quits nor schedules a launch")
-
-        // A quit AppKit itself cancels after Relaunch was requested must not leave a launch waiting for the next ordinary Quit.
-        app.pendingRelaunch = Bundle.main.bundleURL
-        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
-        try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "The cancelled quit is reported to AppKit")
-        try expect(app.pendingRelaunch == nil && launched.isEmpty, "A cancelled quit drops the pending relaunch")
-        app.dirty = false
-
-        app.relaunch()
-        try expect(AppSafetyTermination.requests == 1, "relaunch() requests termination exactly once (\(AppSafetyTermination.requests))")
-        try expect(launched.isEmpty && app.pendingRelaunch == Bundle.main.bundleURL, "Nothing launches while the old instance is still holding its shortcuts")
-        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
-        try expect(launched == [Bundle.main.bundleURL] && app.pendingRelaunch == nil, "The fresh instance starts once, after the old one has finished quitting")
-        try expect(AppSafetyTermination.requests == 1, "No second termination request")
-
-        // A quit that fails to finish cleanup must not relaunch later.
-        let failure = NSError(domain: "AppSafety", code: 7, userInfo: [NSLocalizedDescriptionKey: "Modern relaunch cleanup failed"])
-        app.pendingRelaunch = Bundle.main.bundleURL
-        app.shutdownError = failure
-        AppSafetyAlert.answers.append(.init(title: failure.localizedDescription, response: .alertFirstButtonReturn))
-        try expect(!app.finishShutdownDecision() && app.pendingRelaunch == nil, "A failed shutdown cancels the pending relaunch")
-        try waitForMain("The failure alert is presented") { AppSafetyAlert.answers.isEmpty }
-        try expect(launched.count == 1, "Still exactly one launch")
+        try relaunchQuitSequence(fixture)
     }
 
-    /// What a stub LaunchServices saw, shared with the queue that answers it.
-    private final class LaunchLog: @unchecked Sendable {
-        var url: URL?
-        var configuration: NSWorkspace.OpenConfiguration?
-        var answered = false
-    }
-
-    /// The old instance exits right after the launcher returns, so the launcher must not return before LaunchServices has the request.
     @available(macOS 26, *)
     private static func modernRelaunchLauncher() throws {
-        let target = URL(fileURLWithPath: "/Applications/OpenSkitch.app")
-        func launch(after delay: TimeInterval, on queue: DispatchQueue?, error: Error? = nil, timeout: TimeInterval = 5,
-                    environment: [String: String] = [:]) -> (accepted: Bool, elapsed: TimeInterval, log: LaunchLog) {
-            let log = LaunchLog(), started = Date()
-            let accepted = RelaunchLauncher.launch(target, environment: environment, timeout: timeout) { url, configuration, completion in
-                log.url = url; log.configuration = configuration
-                queue?.asyncAfter(deadline: .now() + delay) { log.answered = true; completion(nil, error) }
-            }
-            return (accepted, Date().timeIntervalSince(started), log)
-        }
-
-        let background = launch(after: 0.3, on: .global())
-        try expect(background.accepted && background.log.answered, "The launcher returns true only after LaunchServices answered")
-        try expect(background.elapsed >= 0.29 && background.elapsed < 2, "It waited for the answer instead of returning at once (\(background.elapsed) s)")
-        try expect(background.log.url == target && background.log.configuration?.createsNewApplicationInstance == true, "It asks for a new instance of the same bundle")
-
-        let main = launch(after: 0.2, on: .main)
-        try expect(main.accepted && main.log.answered && main.elapsed >= 0.19 && main.elapsed < 2, "An answer delivered on the main queue is not starved by the wait (\(main.elapsed) s)")
-
-        let refused = launch(after: 0.05, on: .global(), error: NSError(domain: "AppSafety", code: 9))
-        try expect(!refused.accepted && refused.log.answered && refused.elapsed < 2, "A refused launch reports failure promptly")
-
-        let silent = launch(after: 0, on: nil, timeout: 0.3)
-        try expect(!silent.accepted && !silent.log.answered, "A launch nobody answers is reported as not accepted")
-        try expect(silent.elapsed >= 0.29 && silent.elapsed < 2, "The wait is bounded by its timeout (\(silent.elapsed) s)")
-
-        let inherited = launch(after: 0, on: .global(), environment: ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_APPEARANCE": "modern", "HOME": "/home", "PATH": "/bin"])
-        try expect(inherited.log.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_APPEARANCE": "modern"],
-                   "Only SKITCH_ overrides reach the new instance: \(String(describing: inherited.log.configuration?.environment))")
-        try expect(launch(after: 0, on: .global()).log.configuration?.environment == [:], "Without overrides the new instance inherits nothing")
+        try relaunchLauncherAcknowledgement()
 
         // The wiring OpenSkitchMain installs, driven from the Modern window: the real Preferences button, the quit, then the launcher.
         let (fixture, _) = try modernFixture()
         let app = fixture.app, seen = LaunchLog()
         app.relaunchRequest = { url in
-            _ = RelaunchLauncher.launch(url, environment: ["SKITCH_APPEARANCE": "modern", "SKITCH_APP_SUPPORT": "/isolated", "PATH": "/bin"], timeout: 2) { opened, configuration, completion in
+            _ = RelaunchLauncher.launch(url, environment: ["SKITCH_APPEARANCE": "modern", "SKITCH_FIXTURE": "/fixture.skitch", "SKITCH_APP_SUPPORT": "/isolated",
+                                                           "SKITCH_EVIDENCE_DIR": "/evidence", "PATH": "/bin"], timeout: 2) { opened, configuration, completion in
                 seen.url = opened; seen.configuration = configuration
                 DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { seen.answered = true; completion(nil, nil) }
             }
@@ -477,8 +492,8 @@ extension AppSafetyTests {
         app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
         try expect(seen.answered && seen.url == Bundle.main.bundleURL, "The launcher held the quit until LaunchServices had the request for this bundle")
         try expect(seen.configuration?.createsNewApplicationInstance == true
-                   && seen.configuration?.environment == ["SKITCH_APPEARANCE": "modern", "SKITCH_APP_SUPPORT": "/isolated"],
-                   "The new instance is a separate process that keeps the pinned appearance and support folder: \(String(describing: seen.configuration?.environment))")
+                   && seen.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence"],
+                   "The new instance is a separate process that keeps the support and evidence folders and drops the pinned appearance and fixture: \(String(describing: seen.configuration?.environment))")
     }
 
     @available(macOS 26, *)
@@ -501,12 +516,12 @@ extension AppSafetyTests {
         let controls = evidence["bezelControls"] as? [[String: Any]] ?? []
         try expect(controls.count >= 24, "The Modern controls are inspected (\(controls.count))")
         // AppKit hosts each button's title in a private text field that reports its own 13 pt default
-        // while drawing at the button's font; those sit wholly inside their button's rectangle.
+        // while drawing at the button's font; only a control whose parent is a button gets that exemption.
         let rects = controls.map { NSRectFromString($0["frame"] as? String ?? "") }
         for (index, entry) in controls.enumerated() where entry["hidden"] as? Bool != true {
             let label = entry["label"] as? String ?? "?"
             let frame = rects[index], visible = NSRectFromString(entry["visibleFrame"] as? String ?? "")
-            let isButtonInternal = rects.enumerated().contains { $0.offset != index && $0.element != frame && $0.element.contains(frame) }
+            let isButtonInternal = entry["parentIsButton"] as? Bool == true
             if !isButtonInternal { try expect((entry["fontSize"] as? Double ?? 0) >= 18, "\(label) is at least 18 pt: \(entry)") }
             try expect(!frame.isEmpty && abs(frame.width - visible.width) < 0.5 && abs(frame.height - visible.height) < 0.5, "\(label) is not clipped (\(frame) vs \(visible))")
         }

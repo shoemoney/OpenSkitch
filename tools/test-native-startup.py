@@ -62,8 +62,9 @@ def relaunch_cycle(arch, style, folder, attempt):
         result["error"] = "This build is already running; refusing to touch it."
         return result
     support = tempfile.mkdtemp(prefix="relaunch-support-", dir=folder)
-    # SKITCH_FIXTURE is left out so the old instance is clean and Relaunch asks nothing.
-    env = {key: value for key, value in os.environ.items() if key != "SKITCH_FIXTURE"}
+    # The old instance opens the fixture; Relaunch must not forward it, or the new one would reopen it over the recovered drawing.
+    env = dict(os.environ)
+    env["SKITCH_FIXTURE"] = str(fixture)
     env.update(SKITCH_APP_SUPPORT=support, SKITCH_APPEARANCE=style, SKITCH_EVIDENCE_DIR=str(folder))
     failure = folder / "relaunch-smoke-result.txt"
     failure.unlink(missing_ok=True)

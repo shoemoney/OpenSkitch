@@ -3039,6 +3039,89 @@ enum AppSafetyTests {
         navigate(CGPoint(x: 500, y: 500))
         try expect(scroll.contentView.bounds.origin == origin, "Stale navigator callback cannot move the normal viewport")
     }
+    // MARK: Relaunch, identical in Classic and Modern
+
+    /// What a stub LaunchServices saw, shared with the queue that answers it.
+    final class LaunchLog: @unchecked Sendable {
+        var url: URL?
+        var configuration: NSWorkspace.OpenConfiguration?
+        var answered = false
+    }
+
+    /// relaunch() asks to quit once and starts the new instance only from applicationWillTerminate; a cancelled or failed quit starts nothing.
+    static func relaunchQuitSequence(_ fixture: Fixture) throws {
+        let app = fixture.app
+        try expect(app.relaunchRequest == nil, "Only the production entry point installs a launcher")
+        var launched: [URL] = []
+        app.relaunchRequest = { launched.append($0) }
+
+        app.dirty = true
+        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
+        app.relaunch()
+        try expect(AppSafetyTermination.requests == 0 && app.pendingRelaunch == nil && launched.isEmpty, "Cancelling the Save prompt neither quits nor schedules a launch")
+
+        // A quit AppKit itself cancels after Relaunch was requested must not leave a launch waiting for the next ordinary Quit.
+        app.pendingRelaunch = Bundle.main.bundleURL
+        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
+        try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "The cancelled quit is reported to AppKit")
+        try expect(app.pendingRelaunch == nil && launched.isEmpty, "A cancelled quit drops the pending relaunch")
+        app.dirty = false
+
+        app.relaunch()
+        try expect(AppSafetyTermination.requests == 1, "relaunch() requests termination exactly once (\(AppSafetyTermination.requests))")
+        try expect(launched.isEmpty && app.pendingRelaunch == Bundle.main.bundleURL, "Nothing launches while the old instance is still holding its shortcuts")
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        try expect(launched == [Bundle.main.bundleURL] && app.pendingRelaunch == nil, "The fresh instance starts once, after the old one has finished quitting")
+        try expect(AppSafetyTermination.requests == 1, "No second termination request")
+
+        // A quit that fails to finish cleanup must not relaunch later.
+        let failure = NSError(domain: "AppSafety", code: 7, userInfo: [NSLocalizedDescriptionKey: "Relaunch cleanup failed"])
+        app.pendingRelaunch = Bundle.main.bundleURL
+        app.shutdownError = failure
+        AppSafetyAlert.answers.append(.init(title: failure.localizedDescription, response: .alertFirstButtonReturn))
+        try expect(!app.finishShutdownDecision() && app.pendingRelaunch == nil, "A failed shutdown cancels the pending relaunch")
+        try waitForMain("The failure alert is presented") { AppSafetyAlert.answers.isEmpty }
+        try expect(launched.count == 1, "Still exactly one launch")
+    }
+
+    /// The old instance exits right after the launcher returns, so the launcher must not return before LaunchServices has the request.
+    static func relaunchLauncherAcknowledgement() throws {
+        let target = URL(fileURLWithPath: "/Applications/OpenSkitch.app")
+        func launch(after delay: TimeInterval, on queue: DispatchQueue?, error: Error? = nil, timeout: TimeInterval = 5,
+                    environment: [String: String] = [:]) -> (accepted: Bool, elapsed: TimeInterval, log: LaunchLog) {
+            let log = LaunchLog(), started = Date()
+            let accepted = RelaunchLauncher.launch(target, environment: environment, timeout: timeout) { url, configuration, completion in
+                log.url = url; log.configuration = configuration
+                queue?.asyncAfter(deadline: .now() + delay) { log.answered = true; completion(nil, error) }
+            }
+            return (accepted, Date().timeIntervalSince(started), log)
+        }
+
+        let background = launch(after: 0.3, on: .global())
+        try expect(background.accepted && background.log.answered, "The launcher returns true only after LaunchServices answered")
+        try expect(background.elapsed >= 0.29 && background.elapsed < 2, "It waited for the answer instead of returning at once (\(background.elapsed) s)")
+        try expect(background.log.url == target && background.log.configuration?.createsNewApplicationInstance == true, "It asks for a new instance of the same bundle")
+
+        let main = launch(after: 0.2, on: .main)
+        try expect(main.accepted && main.log.answered && main.elapsed >= 0.19 && main.elapsed < 2, "An answer delivered on the main queue is not starved by the wait (\(main.elapsed) s)")
+
+        let refused = launch(after: 0.05, on: .global(), error: NSError(domain: "AppSafety", code: 9))
+        try expect(!refused.accepted && refused.log.answered && refused.elapsed < 2, "A refused launch reports failure promptly")
+
+        let silent = launch(after: 0, on: nil, timeout: 0.3)
+        try expect(!silent.accepted && !silent.log.answered, "A launch nobody answers is reported as not accepted")
+        try expect(silent.elapsed >= 0.29 && silent.elapsed < 2, "The wait is bounded by its timeout (\(silent.elapsed) s)")
+
+        // The new instance keeps where its data and evidence live. A pinned appearance would override the choice just made in
+        // Preferences, and the fixture would reopen over the recovered drawing, so neither is forwarded.
+        let inherited = launch(after: 0, on: .global(), environment: [
+            "SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence", "SKITCH_APPEARANCE": "modern",
+            "SKITCH_FIXTURE": "/fixture.skitch", "HOME": "/home", "PATH": "/bin"])
+        try expect(inherited.log.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence"],
+                   "Only the support and evidence folders reach the new instance; SKITCH_APPEARANCE and SKITCH_FIXTURE are dropped: \(String(describing: inherited.log.configuration?.environment))")
+        try expect(launch(after: 0, on: .global()).log.configuration?.environment == [:], "Without overrides the new instance inherits nothing")
+    }
+
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -3769,7 +3852,9 @@ enum AppSafetyTests {
                 }
                 try expect(ToolButton.textColor(on: .yellow) == .black, "Yellow needs a dark selected label")
                 try expect(ToolButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
-            })
+            }),
+            ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", { try relaunchQuitSequence(Fixture()) }),
+            ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", relaunchLauncherAcknowledgement)
         ]
         let tests = ProcessInfo.processInfo.environment["SKITCH_APPEARANCE"] == "modern" ? Self.modernCases : classicCases
         var results: [[String: Any]] = [], failures = 0
