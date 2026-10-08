@@ -25,6 +25,7 @@ Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in cod
 | Wipe resets crop/pan/render size when no snapshot remains (original `wipeTA`) | `Canvas.resetViewport` |
 | Frame mode: no window shadow, screen-saver level, alpha 0.8, pre-Frame values restored on leave, both appearances | `AppDelegate.enterFrame`/`leaveFrame` |
 | Webpost one-click upload: Webpost…/Publish Image…/Snap & Upload upload immediately (no sheet); right-click menu = destinations, settings, macOS Share | `AppDelegate.publishImage`, `PublishingCoordinator.publish` |
+| Multiple upload destinations with one default; S3-compatible transport (path-style SigV4 via curl, AWS profile or Keychain keys, no-upload Test, `--live-s3`); `destination.json` migrates to `destinations.json` | `PublishingDestinationStore`, `PublishingS3Plan`, `PublishingDestinationsView`, `AppDelegate.setDefaultDestination` |
 | Global hotkeys: Upload (default Command+Shift+Control+5) and Show Skitch (no default); a cancelled capture never publishes | `Sources/GlobalHotkeys.swift`, `AppDelegate.snapAndUpload` |
 | Welcome document: first launch with an empty app-support folder opens bundled `firstlaunch.skitch` as unsaved "Welcome", once (`FirstLaunchDone` marker) | `Sources/App.swift` |
 | Line tool Option polygon: holding Option keeps it open, releasing Option ends it | `Sources/Canvas.swift` |
