@@ -197,6 +197,8 @@ private struct CaptureEnvironment: Sendable {
     var arguments: [String] = []
     var temporaryRoot = FileManager.default.temporaryDirectory
     var testDisplays: [NSRect]? = nil
+    /// Pointer in the same top-left global space as testDisplays.
+    var testMouseLocation: NSPoint? = nil
     var settleDelay = 0.3
     var screenTimeout = 120.0
     var killDelay = 2.0
@@ -365,6 +367,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     private var source = ""
     private var requestedFrame: NSRect?
     private var capturedFrame: NSRect?
+    private var activeDisplayFrame: NSRect?
 
     private var operationID: UUID?
     private var completion: CaptureCompletion?
@@ -411,6 +414,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     // Production always uses the system helper and native permission preflight.
     nonisolated init(testHelper: URL, arguments: [String], temporaryRoot: URL,
                      displays: [NSRect] = [NSRect(x: -1000, y: -1000, width: 3000, height: 3000)],
+                     mouseLocation: NSPoint? = nil,
                      settleDelay: Double = 0, timeout: Double = 2, killDelay: Double = 0.1,
                      applicationVisibility: (any CaptureApplicationVisibility)? = nil,
                      selectionPicker: (any CaptureSelectionPicking)? = nil,
@@ -418,6 +422,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
                      captureFlash: (any CaptureFlashPresenting)? = nil) {
         environment = CaptureEnvironment(executable: testHelper, arguments: arguments,
                                          temporaryRoot: temporaryRoot, testDisplays: displays,
+                                         testMouseLocation: mouseLocation,
                                          settleDelay: settleDelay,
                                          screenTimeout: timeout, killDelay: killDelay)
         self.applicationVisibility = applicationVisibility
@@ -542,7 +547,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         lastCaptureMetadata = nil
         source = ""
         requestedFrame = nil
-        capturedFrame = nil
+        capturedFrame = nil; activeDisplayFrame = nil
         lifetime = self // Keep even a temporary coordinator alive until completion.
         return id
     }
@@ -666,8 +671,25 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
 
     private func flashPlan() -> OriginalCaptureFlashPlan? {
         let screens = environment.testDisplays ?? NSScreen.screens.map(\.frame)
+        guard source == "fullscreen", let active = activeDisplayFrame else {
+            return OriginalCaptureFlashPlan.make(source: source, requested: requestedFrame,
+                                                 captured: capturedFrame, mainScreen: screens.first)
+        }
         return OriginalCaptureFlashPlan.make(source: source, requested: requestedFrame,
-                                             captured: capturedFrame, mainScreen: screens.first)
+                                             captured: capturedFrame, mainScreen: active)
+    }
+
+    /// The display under the pointer at snap start, in AppKit global coordinates
+    /// (injected test displays are used as-is). DEVIATION: the original spanned all displays.
+    private func resolveActiveDisplay() -> (appKit: NSRect, topLeft: NSRect)? {
+        if let supplied = environment.testDisplays {
+            return OriginalCaptureActiveDisplay.resolve(mouse: environment.testMouseLocation, in: supplied)
+                .map { ($0, $0) }
+        }
+        let frames = NSScreen.screens.map(\.frame)
+        guard let primary = frames.first,
+              let hit = OriginalCaptureActiveDisplay.resolve(mouse: NSEvent.mouseLocation, in: frames) else { return nil }
+        return (hit, NSRect(x: hit.minX, y: primary.maxY - hit.maxY, width: hit.width, height: hit.height))
     }
 
     private func acknowledgeStops(_ result: Result<Void, Error>) {
@@ -709,6 +731,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
             finish(.failure(captureFailure(5, "There is no display available to capture.")), id: id)
             return
         }
+        let active = resolveActiveDisplay()
+        activeDisplayFrame = active?.appKit
         var rectangleArgument: String?
         if mode == "frame" {
             guard let rect = frameRect, let argument = screenRectangleArgument(rect) else {
@@ -767,7 +791,14 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
             } else {
                 var args = ["-x", "-t", "png"]
                 switch mode {
-                case "fullscreen": args += ["-m"]
+                case "fullscreen":
+                    // -m is always the MAIN display; -D numbering cannot be mapped to NSScreen reliably.
+                    // -R with the active display's rect (points, top-left global) targets it exactly.
+                    guard let region = active.flatMap({ screenRectangleArgument($0.topLeft) }) else {
+                        finish(.failure(captureFailure(5, "There is no display available to capture.")), id: id)
+                        return
+                    }
+                    args += ["-R", region]
                 case "window": args += ["-i", "-w"]
                 case "frame": args += ["-R", rectangleArgument!]
                 default: args += ["-i"] // Crosshair also allows clicking a window.
@@ -776,7 +807,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
                 let top = NSScreen.screens.first?.frame.maxY ?? 0
                 let rect: NSRect
                 if let frame = requestedFrame { rect = NSRect(x: frame.minX, y: top - frame.maxY, width: frame.width, height: frame.height) }
-                else { rect = NSScreen.screens.first?.frame ?? .zero }
+                else { rect = active?.appKit ?? NSScreen.screens.first?.frame ?? .zero }
                 prepareScreenshot(request, arguments: args, delay: delay, rect: rect,
                                   interactive: mode == "crosshair" || mode == "window", id: id)
             }
