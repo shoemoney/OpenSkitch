@@ -79,7 +79,7 @@ private enum GlobalHotkeysTests {
     }
     private static func custom() -> GlobalHotkeySettings {
         var settings = GlobalHotkeySettings()
-        let codes: [UInt32] = [0,11,8,2,14] // A, B, C, D, E: independent literal fixtures.
+        let codes: [UInt32] = [0,11,8,2,14,3,5] // A, B, C, D, E: independent literal fixtures.
         for (action, code) in zip(GlobalHotkeyAction.allCases, codes) {
             settings[action] = .init(keyCode: code, modifiers: [.control, .option])
         }
@@ -89,7 +89,8 @@ private enum GlobalHotkeysTests {
                                 callback: @escaping @MainActor (GlobalHotkeyAction) -> Void = { _ in }) throws {
         try manager.install(globalScreen: { callback(.screen) }, globalWindow: { callback(.window) },
                             globalFullscreen: { callback(.fullscreen) }, globalFrame: { callback(.frame) },
-                            globalCamera: { callback(.camera) })
+                            globalCamera: { callback(.camera) }, globalUpload: { callback(.upload) },
+                            globalShow: { callback(.show) })
     }
     private static func drainCallbacks() async throws {
         try await Task.sleep(nanoseconds: 20_000_000)
@@ -112,6 +113,15 @@ private enum GlobalHotkeysTests {
         try expect(first.frame == .none && first.activeBindings.isEmpty, "No original shortcut is automatically claimed on first launch")
         try expect(originalFrame.keyCode == 26 && originalFrame.modifiers == [.command, .shift], "Verified original frame hardware code and flags are metadata only")
         try expect(originalFrame.modifiers.carbonFlags == 0x300, "Original frame maps to Carbon Command+Shift")
+        let originalUpload = GlobalHotkeySettings.originalBindings[.upload]!
+        try expect(originalUpload.keyCode == 23 && originalUpload.modifiers == [.command, .shift, .control] && originalUpload.modifiers.carbonFlags == 0x1300, "Original Upload chord is code 0x17 flags 0x1300, metadata only")
+        try expect(GlobalHotkeySettings.originalBindings[.show] == nil && first.upload == .none && first.show == .none, "Show has no original default and neither new action is claimed on first launch")
+        try expect(GlobalHotkeyAction(rawValue: "upload") == .upload && GlobalHotkeyAction(rawValue: "show") == .show, "Upload/Show raw values")
+        try expect(Set(GlobalHotkeyAction.allCases.map(\.carbonID)).count == 7 && GlobalHotkeyAction.allCases.count == 7, "Seven actions with distinct carbon IDs")
+        try expect(GlobalHotkeyAction.upload.title == "Upload" && GlobalHotkeyAction.show.title == "Show Skitch", "Upload/Show titles")
+        let legacy = Data(#"{"version":1,"enabled":true,"screen":{"modifiers":0},"window":{"modifiers":0},"fullscreen":{"modifiers":0},"frame":{"modifiers":0},"camera":{"modifiers":0}}"#.utf8)
+        let decodedLegacy = try? JSONDecoder().decode(GlobalHotkeySettings.self, from: legacy)
+        try expect(decodedLegacy?.upload == GlobalHotkeyBinding.none && decodedLegacy?.show == GlobalHotkeyBinding.none, "Preferences saved before Upload/Show still load")
         try expect(GlobalHotkeyModifiers(carbonFlags: 0x1800) == [.control, .option], "Carbon Control+Option conversion")
         try expect(GlobalHotkeyModifiers(appKitFlags: [.control, .option, .capsLock]) == [.control, .option], "AppKit uses semantic modifiers, ignoring Caps Lock")
         try expect(GlobalHotkeyKeys.choices.count == Set(GlobalHotkeyKeys.choices.map(\.code)).count, "Physical key catalog has unique hardware positions")
@@ -152,6 +162,10 @@ private enum GlobalHotkeysTests {
             candidate = GlobalHotkeySettings(); candidate.screen = reserved
             try rejects("reserved app or screenshot binding") { try candidate.validate() }
         }
+        candidate = GlobalHotkeySettings(); candidate.screen = .init(keyCode: 22, modifiers: [.command, .shift, .control])
+        try rejects("Control+6 stays reserved for the macOS Touch Bar screenshot") { try candidate.validate() }
+        candidate = GlobalHotkeySettings(); candidate.upload = GlobalHotkeySettings.originalBindings[.upload]!
+        try candidate.validate()
         candidate = custom()
         try rejects("parent-provided extra internal conflict") { try candidate.validate(additionalReserved: [candidate.screen]) }
 
@@ -160,7 +174,7 @@ private enum GlobalHotkeysTests {
         try expect(try store.load() == candidate, "Custom settings and per-action None round-trip")
         let payload = defaults.data(forKey: GlobalHotkeyStore.defaultsKey)!
         let json = try JSONSerialization.jsonObject(with: payload) as! [String: Any]
-        try expect(Set(json.keys) == Set(["version","enabled","screen","window","fullscreen","frame","camera"]), "Persistence schema contains only version, enabled and known action bindings")
+        try expect(Set(json.keys) == Set(["version","enabled","screen","window","fullscreen","frame","camera","upload","show"]), "Persistence schema contains only version, enabled and known action bindings")
         let camera = json["camera"] as! [String: Any]
         try expect(camera["keyCode"] == nil, "None persists without a hardware code")
         try expect(!String(decoding: payload, as: UTF8.self).contains("password") && !String(decoding: payload, as: UTF8.self).contains("credential"), "No credential fields persisted")
@@ -199,7 +213,7 @@ private enum GlobalHotkeysTests {
             precondition(Thread.isMainThread, "Capture callback must be on main thread")
             fired.append(action)
         }
-        try expect(manager.isRunning && backend.registeredIDs.count == 5 && manager.registeredActions.count == 5, "Install registers each enabled action once")
+        try expect(manager.isRunning && backend.registeredIDs.count == 7 && manager.registeredActions.count == 7, "Install registers each enabled action once")
         for action in GlobalHotkeyAction.allCases { backend.emit(action) }
         backend.emitUnknown()
         try expect(fired.isEmpty, "Hotkey delivery is queued rather than reentrant")
@@ -220,7 +234,7 @@ private enum GlobalHotkeysTests {
         var repaired = explicitManager.settings
         repaired.screen = .init(keyCode: 35, modifiers: [.control, .option])
         try explicitManager.apply(repaired)
-        try expect(explicitManager.isRunning && explicitBackend.bindings.count == 5 && explicitManager.lastError == nil,
+        try expect(explicitManager.isRunning && explicitBackend.bindings.count == 7 && explicitManager.lastError == nil,
                    "Saving a repaired explicit binding recovers failed launch without relaunch")
         try expect((try store.load()) == repaired, "Only explicitly repaired choices are persisted")
         try explicitManager.unregister()
@@ -237,7 +251,7 @@ private enum GlobalHotkeysTests {
         backend.failuresToRegister[GlobalHotkeyAction.screen.carbonID] = 2
         let rollbackError = try rejects("rollback failure") { try manager.apply(changed) }
         try expect((rollbackError.userInfo["RelatedErrors"] as? [NSError])?.count == 2, "Rollback failure reports original and restoration errors")
-        try expect(!manager.registeredActions.contains(.screen) && backend.bindings.count == 4, "Actual missing registration remains visible after failed rollback")
+        try expect(!manager.registeredActions.contains(.screen) && backend.bindings.count == 6, "Actual missing registration remains visible after failed rollback")
         try expect(manager.settings == custom() && defaults.data(forKey: GlobalHotkeyStore.defaultsKey) == saved, "Rollback failure does not fabricate successful preferences")
         try manager.register()
         try expect(backend.bindings == activeBefore, "Register can repair a previous failed rollback")

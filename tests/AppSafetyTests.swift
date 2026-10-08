@@ -114,7 +114,9 @@ final class AppSafetyHotkeyManager {
                  globalWindow: @escaping @MainActor () -> Void,
                  globalFullscreen: @escaping @MainActor () -> Void,
                  globalFrame: @escaping @MainActor () -> Void,
-                 globalCamera: @escaping @MainActor () -> Void) throws {
+                 globalCamera: @escaping @MainActor () -> Void,
+                 globalUpload: @escaping @MainActor () -> Void,
+                 globalShow: @escaping @MainActor () -> Void) throws {
         Self.installations += 1
         screen = globalScreen; fullscreen = globalFullscreen; frame = globalFrame
     }
