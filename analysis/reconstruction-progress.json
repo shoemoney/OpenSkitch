@@ -27510,7 +27510,7 @@
       "next_action": "Implement and test: Original text promises Twitter functionality; native Twitter posting is not proven.",
       "full_original_parity_claimed": false,
       "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Depends on a retired online service (Skitch.com, Evernote, Flickr, MobileMe, TFTP); not reconstructed."
+      "disposition_reason": "Twitter posting used the original's embedded Twitter API credentials and legacy auth, which no longer work, so the provider is not reconstructed."
     },
     {
       "id": "providers.ftp",
@@ -33858,7 +33858,7 @@
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
       "full_original_parity_claimed": false,
       "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
+      "disposition_reason": "Create Evernote menu action (-[PlatformController createEvernote:]) posts to the retired Evernote service; not reconstructed."
     },
     {
       "id": "unresolved_action.createnotebook",
@@ -34795,8 +34795,8 @@
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
       "full_original_parity_claimed": false,
-      "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Local Mail this Image menu action: -[PlatformController(net) mail:] exports a temp image and hands it to the default mailto: app via Email Exporter; it touches no retired service, so it is deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.makevisible",
@@ -35145,8 +35145,8 @@
       ],
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
       "full_original_parity_claimed": false,
-      "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
+      "disposition": "deferred_post_0_3_0",
+      "disposition_reason": "Generic SkitchRadioButtonContainer radioButtonClicked: group-selection handler wired in MainMenu.nib; not tied to a retired service, so deferred past 0.3.0."
     },
     {
       "id": "unresolved_action.register",
@@ -35618,7 +35618,7 @@
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
       "full_original_parity_claimed": false,
       "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
+      "disposition_reason": "Selects the Feedback preferences tab via -[PlatformController selectFeedbackTab:], part of the retired feedback UI; not reconstructed."
     },
     {
       "id": "unresolved_action.selecthistorytab",
@@ -35695,7 +35695,7 @@
       "next_action": "Implement and test: Original selector mapping/reachability remains unknown. Do not infer implementation from a similarly named native action.",
       "full_original_parity_claimed": false,
       "disposition": "not_reconstructed_retired_service",
-      "disposition_reason": "Selector belongs to the retired Skitch.com/Evernote/MobileMe/Plus/feedback UI; not reconstructed."
+      "disposition_reason": "Selects the Plus (PTW) preferences tab via -[PlatformController selectPTWTab:], part of the retired Plus store UI; not reconstructed."
     },
     {
       "id": "unresolved_action.selectsettingstab",
