@@ -1,4 +1,8 @@
-// Compile non-App sources with -D SKITCH_FILE_TESTS. No original app or network.
+// Executable regression tests; no original app launch or network. From the repository root:
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D SKITCH_FILE_TESTS \
+//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,SVGExport,SkitchFile}.swift \
+//   tests/SkitchFileTests.swift -o /tmp/skitch-skitch-file-tests
+// /tmp/skitch-skitch-file-tests --fixture original/Skitch.app/Contents/Resources/firstlaunch.skitch
 #if SKITCH_FILE_TESTS
 import AppKit
 import Foundation

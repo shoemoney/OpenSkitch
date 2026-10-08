@@ -1,3 +1,7 @@
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D LEGACY_HISTORY_IMPORTER_TESTS \
+//   Sources/LegacyHistoryImporter.swift \
+//   tests/LegacyHistoryImporterTests.swift -o /tmp/skitch-legacy-history-importer-tests
+// /tmp/skitch-legacy-history-importer-tests
 #if LEGACY_HISTORY_IMPORTER_TESTS
 import Foundation
 import CoreGraphics

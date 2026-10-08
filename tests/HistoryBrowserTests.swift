@@ -3,8 +3,9 @@ import AppKit
 import UniformTypeIdentifiers
 
 // Standalone executable; no core files, activation, desktop input, or pasteboard writes.
-// swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete
-// -D HISTORY_BROWSER_TESTS Sources/HistoryBrowser.swift tests/HistoryBrowserTests.swift
+// xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete
+// -D HISTORY_BROWSER_TESTS Sources/HistoryBrowser.swift tests/HistoryBrowserTests.swift -o /tmp/skitch-history-browser-tests
+// /tmp/skitch-history-browser-tests
 @main @MainActor
 struct HistoryBrowserTests {
     struct Failure: LocalizedError {

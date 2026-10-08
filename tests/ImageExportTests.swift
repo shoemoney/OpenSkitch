@@ -1,5 +1,8 @@
-// Compile the model, LegacySkitch, LegacyBridge, VectorGeometry and ImageExport
-// with -D IMAGE_EXPORT_TESTS. No Canvas, windows or desktop input is required.
+// No Canvas, windows or desktop input is required. From the repository root:
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D IMAGE_EXPORT_TESTS \
+//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,ImageExport}.swift \
+//   tests/ImageExportTests.swift -o /tmp/skitch-image-export-tests
+// /tmp/skitch-image-export-tests
 #if IMAGE_EXPORT_TESTS
 import AppKit
 import ImageIO

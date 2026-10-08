@@ -4,6 +4,7 @@
 //   Sources/Appearance.swift Sources/OriginalActionButton.swift Sources/ToolButton.swift Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift \
 //   Sources/BezelDrawingControls.swift Sources/LegacySkitch.swift Sources/DocumentModel.swift Sources/GlassChrome.swift Sources/ModernEditorChrome.swift \
 //   tests/GlassChromeTests.swift -o build/glass-chrome-tests
+// build/glass-chrome-tests
 #if GLASS_CHROME_TESTS
 import AppKit
 
