@@ -5,7 +5,7 @@ import Foundation
 import CoreFoundation
 
 // xcrun swiftc -swift-version 6 -D CAPTURE_TESTS -target arm64-apple-macosx13.0
-// Sources/{OriginalCaptureTiming,OriginalCapturePicker,OriginalCaptureCountdown,Capture}.swift
+// Sources/{OriginalCaptureTiming,OriginalCapturePicker,OriginalCaptureCountdown,OriginalCaptureFlash,Capture}.swift
 // tests/CaptureTests.swift -o /tmp/skitch-capture-tests
 // /tmp/skitch-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
@@ -71,6 +71,23 @@ private final class FakeCaptureSelectionPicker: CaptureSelectionPicking {
         }
         cancellationCompleted = true
     }
+}
+
+@MainActor
+private final class FakeCaptureFlash: CaptureFlashPresenting {
+    var plays: [(frame: NSRect, deflash: Float32)] = []
+    var cancellations = 0
+    func play(frame: NSRect, deflashDuration: Float32) { plays.append((frame, deflashDuration)) }
+    func cancel() { cancellations += 1 }
+}
+
+@MainActor
+private final class FakeFlashWindow: CaptureFlashWindowing {
+    var alphas: [Float32] = []
+    var fronted = 0, ordered = 0
+    func setAlpha(_ alpha: Float32) { alphas.append(alpha) }
+    func orderFront() { fronted += 1 }
+    func orderOut() { ordered += 1 }
 }
 
 @MainActor
@@ -329,6 +346,9 @@ private enum CaptureTests {
             defer { try? FileManager.default.removeItem(at: root) }
             try writeFixture()
             try await queuedCancellation()
+            try await captureFlashOnlyAfterSuccess()
+            try captureFlashTimingRamp()
+            try await captureFlashControllerTimeline()
             try await queuedShutdown()
             try await delayedCancellation()
             try await nativeSelectionAndTiming()
@@ -403,7 +423,8 @@ private enum CaptureTests {
                      killDelay: Double = 0.15, missingExecutable: Bool = false,
                      visibility: FakeApplicationVisibility? = nil,
                      selectionPicker: (any CaptureSelectionPicking)? = nil,
-                     countdown: (any CaptureCountdownPresenting)? = nil) throws -> Rig {
+                     countdown: (any CaptureCountdownPresenting)? = nil,
+                     captureFlash: (any CaptureFlashPresenting)? = nil) throws -> Rig {
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let temporary = directory.appendingPathComponent("captures", isDirectory: true)
         let marker = directory.appendingPathComponent("helper.json")
@@ -413,7 +434,8 @@ private enum CaptureTests {
         let coordinator = CaptureCoordinator(testHelper: helper,
             arguments: ["--capture-test-helper", behavior, marker.path, fixture.path],
             temporaryRoot: temporary, timeout: timeout, killDelay: killDelay,
-            applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown)
+            applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown,
+            captureFlash: captureFlash)
         coordinators.append(coordinator)
         return Rig(coordinator: coordinator, directory: directory, temporary: temporary, marker: marker)
     }
@@ -480,6 +502,114 @@ private enum CaptureTests {
         try await wait { resumed.results.count == 1 }
         try expect(errorCode(resumed.results.first) == nil, "cancelled coordinator must remain reusable")
         try expect(directories(rig).isEmpty, "normal capture callback must follow cleanup too")
+    }
+
+    static func captureFlashOnlyAfterSuccess() async throws {
+        let flash = FakeCaptureFlash()
+        let rig = try make(captureFlash: flash)
+        let ok = start(rig)
+        try await wait { ok.results.count == 1 }
+        try expect(errorCode(ok.results.first) == nil && flash.plays.count == 1, "a successful capture must flash exactly once")
+        let quick = OriginalCaptureFlashTiming.captureDuration
+        let display = NSRect(x: -1000, y: -1000, width: 3000, height: 3000)
+        try expect(flash.plays.first?.frame == display && flash.plays.first?.deflash == quick,
+                   "fullscreen flashes the main screen frame with the 0.1s deflash")
+        let frameRig = try make(captureFlash: flash)
+        let frameRect = NSRect(x: 100, y: 200, width: 160, height: 90)
+        let frameRecord = CaptureRecord()
+        frameRig.coordinator.frameRect = frameRect
+        frameRig.coordinator.capture(mode: "frame", completion: frameRecord.received)
+        try await wait { frameRecord.results.count == 1 }
+        let expectedFrame = NSRect(x: 100, y: 2000 - 290, width: 160, height: 90)
+        try expect(flash.plays.count == 2 && flash.plays[1].frame == expectedFrame && flash.plays[1].deflash == quick,
+                   "frame capture flashes only its rect (Cocoa coordinates) with the 0.1s deflash")
+        for mode in ["crosshair", "window"] {
+            let journal = CapturePhaseJournal()
+            let picker = FakeCaptureSelectionPicker(journal)
+            let pickRig = try make(selectionPicker: picker, captureFlash: flash)
+            let record = start(pickRig, mode: mode)
+            try await wait { picker.requests.count == 1 }
+            let region = NSRect(x: 40, y: 60, width: 120, height: 80)
+            picker.requests[0].completion(.success(OriginalCaptureSelection(rect: region, windowID: mode == "window" ? 7 : nil, modifiers: [])))
+            try await wait { record.results.count == 1 }
+            try expect(flash.plays.last?.frame == NSRect(x: 40, y: 1860, width: 120, height: 80) && flash.plays.last?.deflash == quick,
+                       "\(mode) flashes only the snapped rect (flipped from CG top-left to Cocoa) with the 0.1s deflash")
+        }
+        let camera = OriginalCaptureFlashPlan.make(source: "camera", requested: nil, captured: nil, mainScreen: display)
+        try expect(camera?.frame == .zero && camera?.deflashDuration == OriginalCaptureFlashTiming.cameraDeflashDuration,
+                   "camera flashes NSZeroRect with the 0.2s deflash")
+        try expect(OriginalCaptureFlashPlan.make(source: "web", requested: nil, captured: nil, mainScreen: display) == nil,
+                   "URL snaps never flash")
+        let playsBefore = flash.plays.count
+        let failing = try make("failure", captureFlash: flash)
+        let failed = start(failing)
+        try await wait { failed.results.count == 1 }
+        try expect(errorCode(failed.results.first) != nil && flash.plays.count == playsBefore, "a failed capture must not flash")
+        let cancelRig = try make(captureFlash: flash)
+        let cancelled = start(cancelRig)
+        try await stopped(cancelRig, cancelled)
+        try expect(flash.plays.count == playsBefore, "a cancelled capture must not flash")
+    }
+
+    static func captureFlashTimingRamp() throws {
+        typealias T = OriginalCaptureFlashTiming
+        let quick = T.captureDuration, slow = T.cameraDeflashDuration
+        func check(_ elapsed: TimeInterval, _ duration: Float32, _ phase: T.Phase, _ want: Float32) throws {
+            let got = T.alpha(elapsed: elapsed, duration: duration, phase: phase)
+            try expect(abs(got - want) < 1e-3, "\(phase) alpha at \(elapsed)/\(duration) = \(got), want \(want)")
+        }
+        for (elapsed, want) in [(0.0, Float32(0)), (0.025, 0.25), (0.05, 0.5), (0.075, 0.75), (0.1, 1), (0.5, 1)] {
+            try check(elapsed, quick, .flash, want)
+            try check(elapsed, quick, .deflash, 1 - want)
+        }
+        for (elapsed, want) in [(0.0, Float32(0)), (0.05, 0.25), (0.1, 0.5), (0.15, 0.75), (0.2, 1), (0.5, 1)] {
+            try check(elapsed, slow, .flash, want)
+            try check(elapsed, slow, .deflash, 1 - want)
+        }
+        try check(0.05, slow, .deflash, 0.75)
+        try check(-1, quick, .flash, 0)
+    }
+
+    static func captureFlashControllerTimeline() async throws {
+        var now: TimeInterval = 100
+        var ticks: [@MainActor () -> Void] = []
+        var invalidated = 0
+        let window = FakeFlashWindow()
+        let controller = OriginalCaptureFlashController(
+            clock: { now },
+            windowFactory: { _ in window },
+            timerFactory: { interval, tick in
+                precondition(interval == 0.02)
+                ticks.append(tick)
+                return { invalidated += 1 }
+            })
+        controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50),
+                        deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
+        try expect(window.fronted == 1 && controller.isRunning, "play must order the flash window front")
+        func tick(to elapsed: TimeInterval, expecting expected: Float32, _ what: String) throws {
+            now = 100 + elapsed
+            ticks.last?()
+            try expect(abs((window.alphas.last ?? -1) - expected) < 1e-3, "\(what): got \(window.alphas.last ?? -1), want \(expected)")
+        }
+        try tick(to: 0.025, expecting: 0.25, "flash at 0.025 of 0.1s")
+        try tick(to: 0.075, expecting: 0.75, "flash at 0.075 of 0.1s")
+        try tick(to: 0.11, expecting: 1, "flash reaching duration pins 1")
+        try expect(ticks.count == 2 && controller.isRunning, "flash reaching duration begins deflash")
+        let deflashStart = now
+        func deflashTick(_ elapsed: TimeInterval, _ expected: Float32, _ what: String) throws {
+            now = deflashStart + elapsed
+            ticks.last?()
+            try expect(abs((window.alphas.last ?? -1) - expected) < 1e-3, "\(what): got \(window.alphas.last ?? -1), want \(expected)")
+        }
+        try deflashTick(0.05, 0.75, "deflash at 0.05 of 0.2s")
+        try deflashTick(0.15, 0.25, "deflash at 0.15 of 0.2s")
+        try expect(controller.isRunning && window.ordered == 0, "deflash mid-ramp keeps the window up")
+        let before = window.alphas.count
+        try deflashTick(0.21, 0, "deflash ramp final tick")
+        try expect(window.alphas.count == before + 2 && Array(window.alphas.suffix(2)) == [0, 0],
+                   "deflash ramp itself reaches 0 before tearDown writes its own 0, got \(window.alphas.suffix(2))")
+        try expect(window.ordered == 1 && !controller.isRunning, "deflash end hides the window")
+        try expect(invalidated >= 2, "timers are invalidated")
     }
 
     static func queuedShutdown() async throws {

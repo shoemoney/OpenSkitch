@@ -97,7 +97,7 @@ suites = [
     ("hotkey-tests", ["GlobalHotkeys.swift"], "GlobalHotkeysTests.swift", "GLOBAL_HOTKEY_TESTS", ()),
     ("svg-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift", "SVGExport.swift"], "SVGExportTests.swift", "SVG_EXPORT_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
     ("skitch-file-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift", "SVGExport.swift", "SkitchFile.swift"], "SkitchFileTests.swift", "SKITCH_FILE_TESTS", ("--fixture", str(root / "original/Skitch.app/Contents/Resources/firstlaunch.skitch"))),
-    ("capture-tests", ["OriginalCaptureTiming.swift", "OriginalCaptureMagnifier.swift", "OriginalCapturePicker.swift", "OriginalCaptureCountdown.swift", "Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
+    ("capture-tests", ["OriginalCaptureTiming.swift", "OriginalCaptureMagnifier.swift", "OriginalCapturePicker.swift", "OriginalCaptureCountdown.swift", "OriginalCaptureFlash.swift", "Capture.swift"], "CaptureTests.swift", "CAPTURE_TESTS", ()),
     ("photo-browser-tests", ["PhotoBrowser.swift"], "PhotoBrowserTests.swift", None, ()),
 ]
 # Modern appearance suites are skipped, not failed, while their files are not in the tree yet.
