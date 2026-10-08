@@ -138,7 +138,7 @@ Original archive: `original/Skitch.app/Contents/Resources/English.lproj/MainMenu
 - Left tools178 `(0,376,37,231)`, 31×31, ordered Cursor, Brush, Line, Circle, Rectangle, Fill, Eraser, Text, Arrow. Crop is not one of the nine.
 - Frame mode `setSnapMode:` IMP `0x2067c`, decompiled.c around20481: normal tab1 shadow/alpha1, Frame tab2 no shadow/alpha0.8. Current exact shadow/alpha fidelity remains open.
 - Actual enabled getter `0x91d0`, decompiled4656: alreadyActual OR document + capturemode0 + pixelSize()<1.0; Float32 constant at `0x260470` is 1.0.
-- `updateWipeButton` IMP `0x25d45`, decompiled24681: empty/no field editing/no background image/white means **Blank disabled**; empty with image or nonwhite means **Clear enabled**; artwork or field editing means **Wipe enabled**. Current UI still always says Wipe. This remains an interface gap.
+- `updateWipeButton` IMP `0x25d45`, decompiled24681: empty/no field editing/no background image/white means **Blank disabled**; empty with image or nonwhite means **Clear enabled**; artwork or field editing means **Wipe enabled**. The Classic rail button now follows this rule through `CanvasView.wipeStage`/`AppDelegate.updateWipeButton` (title and enabled state refresh on every document change, Undo/Redo and field-editor start/stop); the Modern chrome button is not yet wired into the app.
 - Font `showHideFontPanel:` IMP `0xfb70`, decompiled8727: sharedFontPanel, isVisible, then orderOut or orderFront. Mode7 IMP `0xfb66`. It does not stop text editing, force first responder, or makeKeyAndOrderFront. Preserve this behavior.
 - Original cluster-wide hover/click behavior: SKBezelClusterControl mouseUp `0x7f918`, hover `0x7f3a8` / `0x7f411`. Current horizontal native NSButtons are a readability adaptation; exact rendering/hover parity is not proven.
 
@@ -198,7 +198,7 @@ The prior complete checkpoint evidence is in `build/interface-verification/`, st
 
 4. Capture/review fresh main-window and minimum-size UI, live Frame replacement/Cancel, tool feedback, and Fonts-panel rendering if the supported UI tools permit. Clearly mark anything not observed. Native tests alone are not visual proof.
 5. Finish original recovery/current desktop evidence, update metadata and source/hash anchors accurately, audit them, then commit/push the completed patch without AI attribution. Preserve the native skill, issue-documentation and license commits.
-6. Continue remaining interface fidelity (notably Blank/Clear/Wipe) and then the user-requested corners/resizing work. When the user resumes, preserve the full original goal; do not claim completion until the actual full requirement is met.
+6. Continue remaining interface fidelity and then the user-requested corners/resizing work. When the user resumes, preserve the full original goal; do not claim completion until the actual full requirement is met.
 
 Global design preference: readable text has an 18 minimum, ordinarily20; preserve comfortable spacing and contrast. Semantic Font Awesome icons are preferred for new generic UI; the user's explicit original Skitch fidelity requirement permits the recovered original assets here. Do not introduce tiny controls or force utility-window focus to simplify tests. Never put credentials, private keys or secrets into logs, handoffs or committed artifacts.
 

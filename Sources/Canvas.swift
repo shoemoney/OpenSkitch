@@ -241,6 +241,19 @@ private final class SketchTextGrip: NSView {
     }
 }
 
+/// What the next Wipe press will do (original updateWipeButton, IMP 0x25d45).
+enum WipeStage: Equatable {
+    case blank, clear, wipe
+    var title: String {
+        switch self {
+        case .blank: return "Blank"
+        case .clear: return "Clear"
+        case .wipe: return "Wipe"
+        }
+    }
+    var isEnabled: Bool { self != .blank }
+}
+
 /// Native AppKit canvas. All model geometry stays in top-left document pixels.
 /// Assign as NSScrollView.documentView; frame/intrinsic size follow output size * display zoom.
 final class CanvasView: NSView, NSTextViewDelegate {
@@ -672,16 +685,22 @@ final class CanvasView: NSView, NSTextViewDelegate {
         edit("Re-Snap") { document.backgroundPNG = png; panBackground = nil }
         return true
     }
-    /// Stage is derived from content, so Undo naturally restores the next Wipe action.
+    /// Derived from content, so Undo naturally restores the next Wipe action. Field editing
+    /// counts as artwork: the first press commits it and removes the drawing.
+    var wipeStage: WipeStage {
+        if textEditor != nil || !document.elements.isEmpty { return .wipe }
+        return document.backgroundPNG != nil || document.backgroundColor != .white ? .clear : .blank
+    }
     func wipe() {
         finishTextEditing()
-        if !document.elements.isEmpty {
+        switch wipeStage {
+        case .wipe:
             clearAnnotations()
             onSound?("wipe_brushlayer")
-        } else if document.backgroundPNG != nil || document.backgroundColor != .white {
+        case .clear:
             edit("Wipe Snap") { document.backgroundPNG = nil; document.backgroundColor = .white; panBackground = nil }
             onSound?("wipe_snap")
-        } else {
+        case .blank:
             onSound?("wipe_already_blank")
         }
     }

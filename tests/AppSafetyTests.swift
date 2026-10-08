@@ -3675,6 +3675,84 @@ enum AppSafetyTests {
                 try expect(fill.state == (app.canvas.filled ? .on : .off) && shadow.state == (app.canvas.shadowed ? .on : .off), "Toolbox style checks reflect their actual state")
                 app.toggleBezelFill(fill); app.toggleBezelShadow(shadow)
             }),
+            ("Classic rail Wipe button reads Blank/Clear/Wipe from content through Undo, Redo and field editing", {
+                let fixture = try Fixture(), app = fixture.app, canvas = app.canvas
+                guard let content = app.window.contentView, let button = app.wipeRailButton, button.action == #selector(AppDelegate.wipe),
+                      button.target === app, button.isDescendant(of: content) else { throw Failure(description: "Wipe rail button must be located by its action") }
+                func reads(_ title: String, _ enabled: Bool) -> Bool {
+                    button.title == title && button.isEnabled == enabled && button.isAccessibilityEnabled() == enabled && button.accessibilityTitle() == title
+                }
+                try expect(reads("Blank", false), "A fresh white drawing reads Blank and is disabled")
+                let hint = button.subviews.compactMap { $0 as? HintTrackingView }.first
+                try expect(hint != nil, "The Wipe hover hint tracker is retained for the disabled state")
+                hint?.onHover?(true); hint?.onHover?(false)
+                try expect(reads("Blank", false) && app.wipeRailButton === button, "Hover hints neither retitle nor re-enable a Blank button")
+                canvas.setBackgroundColor(.red)
+                try expect(reads("Clear", true), "A non-white background without artwork reads an enabled Clear")
+                app.undo(); try expect(reads("Blank", false), "Undo restores Blank")
+                app.redo(); try expect(reads("Clear", true), "Redo restores Clear")
+                let shape = SketchElement(kind: .rectangle)
+                canvas.document.elements = [shape]; canvas.selection = [shape.id]; canvas.duplicateSelection()
+                try expect(reads("Wipe", true), "Artwork reads an enabled Wipe")
+                app.wipe(); try expect(reads("Clear", true) && canvas.document.elements.isEmpty, "Wiping artwork leaves the snap, so the button reads Clear")
+                app.undo(); try expect(reads("Wipe", true), "Undo of Wipe restores the Wipe stage from content")
+                app.redo(); try expect(reads("Clear", true), "Redo of Wipe returns to Clear")
+                app.wipe(); try expect(reads("Blank", false), "Clearing the snap reads a disabled Blank")
+                app.undo(); try expect(reads("Clear", true), "Undo of Clear restores the enabled Clear stage")
+                app.redo(); try expect(reads("Blank", false), "Redo of Clear returns to Blank")
+                let text = try editor(app, text: "Typing")
+                try expect(reads("Wipe", true), "Field editing reads an enabled Wipe over an otherwise blank drawing")
+                text.string = ""; canvas.commitPendingTextEditing()
+                try expect(reads("Blank", false) && canvas.document.elements.isEmpty, "Ending an emptied field returns the button to Blank")
+                let editMenu = NSApp.mainMenu!.items.first { $0.submenu?.title == "Edit" }!.submenu!
+                try expect(editMenu.items.first { $0.action == #selector(AppDelegate.wipe) }?.title == "Wipe", "The Edit menu item keeps its Wipe title")
+            }),
+            ("Classic rail Wipe presses follow the Blank/Clear/Wipe stages with the original sounds", {
+                let fixture = try Fixture(), app = fixture.app, canvas = app.canvas
+                guard let button = app.wipeRailButton else { throw Failure(description: "Wipe rail button must be located by its action") }
+                var sounds: [String] = []
+                canvas.onSound = { sounds.append($0) }
+                func reads(_ title: String, _ enabled: Bool) -> Bool { button.title == title && button.isEnabled == enabled }
+                let shape = SketchElement(kind: .rectangle)
+                let untouched = canvas.editingUndoManager.undoActionName
+                button.performClick(nil)
+                try expect(sounds.isEmpty && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
+                           "A disabled Blank button ignores presses")
+                app.wipe()
+                try expect(sounds == ["wipe_already_blank"] && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
+                           "The Wipe menu command on a blank drawing is sound-only")
+                sounds.removeAll()
+
+                canvas.setBackground(try image(size: CGSize(width: 120, height: 80)))
+                try expect(reads("Clear", true) && canvas.document.backgroundPNG != nil, "A snap image alone reads an enabled Clear")
+                canvas.document.elements = [shape]
+                try expect(reads("Wipe", true), "Artwork over a snap reads Wipe")
+                button.performClick(nil)
+                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.document.backgroundPNG != nil && reads("Clear", true),
+                           "Wipe removes only the artwork, keeps the snap and plays wipe_brushlayer")
+                button.performClick(nil)
+                try expect(sounds == ["wipe_brushlayer", "wipe_snap"] && canvas.document.backgroundPNG == nil &&
+                           canvas.document.backgroundColor == .white && reads("Blank", false),
+                           "Clear removes the snap, resets the backdrop white and plays wipe_snap")
+                button.performClick(nil)
+                try expect(sounds.count == 2, "The disabled Blank button stays silent after the last stage")
+
+                sounds.removeAll()
+                canvas.document.elements = [shape]
+                try expect(reads("Wipe", true), "Artwork over a white drawing without a snap reads Wipe")
+                button.performClick(nil)
+                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && reads("Blank", false),
+                           "Wiping artwork with no snap and a white backdrop lands on a disabled Blank")
+
+                sounds.removeAll()
+                canvas.setBackgroundColor(.red)
+                _ = try editor(app, text: "Typing")
+                try expect(reads("Wipe", true), "Field editing over a coloured backdrop reads Wipe")
+                button.performClick(nil)
+                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty &&
+                           canvas.subviews.compactMap { $0 as? NSTextView }.isEmpty && reads("Clear", true),
+                           "Wipe commits the field, removes it with the artwork and leaves the coloured backdrop as Clear")
+            }),
             ("selected tool labels remain readable on bright and dark accent colors", {
                 let colors: [NSColor] = [.yellow, .white, .black, .blue, .red, .green,
                     NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1),
