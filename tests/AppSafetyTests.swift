@@ -573,7 +573,7 @@ enum AppSafetyTests {
         answer(.alertThirdButtonReturn)
         try drop(b, into: app)
         try expect(app.currentURL == b && app.canvas.document == documentB && !app.dirty, "Accepted drop must update document and save destination together")
-        try expect(!app.canvas.editingUndoManager.canUndo, "Accepted open must clear the previous document's undo history")
+        try expect(app.canvas.editingUndoManager.canUndo, "Accepted open must keep one Undo that restores the previous document")
         app.canvas.setBackgroundColor(.blue)
         try expect(app.save(), "Save dropped document")
         try expect(try Data(contentsOf: a) == originalA, "Saving B must never overwrite A")
@@ -1539,9 +1539,9 @@ enum AppSafetyTests {
                    "Real TIFF must have invalid document point size but valid actual pixels")
         answer(.alertThirdButtonReturn); app.openURL(url)
         try expect(app.canvas.canvasSize == CGSize(width: 16, height: 16) && app.canvas.document.elements.isEmpty &&
-                   app.canvas.document.backgroundPNG != nil && text.superview == nil && !app.canvas.editingUndoManager.canUndo &&
+                   app.canvas.document.backgroundPNG != nil && text.superview == nil &&
                    app.legacyMetadata == .init() && app.currentURL == nil && !app.dirty,
-                   "Raster Open must replace the old document using validated pixels and clear old annotations/editor/metadata/history")
+                   "Raster Open must replace the old document using validated pixels and clear old annotations/editor/metadata")
         try expect(try Data(contentsOf: a) == savedA, "Normalized raster Open must preserve the prior saved file")
     }
     static func publishingCallbacksDuringQuit() throws {
@@ -1650,6 +1650,34 @@ enum AppSafetyTests {
                    app.currentArchiveID == state.archiveID && app.dirty == state.dirty && app.window.isDocumentEdited == state.dirty,
                    message)
     }
+    static func newAndOpenUndo() throws {
+        let fixture = try Fixture(), app = fixture.app
+        app.canvas.setBackgroundColor(.yellow)
+        app.nameField.stringValue = "Drawing before New"
+        let destination = try fixture.saveA()
+        app.canvas.setBackgroundColor(.green); app.dirty = true; app.window.isDocumentEdited = true
+        let drawn = try app.historyEditorState()
+        answer(.alertThirdButtonReturn); app.newFile()
+        try expect(app.currentURL == nil && app.nameField.stringValue == "Untitled" && !app.dirty && app.canvas.document != drawn_document(drawn),
+                   "New must replace the document")
+        try expect(app.canvas.editingUndoManager.canUndo, "New must register an Undo instead of clearing the stack")
+        let blank = try app.historyEditorState()
+        app.undo(); try expectHistoryState(app, drawn, "Undo New restores the drawing, name, URL and dirty flag")
+        app.redo(); try expectHistoryState(app, blank, "Redo New returns to the blank document")
+        app.undo()
+
+        var documentB = SketchDocument(size: CGSize(width: 123, height: 99)); documentB.backgroundColor = SketchColor(.blue)
+        let b = fixture.file("Open-B").deletingPathExtension().appendingPathExtension("skitch")
+        try SkitchFile(document: documentB, metadata: .init()).write(to: b)
+        answer(.alertThirdButtonReturn); app.openURL(b)
+        try expect(app.currentURL == b && app.canvas.document.size == CGSize(width: 123, height: 99) && !app.dirty,
+                   "Open must load the fixture")
+        let opened = try app.historyEditorState()
+        app.undo(); try expectHistoryState(app, drawn, "Undo Open restores the previous document and currentURL")
+        try expect(app.currentURL == destination, "Undo Open restores the saved destination")
+        app.redo(); try expectHistoryState(app, opened, "Redo Open reopens the fixture")
+    }
+    static func drawn_document(_ state: AppDelegate.HistoryEditorState) -> SketchDocument? { try? CanvasView.validatedDocumentData(state.data) }
     static func historyOpenUndoRedo() throws {
         let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
         _ = try preparePannedHistory(app)
@@ -2750,8 +2778,8 @@ enum AppSafetyTests {
                     app.receiveCapture(.success(try image(size: CGSize(width: 80, height: 60))))
                 }
                 try expect(!app.isActualSize && app.actualView == nil && app.documentGeneration != generation &&
-                           !app.canvas.editingUndoManager.canUndo && app.navigatorWindow?.isVisible != true,
-                           "Successful \(replacement) replacement exits Actual mode and clears old undo")
+                           app.canvas.editingUndoManager.canUndo == (replacement != "capture") && app.navigatorWindow?.isVisible != true,
+                           "Successful \(replacement) replacement exits Actual mode; New/Open keep one Undo, Capture clears it")
                 let after = try app.canvas.snapshotDocumentData()
                 app.leaveActualSize()
                 try expect(try app.canvas.snapshotDocumentData() == after, "Old normal viewport cannot restore across \(replacement) generation")
@@ -3566,6 +3594,7 @@ enum AppSafetyTests {
             ("Frame chrome stays opaque around its transparent canvas hole in light/dark appearance", frameChromeDrawing),
             ("History Open Undo/Redo retains full pan, metadata, filename, URL, archive, dirty flags and prior Undo", historyOpenUndoRedo),
             ("History Open preserves pending text through older Undo/Redo without saving its prior destination", historyOpenPendingText),
+            ("New and Open register one Undo that restores the previous document", newAndOpenUndo),
             ("History follow keeps latest pending edits and detaches on New/native/capture replacement", historyFollowReplacement),
             ("History index failure preserves prior readable revision and live editor", historyFailedIndexWrite),
             ("successful Save archives exported native state; failed Save archives nothing", historySaveOutcomes),

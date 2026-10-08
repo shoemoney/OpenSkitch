@@ -1229,29 +1229,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return false
     }
-    @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; replaceDragPresentation(); activeResizeSession?.cancel(); followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
+    @objc func newFile() {
+        guard !terminationStarted, allowDiscard() else { return }
+        do {
+            // The original loads the replacement and registers one transaction (loadFromFileTA, decompiled.c:314172-314243).
+            let scratch = CanvasView(frame: .zero); scratch.newBlank(size: NSSize(width: 1000, height: 700))
+            try restoreHistoryEditorState(HistoryEditorState(data: try scratch.snapshotDocumentData(), metadata: .init(), name: "Untitled",
+                url: nil, archiveID: nil, dirty: false), actionName: "New", resetDrawingDefaults: false)
+            replaceDragPresentation()
+        } catch { self.error(error) }
+    }
     @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if withFrameWindowValuesSuspended({ p.runModal() }) == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
         guard allowDiscard() else { return }
         do {
-            followHistory()
-            if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) {
+            let state: HistoryEditorState, native = ["skitchredux", "skitch"].contains(url.pathExtension.lowercased())
+            if native {
                 let file = try SkitchFile.read(url)
-                activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
-                try canvas.loadDocument(data: file.canvasData); legacyMetadata = file.metadata; restoreDrawingDefaults()
                 // Bundled samples stay intact; ordinary drawings save in place.
-                currentURL = url.path.contains(".app/Contents/Resources/") ? nil : url
-            }
-            else { guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "SkitchRedux", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; var proposed = CGRect(origin: .zero, size: image.size)
+                state = HistoryEditorState(data: try file.canvasData, metadata: file.metadata, name: url.deletingPathExtension().lastPathComponent,
+                    url: url.path.contains(".app/Contents/Resources/") ? nil : url, archiveID: nil, dirty: false)
+            } else {
+                guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "SkitchRedux", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; var proposed = CGRect(origin: .zero, size: image.size)
                 guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
                     throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
                 }
-                activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
-                canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); legacyMetadata = .init(); currentURL = nil }
-            currentArchiveID = nil; documentGeneration = UUID(); leaveFrame(); canvas.editingUndoManager.removeAllActions()
-            if ["skitchredux", "skitch"].contains(url.pathExtension.lowercased()) { fitCanvasToWindow() } else { adoptRasterViewport() }
-            nameField.stringValue = url.deletingPathExtension().lastPathComponent; dirty = false; window.isDocumentEdited = false; replaceDragPresentation(); updateStatus()
+                let scratch = CanvasView(frame: .zero)
+                scratch.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); scratch.setBackground(image)
+                state = HistoryEditorState(data: try scratch.snapshotDocumentData(), metadata: .init(), name: url.deletingPathExtension().lastPathComponent,
+                    url: nil, archiveID: nil, dirty: false)
+            }
+            try restoreHistoryEditorState(state, actionName: "Open", resetDrawingDefaults: native, rasterViewport: !native)
+            replaceDragPresentation()
         } catch { self.error(error) }
     }
     func save(forceChoose: Bool = false) -> Bool {
@@ -1386,7 +1396,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     /// The whole document identity participates in the same Undo operation as
     /// the artwork, so reopening History cannot redirect a later Save.
-    func restoreHistoryEditorState(_ state: HistoryEditorState) throws {
+    func restoreHistoryEditorState(_ state: HistoryEditorState, actionName: String = "Open History",
+                                   resetDrawingDefaults: Bool = true, rasterViewport: Bool = false) throws {
         _ = try CanvasView.validatedDocumentData(state.data)
         canvas.commitPendingTextEditing()
         activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize()
@@ -1395,17 +1406,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         restoring = true
         defer { restoring = false }
         try canvas.loadDocument(data: state.data, clearingUndo: false)
-        legacyMetadata = state.metadata; restoreDrawingDefaults(); nameField.stringValue = state.name; currentURL = state.url
+        legacyMetadata = state.metadata; if resetDrawingDefaults { restoreDrawingDefaults() }; nameField.stringValue = state.name; currentURL = state.url
         currentArchiveID = state.archiveID; dirty = state.dirty; documentGeneration = UUID()
         let manager = canvas.editingUndoManager
         let grouping = !manager.isUndoing && !manager.isRedoing
         if grouping { manager.beginUndoGrouping() }
         manager.registerUndo(withTarget: self) { app in
-            do { try app.restoreHistoryEditorState(inverse) } catch { app.error(error) }
+            do { try app.restoreHistoryEditorState(inverse, actionName: actionName, resetDrawingDefaults: resetDrawingDefaults) } catch { app.error(error) }
         }
-        manager.setActionName("Open History")
+        manager.setActionName(actionName)
         if grouping { manager.endUndoGrouping() }
-        fitCanvasToWindow(); window.isDocumentEdited = dirty; updateStatus(); refreshHistory()
+        if rasterViewport { adoptRasterViewport() } else { fitCanvasToWindow() }
+        window.isDocumentEdited = dirty; updateStatus(); refreshHistory()
     }
     func openHistory(_ id: UUID) {
         guard !terminationStarted else { return }
