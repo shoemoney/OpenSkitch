@@ -18,6 +18,8 @@
 	<string>2</string>
 	<key>CFBundleIconFile</key>
 	<string>OpenSkitch</string>
+	<key>CFBundleIconName</key>
+	<string>OpenSkitch</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
