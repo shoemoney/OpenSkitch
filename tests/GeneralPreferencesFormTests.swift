@@ -1,7 +1,7 @@
 // Standalone native tests; no windows or desktop automation.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete \
 //   -target arm64-apple-macosx13.0 -framework AppKit -D GENERAL_PREFERENCES_FORM_TESTS \
-//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/Appearance.swift Sources/GeneralPreferencesForm.swift \
+//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/GeneralPreferencesForm.swift Sources/Appearance.swift \
 //   tests/GeneralPreferencesFormTests.swift -o build/general-preferences-form-tests
 // rtk proxy build/general-preferences-form-tests
 #if GENERAL_PREFERENCES_FORM_TESTS

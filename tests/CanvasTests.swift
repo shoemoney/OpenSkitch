@@ -1,6 +1,6 @@
 // Executable regression suite, deliberately gated to avoid an App.swift @main conflict.
 // Run (excluding App.swift):
-// swiftc -D CANVAS_TESTS -target arm64-apple-macosx13.0 Sources/LegacySkitch.swift Sources/LegacyBridge.swift Sources/DocumentModel.swift Sources/Canvas.swift tests/CanvasTests.swift -o /tmp/skitch-redux-canvas-tests
+// swiftc -D CANVAS_TESTS -target arm64-apple-macosx13.0 Sources/LegacySkitch.swift Sources/LegacyBridge.swift Sources/DocumentModel.swift Sources/VectorGeometry.swift Sources/StrokeFitting.swift Sources/ImageExport.swift Sources/Canvas.swift tests/CanvasTests.swift -o /tmp/skitch-redux-canvas-tests
 // /tmp/skitch-redux-canvas-tests
 // Fixture-only check without windows/captures: /tmp/skitch-redux-canvas-tests --fixture-only
 // Full suite without the optional capture: /tmp/skitch-redux-canvas-tests --skip-visual-proof

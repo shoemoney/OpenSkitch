@@ -1,6 +1,7 @@
 // Standalone NSMenu trees only; no application delegate, no windows, no desktop input.
 // xcrun swiftc -swift-version 5 -strict-concurrency=complete -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D MENU_SYMBOLS_TESTS Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift Sources/MenuSymbols.swift tests/MenuSymbolsTests.swift -o build/menu-symbols-tests
+// build/menu-symbols-tests
 #if MENU_SYMBOLS_TESTS
 import AppKit
 

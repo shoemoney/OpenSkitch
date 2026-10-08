@@ -1,9 +1,10 @@
 // Executable regression tests; no app windows, capture, network, or credentials.
-// From the repository root, compile all Sources/*.swift except App.swift with:
+// From the repository root, with the sources tools/test.py compiles for this suite:
 // xcrun swiftc -D SVG_EXPORT_TESTS -swift-version 5 -target arm64-apple-macosx13.0 \
-//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,Canvas,SVGExport,Capture,Publishing}.swift \
+//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,SVGExport}.swift \
 //   tests/SVGExportTests.swift -o /tmp/skitch-svg-tests
-// /tmp/skitch-svg-tests [--fixture /absolute/path/firstlaunch.skitch]
+// /tmp/skitch-svg-tests --fixture original/Skitch.app/Contents/Resources/firstlaunch.skitch
+// (--fixture defaults to that path under the repository root and accepts any other .skitch file.)
 // Repeat compilation with x86_64-apple-macosx13.0 to check the other architecture.
 // Known exporter regressions deliberately fail; they are not treated as expected passes.
 

@@ -2,8 +2,9 @@
 import Foundation
 import CoreGraphics
 
-// Standalone: swiftc -swift-version 5 -warnings-as-errors -D STROKE_FITTING_TESTS
-// Sources/LegacySkitch.swift Sources/StrokeFitting.swift tests/StrokeFittingTests.swift
+// Standalone: xcrun swiftc -swift-version 5 -warnings-as-errors -D STROKE_FITTING_TESTS
+// Sources/LegacySkitch.swift Sources/StrokeFitting.swift tests/StrokeFittingTests.swift -o /tmp/skitch-stroke-fitting-tests
+// /tmp/skitch-stroke-fitting-tests
 // No Canvas, application launch, or original runtime is used by these tests.
 @main
 struct StrokeFittingTests {

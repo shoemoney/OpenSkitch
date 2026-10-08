@@ -2,6 +2,7 @@
 // Set OPENSKITCH_FA_FONT_DIR to a folder holding FontAwesome7Pro-{Regular,Solid}-subset.ttf to exercise the glyph branch.
 // xcrun swiftc -swift-version 5 -strict-concurrency=complete -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D FONTAWESOME_ICONS_TESTS Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift tests/FontAwesomeIconsTests.swift -o build/fontawesome-icons-tests
+// build/fontawesome-icons-tests
 #if FONTAWESOME_ICONS_TESTS
 import AppKit
 import CoreText

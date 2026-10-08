@@ -1,5 +1,8 @@
-// Pure executable tests. Compile LegacySkitch, LegacyBridge, DocumentModel and
-// VectorGeometry with -D VECTOR_GEOMETRY_TESTS; no Canvas, windows or OS input.
+// Pure executable tests; no Canvas, windows or OS input. From the repository root:
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D VECTOR_GEOMETRY_TESTS \
+//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry}.swift \
+//   tests/VectorGeometryTests.swift -o /tmp/skitch-vector-geometry-tests
+// /tmp/skitch-vector-geometry-tests
 #if VECTOR_GEOMETRY_TESTS
 import AppKit
 import CoreGraphics

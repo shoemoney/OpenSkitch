@@ -1,3 +1,7 @@
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D HISTORY_STORE_TESTS \
+//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,SVGExport,SkitchFile,LegacyHistoryImporter,HistoryStore}.swift \
+//   tests/HistoryStoreTests.swift -o /tmp/skitch-history-store-tests
+// /tmp/skitch-history-store-tests
 #if HISTORY_STORE_TESTS
 import AppKit
 

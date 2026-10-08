@@ -1,3 +1,7 @@
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D TEXT_STYLE_FORM_TESTS \
+//   Sources/TextStyleForm.swift \
+//   tests/TextStyleFormTests.swift -o /tmp/skitch-text-style-form-tests
+// /tmp/skitch-text-style-form-tests
 #if TEXT_STYLE_FORM_TESTS
 import AppKit
 

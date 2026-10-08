@@ -1,7 +1,8 @@
 // rtk proxy xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -framework AppKit -D ORIGINAL_GENERAL_PREFERENCES_TESTS \
-//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/DocumentModel.swift Sources/Appearance.swift \
-//   Sources/GeneralPreferencesForm.swift Sources/OriginalGeneralPreferences.swift tests/OriginalGeneralPreferencesTests.swift \
+//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/DocumentModel.swift Sources/GeneralPreferencesForm.swift \
+//   Sources/OriginalGeneralPreferences.swift Sources/Appearance.swift tests/OriginalGeneralPreferencesTests.swift \
 //   -o build/original-general-preferences-tests
+// rtk proxy build/original-general-preferences-tests
 // The audio decode checks need the git-ignored original/ archive; without it they print a SKIP line and the rest still run.
 #if ORIGINAL_GENERAL_PREFERENCES_TESTS
 import AppKit

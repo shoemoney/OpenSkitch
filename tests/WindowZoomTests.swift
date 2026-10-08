@@ -1,3 +1,7 @@
+// xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D WINDOW_ZOOM_TESTS \
+//   Sources/WindowZoom.swift \
+//   tests/WindowZoomTests.swift -o /tmp/skitch-window-zoom-tests
+// /tmp/skitch-window-zoom-tests
 #if WINDOW_ZOOM_TESTS
 import AppKit
 

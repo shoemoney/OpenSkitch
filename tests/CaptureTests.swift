@@ -5,8 +5,9 @@ import Foundation
 import CoreFoundation
 
 // xcrun swiftc -swift-version 6 -D CAPTURE_TESTS -target arm64-apple-macosx13.0
-// Sources/{Capture,OriginalCapturePicker,OriginalCaptureCountdown,OriginalCaptureTiming}.swift
+// Sources/{OriginalCaptureTiming,OriginalCapturePicker,OriginalCaptureCountdown,Capture}.swift
 // tests/CaptureTests.swift -o /tmp/skitch-capture-tests
+// /tmp/skitch-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
 // Pure checks use no screen/camera permissions, network or NSApplication.
 // --termination-probe runs a separate headless NSApplication with no windows.
