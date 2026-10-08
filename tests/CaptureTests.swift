@@ -5,7 +5,7 @@ import Foundation
 import CoreFoundation
 
 // xcrun swiftc -swift-version 6 -D CAPTURE_TESTS -target arm64-apple-macosx13.0
-// Sources/{OriginalCaptureTiming,OriginalCapturePicker,OriginalCaptureCountdown,Capture}.swift
+// Sources/{OriginalCaptureTiming,OriginalCapturePicker,OriginalCaptureCountdown,OriginalCaptureFlash,Capture}.swift
 // tests/CaptureTests.swift -o /tmp/skitch-capture-tests
 // /tmp/skitch-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
@@ -71,6 +71,23 @@ private final class FakeCaptureSelectionPicker: CaptureSelectionPicking {
         }
         cancellationCompleted = true
     }
+}
+
+@MainActor
+private final class FakeCaptureFlash: CaptureFlashPresenting {
+    var plays: [NSRect] = []
+    var cancellations = 0
+    func play(frame: NSRect) { plays.append(frame) }
+    func cancel() { cancellations += 1 }
+}
+
+@MainActor
+private final class FakeFlashWindow: CaptureFlashWindowing {
+    var alphas: [Float32] = []
+    var fronted = 0, ordered = 0
+    func setAlpha(_ alpha: Float32) { alphas.append(alpha) }
+    func orderFront() { fronted += 1 }
+    func orderOut() { ordered += 1 }
 }
 
 @MainActor
@@ -329,6 +346,8 @@ private enum CaptureTests {
             defer { try? FileManager.default.removeItem(at: root) }
             try writeFixture()
             try await queuedCancellation()
+try await captureFlashOnlyAfterSuccess()
+try await captureFlashControllerTimeline()
             try await queuedShutdown()
             try await delayedCancellation()
             try await nativeSelectionAndTiming()
@@ -403,7 +422,8 @@ private enum CaptureTests {
                      killDelay: Double = 0.15, missingExecutable: Bool = false,
                      visibility: FakeApplicationVisibility? = nil,
                      selectionPicker: (any CaptureSelectionPicking)? = nil,
-                     countdown: (any CaptureCountdownPresenting)? = nil) throws -> Rig {
+                     countdown: (any CaptureCountdownPresenting)? = nil,
+                     captureFlash: (any CaptureFlashPresenting)? = nil) throws -> Rig {
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let temporary = directory.appendingPathComponent("captures", isDirectory: true)
         let marker = directory.appendingPathComponent("helper.json")
@@ -413,7 +433,8 @@ private enum CaptureTests {
         let coordinator = CaptureCoordinator(testHelper: helper,
             arguments: ["--capture-test-helper", behavior, marker.path, fixture.path],
             temporaryRoot: temporary, timeout: timeout, killDelay: killDelay,
-            applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown)
+            applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown,
+            captureFlash: captureFlash)
         coordinators.append(coordinator)
         return Rig(coordinator: coordinator, directory: directory, temporary: temporary, marker: marker)
     }
@@ -480,6 +501,49 @@ private enum CaptureTests {
         try await wait { resumed.results.count == 1 }
         try expect(errorCode(resumed.results.first) == nil, "cancelled coordinator must remain reusable")
         try expect(directories(rig).isEmpty, "normal capture callback must follow cleanup too")
+    }
+
+    static func captureFlashOnlyAfterSuccess() async throws {
+        let flash = FakeCaptureFlash()
+        let rig = try make(captureFlash: flash)
+        let ok = start(rig)
+        try await wait { ok.results.count == 1 }
+        try expect(errorCode(ok.results.first) == nil && flash.plays.count == 1, "a successful capture must flash exactly once")
+        try expect(flash.plays.first?.isEmpty == true, "screen captures flash the whole screen (NSZeroRect)")
+        let failing = try make("failure", captureFlash: flash)
+        let failed = start(failing)
+        try await wait { failed.results.count == 1 }
+        try expect(errorCode(failed.results.first) != nil && flash.plays.count == 1, "a failed capture must not flash")
+        let cancelRig = try make(captureFlash: flash)
+        let cancelled = start(cancelRig)
+        try await stopped(cancelRig, cancelled)
+        try expect(flash.plays.count == 1, "a cancelled capture must not flash")
+    }
+
+    static func captureFlashControllerTimeline() async throws {
+        var now: TimeInterval = 100
+        var ticks: [@MainActor () -> Void] = []
+        var invalidated = 0
+        let window = FakeFlashWindow()
+        let controller = OriginalCaptureFlashController(
+            clock: { now },
+            windowFactory: { _ in window },
+            timerFactory: { interval, tick in
+                precondition(interval == 0.02)
+                ticks.append(tick)
+                return { invalidated += 1 }
+            })
+        controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50))
+        try expect(window.fronted == 1 && controller.isRunning, "play must order the flash window front")
+        now += 0.05; ticks.last?()
+        try expect(abs((window.alphas.last ?? -1) - 0.5) < 1e-4, "flash ramps toward 1")
+        now += 0.06; ticks.last?()
+        try expect(window.alphas.last == 1 && ticks.count == 2, "flash reaching duration begins deflash")
+        now += 0.1; ticks.last?()
+        try expect(abs((window.alphas.last ?? -1) - 0.5) < 1e-3, "deflash ramps from 1 toward 0 over 0.2s")
+        now += 0.11; ticks.last?()
+        try expect(window.alphas.last == 0 && window.ordered == 1 && !controller.isRunning, "deflash end hides the window")
+        try expect(invalidated >= 2, "timers are invalidated")
     }
 
     static func queuedShutdown() async throws {

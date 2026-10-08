@@ -374,8 +374,10 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     private var screenshot: ScreenshotProcess?
     private var selectionPicker: (any CaptureSelectionPicking)?
     private var countdown: (any CaptureCountdownPresenting)?
+    private var captureFlash: (any CaptureFlashPresenting)?
     private let nativeSelection: Bool
     private let nativeCountdown: Bool
+    private var nativeFlash = false
     var onSound: ((String) -> Void)?
     var isCapturing: Bool { operationID != nil || cleaningUp }
     private var hidApplication = false
@@ -399,6 +401,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     nonisolated override init() {
         environment = CaptureEnvironment()
         nativeSelection = true; nativeCountdown = true
+        nativeFlash = true
         applicationVisibility = NativeCaptureApplicationVisibility()
         super.init()
     }
@@ -411,13 +414,15 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
                      settleDelay: Double = 0, timeout: Double = 2, killDelay: Double = 0.1,
                      applicationVisibility: (any CaptureApplicationVisibility)? = nil,
                      selectionPicker: (any CaptureSelectionPicking)? = nil,
-                     countdown: (any CaptureCountdownPresenting)? = nil) {
+                     countdown: (any CaptureCountdownPresenting)? = nil,
+                     captureFlash: (any CaptureFlashPresenting)? = nil) {
         environment = CaptureEnvironment(executable: testHelper, arguments: arguments,
                                          temporaryRoot: temporaryRoot, testDisplays: displays,
                                          settleDelay: settleDelay,
                                          screenTimeout: timeout, killDelay: killDelay)
         self.applicationVisibility = applicationVisibility
         self.selectionPicker = selectionPicker; self.countdown = countdown
+        self.captureFlash = captureFlash
         nativeSelection = selectionPicker != nil; nativeCountdown = countdown != nil
         super.init()
     }
@@ -643,6 +648,10 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         cleaningUp = false
         lifetime = nil
         deliveringCallbacks += 1
+        if case .success = delivered {
+            if captureFlash == nil, nativeFlash { captureFlash = OriginalCaptureFlashController() }
+            captureFlash?.play(frame: .zero)
+        }
         callback?.callback(delivered)
         deliveringCallbacks -= 1
         acknowledgeStops(error.map { .failure($0) } ?? .success(()))
