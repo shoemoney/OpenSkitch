@@ -677,6 +677,20 @@ enum AppSafetyTests {
         }
         app.frameSnap(); app.newFile()
         try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "newFile must restore the pre-Frame window values")
+        // Alerts open at modal level, so the Frame level must not be in force while one is showing.
+        _ = try editor(app, text: "Dirty so the Discard prompt appears")
+        app.frameSnap()
+        var seenLevel: NSWindow.Level?, seenAlpha: CGFloat?, seenShadow: Bool?
+        AppSafetyAlert.beforeReply = { seenLevel = app.window.level; seenAlpha = app.window.alphaValue; seenShadow = app.window.hasShadow }
+        answer(.alertSecondButtonReturn)
+        app.receiveFrameCapture(.success(try image()), keepingAnnotations: false)
+        AppSafetyAlert.beforeReply = nil
+        try expect(AppSafetyAlert.seen.last == "Save your drawing?" && (seenLevel ?? level) <= .modalPanel && seenLevel == .floating && seenAlpha == 0.9 && seenShadow == true,
+                   "The Frame-completion Discard prompt must show with the pre-Frame level, alpha and shadow, not under the screen-saver window")
+        try expect(app.frameMode && !app.window.hasShadow && app.window.level == level && app.window.alphaValue == alpha,
+                   "Cancel at the prompt leaves Frame active, so the Frame window values return after the modal")
+        app.cancelFrame()
+        try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "Cancel Frame restores after a prompt")
     }
     static func resnapPreservesAnnotations() throws {
         let fixture = try Fixture(), app = fixture.app

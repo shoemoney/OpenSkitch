@@ -1189,12 +1189,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         feedCanvasBleed()
     }
     func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
-    func error(_ error: Error) { let a = NSAlert(error: error); a.runModal() }
+    func applyFrameWindowValues() {
+        window.hasShadow = false
+        window.alphaValue = CGFloat(Float32(bitPattern: 0x3f4ccccd))
+        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
+    }
+    /// The screen-saver Frame level would bury alerts and panels (they open at modal level),
+    /// so modals shown during Frame run with the stored pre-Frame window values.
+    func withFrameWindowValuesSuspended<T>(_ body: () -> T) -> T {
+        guard frameMode else { return body() }
+        window.hasShadow = frameWindowHadShadow; window.alphaValue = frameWindowAlpha; window.level = frameWindowLevel
+        defer { if frameMode { applyFrameWindowValues() } }
+        return body()
+    }
+    func error(_ error: Error) { let a = NSAlert(error: error); _ = withFrameWindowValuesSuspended { a.runModal() } }
     func allowDiscard(discardingForTermination: Bool = false) -> Bool {
         if discardedForTermination { return true }
         guard dirty || canvas.hasPendingTextChanges else { return true }
         let a = NSAlert(); a.messageText = "Save your drawing?"; a.informativeText = "This document has changes that have not been saved."; a.addButton(withTitle: "Save"); a.addButton(withTitle: "Cancel"); a.addButton(withTitle: "Discard")
-        let result = a.runModal()
+        let result = withFrameWindowValuesSuspended { a.runModal() }
         if result == .alertFirstButtonReturn { return save() }
         if result == .alertThirdButtonReturn {
             if discardingForTermination { discardedForTermination = true; dirty = false }
@@ -1203,7 +1216,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return false
     }
     @objc func newFile() { guard !terminationStarted, allowDiscard() else { return }; replaceDragPresentation(); activeResizeSession?.cancel(); followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); leaveFrame(); canvas.newBlank(size: NSSize(width: 1000,height: 700)); documentGeneration = UUID(); legacyMetadata = .init(); fitCanvasToWindow(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; nameField.stringValue = "Untitled"; dirty = false; window.isDocumentEdited = false; updateStatus() }
-    @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if p.runModal() == .OK, let u = p.url { openURL(u) } }
+    @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if withFrameWindowValuesSuspended({ p.runModal() }) == .OK, let u = p.url { openURL(u) } }
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
         guard allowDiscard() else { return }
@@ -1701,9 +1714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         frameMode = true; frameKeepsAnnotations = keepingAnnotations
         window.isOpaque = false; window.backgroundColor = .clear
         // Recovered -[PlatformController(snap) setSnapMode:] (decompiled.c:20481): shadow off, screen-saver level, alpha 0x3f4ccccd (0.8f).
-        window.hasShadow = false
-        window.alphaValue = CGFloat(Float32(bitPattern: 0x3f4ccccd))
-        window.level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
+        applyFrameWindowValues()
         window.titlebarAppearsTransparent = false
         // A clear window also clears AppKit's titlebar on recent macOS. Keep
         // its adaptive white title readable without filling the canvas hole.
