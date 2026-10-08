@@ -73,6 +73,21 @@ class GlassChromeButton: OriginalActionButton {
 
     override var title: String { didSet { updatePresentation() } }
 
+    private var explicitAccessibilityLabel: String?
+
+    // Without Font Awesome the icon is an SF Symbol with no description of its own, and AppKit then reads the symbol's
+    // ("download" for Save) instead of the command. An explicit label wins; otherwise the live title is what is read,
+    // so Snap / Snap Frame, Actual Size / Normal View and Blank / Clear / Wipe follow their retitles like Classic's.
+    override func setAccessibilityLabel(_ label: String?) {
+        explicitAccessibilityLabel = label
+        super.setAccessibilityLabel(label)
+    }
+
+    override func accessibilityLabel() -> String? {
+        if let explicitAccessibilityLabel { return explicitAccessibilityLabel }
+        return title.isEmpty ? super.accessibilityLabel() : title
+    }
+
     // Symbol artwork carries alignment insets that make the frame outgrow the surface's constraints; the glass is the bezel here.
     override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets() }
 

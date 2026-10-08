@@ -2038,7 +2038,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     }
                     controls.append(["label": control.accessibilityLabel() ?? (control as? NSButton)?.title ?? (control as? NSTextField)?.stringValue ?? "",
                                      "fontSize": control.font?.pointSize ?? 0, "frame": NSStringFromRect(rect),
-                                     "visibleFrame": NSStringFromRect(clipped), "hidden": control.isHiddenOrHasHiddenAncestor])
+                                     "visibleFrame": NSStringFromRect(clipped), "hidden": control.isHiddenOrHasHiddenAncestor,
+                                     "parentIsButton": control.superview is NSButton])
                 }
                 for child in view.subviews { inspect(child) }
             }
@@ -2086,10 +2087,12 @@ enum RelaunchLauncher {
     static let launchServices: Opener = { url, configuration, completion in
         NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: completion)
     }
-    /// Developer and test overrides (isolated support folder, pinned appearance) must survive a relaunch;
-    /// LaunchServices would otherwise start the new instance with none of them.
+    /// Only where the new instance keeps its data and evidence survives a relaunch. SKITCH_APPEARANCE would override the
+    /// choice just made in Preferences, which is the whole reason to relaunch, and SKITCH_FIXTURE would reopen the fixture
+    /// over the recovered drawing.
+    static let inheritedKeys: Set<String> = ["SKITCH_APP_SUPPORT", "SKITCH_EVIDENCE_DIR"]
     static func inheritedEnvironment(_ environment: [String: String]) -> [String: String] {
-        environment.filter { $0.key.hasPrefix("SKITCH_") }
+        environment.filter { inheritedKeys.contains($0.key) }
     }
     @MainActor
     @discardableResult
