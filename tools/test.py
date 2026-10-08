@@ -85,7 +85,7 @@ suites = [
     ("image-export-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "ImageExport.swift"], "ImageExportTests.swift", "IMAGE_EXPORT_TESTS", ()),
     ("vector-geometry-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift"], "VectorGeometryTests.swift", "VECTOR_GEOMETRY_TESTS", ()),
     ("stroke-fitting-tests", ["LegacySkitch.swift", "StrokeFitting.swift"], "StrokeFittingTests.swift", "STROKE_FITTING_TESTS", ()),
-    ("canvas-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift"], "CanvasTests.swift", "CANVAS_TESTS", ("--skip-visual-proof",)),
+    ("canvas-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift"], "CanvasTests.swift", "CANVAS_TESTS", ()),
     ("legacy-history-importer-tests", ["LegacyHistoryImporter.swift"], "LegacyHistoryImporterTests.swift", "LEGACY_HISTORY_IMPORTER_TESTS", ()),
     ("history-store-tests", ["LegacySkitch.swift", "LegacyBridge.swift", "DocumentModel.swift", "VectorGeometry.swift", "StrokeFitting.swift", "ImageExport.swift", "Canvas.swift", "SVGExport.swift", "SkitchFile.swift", "LegacyHistoryImporter.swift", "HistoryStore.swift"], "HistoryStoreTests.swift", "HISTORY_STORE_TESTS", ()),
     ("history-browser-tests", ["HistoryBrowser.swift"], "HistoryBrowserTests.swift", "HISTORY_BROWSER_TESTS", ()),
