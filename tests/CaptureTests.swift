@@ -75,9 +75,9 @@ private final class FakeCaptureSelectionPicker: CaptureSelectionPicking {
 
 @MainActor
 private final class FakeCaptureFlash: CaptureFlashPresenting {
-    var plays: [NSRect] = []
+    var plays: [(frame: NSRect, deflash: Float32)] = []
     var cancellations = 0
-    func play(frame: NSRect) { plays.append(frame) }
+    func play(frame: NSRect, deflashDuration: Float32) { plays.append((frame, deflashDuration)) }
     func cancel() { cancellations += 1 }
 }
 
@@ -346,8 +346,8 @@ private enum CaptureTests {
             defer { try? FileManager.default.removeItem(at: root) }
             try writeFixture()
             try await queuedCancellation()
-try await captureFlashOnlyAfterSuccess()
-try await captureFlashControllerTimeline()
+            try await captureFlashOnlyAfterSuccess()
+            try await captureFlashControllerTimeline()
             try await queuedShutdown()
             try await delayedCancellation()
             try await nativeSelectionAndTiming()
@@ -509,15 +509,45 @@ try await captureFlashControllerTimeline()
         let ok = start(rig)
         try await wait { ok.results.count == 1 }
         try expect(errorCode(ok.results.first) == nil && flash.plays.count == 1, "a successful capture must flash exactly once")
-        try expect(flash.plays.first?.isEmpty == true, "screen captures flash the whole screen (NSZeroRect)")
+        let quick = OriginalCaptureFlashTiming.captureDuration
+        let display = NSRect(x: -1000, y: -1000, width: 3000, height: 3000)
+        try expect(flash.plays.first?.frame == display && flash.plays.first?.deflash == quick,
+                   "fullscreen flashes the main screen frame with the 0.1s deflash")
+        let frameRig = try make(captureFlash: flash)
+        let frameRect = NSRect(x: 100, y: 200, width: 160, height: 90)
+        let frameRecord = CaptureRecord()
+        frameRig.coordinator.frameRect = frameRect
+        frameRig.coordinator.capture(mode: "frame", completion: frameRecord.received)
+        try await wait { frameRecord.results.count == 1 }
+        let expectedFrame = NSRect(x: 100, y: 2000 - 290, width: 160, height: 90)
+        try expect(flash.plays.count == 2 && flash.plays[1].frame == expectedFrame && flash.plays[1].deflash == quick,
+                   "frame capture flashes only its rect (Cocoa coordinates) with the 0.1s deflash")
+        for mode in ["crosshair", "window"] {
+            let journal = CapturePhaseJournal()
+            let picker = FakeCaptureSelectionPicker(journal)
+            let pickRig = try make(selectionPicker: picker, captureFlash: flash)
+            let record = start(pickRig, mode: mode)
+            try await wait { picker.requests.count == 1 }
+            let region = NSRect(x: 40, y: 60, width: 120, height: 80)
+            picker.requests[0].completion(.success(OriginalCaptureSelection(rect: region, windowID: mode == "window" ? 7 : nil, modifiers: [])))
+            try await wait { record.results.count == 1 }
+            try expect(flash.plays.last?.frame == region && flash.plays.last?.deflash == quick,
+                       "\(mode) flashes only the snapped rect with the 0.1s deflash")
+        }
+        let camera = OriginalCaptureFlashPlan.make(source: "camera", requested: nil, captured: nil, mainScreen: display)
+        try expect(camera?.frame == .zero && camera?.deflashDuration == OriginalCaptureFlashTiming.cameraDeflashDuration,
+                   "camera flashes NSZeroRect with the 0.2s deflash")
+        try expect(OriginalCaptureFlashPlan.make(source: "web", requested: nil, captured: nil, mainScreen: display) == nil,
+                   "URL snaps never flash")
+        let playsBefore = flash.plays.count
         let failing = try make("failure", captureFlash: flash)
         let failed = start(failing)
         try await wait { failed.results.count == 1 }
-        try expect(errorCode(failed.results.first) != nil && flash.plays.count == 1, "a failed capture must not flash")
+        try expect(errorCode(failed.results.first) != nil && flash.plays.count == playsBefore, "a failed capture must not flash")
         let cancelRig = try make(captureFlash: flash)
         let cancelled = start(cancelRig)
         try await stopped(cancelRig, cancelled)
-        try expect(flash.plays.count == 1, "a cancelled capture must not flash")
+        try expect(flash.plays.count == playsBefore, "a cancelled capture must not flash")
     }
 
     static func captureFlashControllerTimeline() async throws {
@@ -533,7 +563,8 @@ try await captureFlashControllerTimeline()
                 ticks.append(tick)
                 return { invalidated += 1 }
             })
-        controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50))
+        controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50),
+                        deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
         try expect(window.fronted == 1 && controller.isRunning, "play must order the flash window front")
         now += 0.05; ticks.last?()
         try expect(abs((window.alphas.last ?? -1) - 0.5) < 1e-4, "flash ramps toward 1")

@@ -648,13 +648,19 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         cleaningUp = false
         lifetime = nil
         deliveringCallbacks += 1
-        if case .success = delivered {
+        if case .success = delivered, let plan = flashPlan() {
             if captureFlash == nil, nativeFlash { captureFlash = OriginalCaptureFlashController() }
-            captureFlash?.play(frame: .zero)
+            captureFlash?.play(frame: plan.frame, deflashDuration: plan.deflashDuration)
         }
         callback?.callback(delivered)
         deliveringCallbacks -= 1
         acknowledgeStops(error.map { .failure($0) } ?? .success(()))
+    }
+
+    private func flashPlan() -> OriginalCaptureFlashPlan? {
+        let screens = environment.testDisplays ?? NSScreen.screens.map(\.frame)
+        return OriginalCaptureFlashPlan.make(source: source, requested: requestedFrame,
+                                             captured: capturedFrame, mainScreen: screens.first)
     }
 
     private func acknowledgeStops(_ result: Result<Void, Error>) {

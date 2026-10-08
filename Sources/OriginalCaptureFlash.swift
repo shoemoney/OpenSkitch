@@ -55,10 +55,36 @@ final class OriginalCaptureFlashWindow: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
+/// What the original flashed per source: snapped rect (0.1s) for crosshair/window/frame,
+/// the main screen (0.1s) for fullscreen, NSZeroRect (0.2s) for the camera, nothing for URL snaps.
+/// Rects are returned in Cocoa (bottom-left) coordinates; frame rects arrive top-left.
+struct OriginalCaptureFlashPlan: Equatable {
+    let frame: NSRect
+    let deflashDuration: Float32
+
+    static func make(source: String, requested: NSRect?, captured: NSRect?, mainScreen: NSRect?) -> OriginalCaptureFlashPlan? {
+        let quick = OriginalCaptureFlashTiming.captureDuration
+        switch source {
+        case "camera":
+            return OriginalCaptureFlashPlan(frame: .zero, deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
+        case "fullscreen":
+            return mainScreen.map { OriginalCaptureFlashPlan(frame: $0, deflashDuration: quick) }
+        case "crosshair", "window":
+            return requested.map { OriginalCaptureFlashPlan(frame: $0, deflashDuration: quick) }
+        case "frame":
+            guard let rect = captured ?? requested, let screen = mainScreen else { return nil }
+            let flipped = NSRect(x: rect.minX, y: screen.maxY - rect.maxY, width: rect.width, height: rect.height)
+            return OriginalCaptureFlashPlan(frame: flipped, deflashDuration: quick)
+        default:
+            return nil
+        }
+    }
+}
+
 @MainActor
 protocol CaptureFlashPresenting: AnyObject, Sendable {
     /// Plays the white flash-up then deflash for a successful capture.
-    func play(frame: NSRect)
+    func play(frame: NSRect, deflashDuration: Float32)
     func cancel()
 }
 
@@ -92,14 +118,13 @@ final class OriginalCaptureFlashController: CaptureFlashPresenting {
     private var phase = OriginalCaptureFlashTiming.Phase.flash
     private var start: TimeInterval = 0
     private let flashDuration: Float32
-    private let deflashDuration: Float32
+    private var deflashDuration: Float32
     var isRunning: Bool { window != nil }
 
     init(flashDuration: Float32 = OriginalCaptureFlashTiming.captureDuration,
-         deflashDuration: Float32 = OriginalCaptureFlashTiming.cameraDeflashDuration,
          clock: Clock? = nil, windowFactory: WindowFactory? = nil, timerFactory: TimerFactory? = nil) {
         self.flashDuration = flashDuration
-        self.deflashDuration = deflashDuration
+        self.deflashDuration = OriginalCaptureFlashTiming.captureDuration
         self.clock = clock ?? { Date.timeIntervalSinceReferenceDate }
         self.windowFactory = windowFactory ?? { OriginalCaptureFlashWindow(contentRect: $0, screen: nil) }
         self.timerFactory = timerFactory ?? { interval, tick in
@@ -114,8 +139,9 @@ final class OriginalCaptureFlashController: CaptureFlashPresenting {
     }
 
     /// A zero or empty frame covers every screen (original passes NSZeroRect -> totalFrame).
-    func play(frame: NSRect) {
+    func play(frame: NSRect, deflashDuration: Float32) {
         guard window == nil else { return }
+        self.deflashDuration = deflashDuration
         let target = frame.isEmpty ? NSScreen.screens.map(\.frame).reduce(NSRect.null) { $0.union($1) } : frame
         guard !target.isNull, !target.isEmpty else { return }
         let created = windowFactory(target)
