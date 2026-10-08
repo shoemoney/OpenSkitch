@@ -497,7 +497,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         let callback = CaptureCompletion(completion)
         switch ingress.enqueue(callback) {
         case .success(let id):
-            Task { @MainActor in
+            // Run-loop delivery, not a MainActor Task: nested run loops still reach it.
+            CaptureMainDelivery.perform {
                 guard let callback = self.ingress.take(id) else { return }
                 start(callback)
             }
@@ -521,7 +522,13 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     }
 
     nonisolated func captureCamera(completion: @escaping (Result<NSImage, Error>) -> Void) {
-        submit(completion) { callback in self.startCameraCapture(callback: callback) }
+        captureCamera(delay: 0, completion: completion)
+    }
+
+    /// snapSnap: (decompiled.c:22327-22442) runs the countdown before doISightSnap:.
+    nonisolated func captureCamera(delay: Double,
+                                   completion: @escaping (Result<NSImage, Error>) -> Void) {
+        submit(completion) { callback in self.startCameraCapture(delay: delay, callback: callback) }
     }
 
     private func begin(_ callback: CaptureCompletion) -> UUID? {
@@ -982,9 +989,34 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         finish(.failure(captureFailure(15, "The webpage rendering process terminated.")), id: id)
     }
 
-    private func startCameraCapture(callback: CaptureCompletion) {
+    private func startCameraCapture(delay: Double, callback: CaptureCompletion) {
         guard let id = begin(callback) else { return }
         source = "camera"
+        guard delay.isFinite, delay > 0 else { enterCameraPath(id: id); return }
+        armTimeout(delay + 10, id: id, message: "The camera countdown did not complete.")
+        let proceed = { [weak self] in
+            guard let self, self.operationID == id else { return }
+            self.enterCameraPath(id: id)
+        }
+        if nativeCountdown {
+            if countdown == nil { countdown = OriginalCaptureCountdown() }
+            let screen = NSScreen.main?.frame ?? NSScreen.screens.first?.frame ?? .zero
+            countdown?.start(rect: NSRect(x: screen.midX, y: screen.midY, width: 0, height: 0),
+                             parent: nil, delay: delay, cue: { [weak self] in
+                guard let self, self.operationID == id else { return }
+                self.onSound?("pre-snap-countdown")
+            }, completion: proceed)
+        } else {
+            delayedCapture = Task {
+                do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
+                catch { return }
+                proceed()
+            }
+        }
+    }
+
+    private func enterCameraPath(id: UUID) {
+        guard operationID == id else { return }
         // Calling the permission API without this key terminates the host process.
         guard let purpose = Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String,
               !purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

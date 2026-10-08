@@ -237,6 +237,9 @@ final class AppSafetyCaptureCoordinator {
     func captureCamera(completion: @escaping (Result<NSImage, Error>) -> Void) {
         Self.requests.append("camera"); deliver(completion)
     }
+    func captureCamera(delay: Double, completion: @escaping (Result<NSImage, Error>) -> Void) {
+        captureCamera(completion: completion)
+    }
     func captureURL(_ url: URL, completion: @escaping (Result<NSImage, Error>) -> Void) {
         Self.requests.append("web"); deliver(completion)
     }
