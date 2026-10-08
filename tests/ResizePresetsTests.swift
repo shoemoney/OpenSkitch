@@ -253,8 +253,15 @@ private enum ResizePresetsTests {
     // Resolves the original i386 Mach-O VM addresses used by disassembly;
     // verifies actual CFString key literals and catalog spellings, not strings
     // copied from the new implementation. No application or live prefs touched.
+    // Both inputs are git-ignored, so a fresh clone lacks them: only their absence skips
+    // (with a SKIP line); a present but unreadable or mismatched input still throws.
     static func originalEvidence() throws {
-        let data = try Data(contentsOf: URL(fileURLWithPath: "original/Skitch.app/Contents/MacOS/Skitch"))
+        let binaryPath = "original/Skitch.app/Contents/MacOS/Skitch", disassemblyPath = "analysis/disassembly.txt"
+        guard FileManager.default.fileExists(atPath: binaryPath) else {
+            print("SKIP original evidence: \(binaryPath) not present")
+            return
+        }
+        let data = try Data(contentsOf: URL(fileURLWithPath: binaryPath))
         func word(_ offset: Int) -> Int {
             (0..<4).reduce(0) { $0 | (Int(data[offset + $1]) << ($1 * 8)) }
         }
@@ -293,7 +300,11 @@ private enum ResizePresetsTests {
             try expect(try string(pointer(0x28c69c + index * 16 + 8)) == preset.name, "Original catalog literal \(index)")
         }
         // Recover numeric setter arguments from the original loadPresets body.
-        let disassembly = try String(contentsOfFile: "analysis/disassembly.txt", encoding: .utf8)
+        guard FileManager.default.fileExists(atPath: disassemblyPath) else {
+            print("SKIP original disassembly evidence: \(disassemblyPath) not present")
+            return
+        }
+        let disassembly = try String(contentsOfFile: disassemblyPath, encoding: .utf8)
         guard let start = disassembly.range(of: "-[SKResizeController loadPresets]:"),
               let end = disassembly.range(of: "-[SKResizeController savePresets]:", range: start.upperBound..<disassembly.endIndex) else {
             throw Failure(description: "Original loadPresets evidence missing")
