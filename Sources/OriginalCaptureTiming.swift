@@ -17,11 +17,6 @@ struct OriginalCaptureTiming: Sendable {
         explicitDelay == 0 ? manualDelay(flags: flags) : explicitDelay
     }
 
-    // snapSnap: 0x22fa5 reverses the timed flag for camera preview.
-    static func cameraDelay(flags: NSEvent.ModifierFlags) -> Double {
-        flags.contains(.shift) ? 0 : 3
-    }
-
     struct Frame: Equatable, Sendable {
         let imageNumber: Int
         let alpha: Float32

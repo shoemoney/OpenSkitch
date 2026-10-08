@@ -9,7 +9,7 @@ import CoreFoundation
 // tests/CaptureTests.swift -o /tmp/skitch-capture-tests
 // /tmp/skitch-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
-// Pure checks use no screen/camera permissions, network or NSApplication.
+// Pure checks use no screen-recording permissions, network or NSApplication.
 // --termination-probe runs a separate headless NSApplication with no windows.
 private final class CaptureRecord: @unchecked Sendable {
     var results: [Result<NSImage, Error>] = []
@@ -24,18 +24,6 @@ private final class CaptureRecord: @unchecked Sendable {
         allMain = allMain && Thread.isMainThread
         acknowledgements.append(result); events.append("ack")
     }
-}
-
-private actor FakeCameraSession: CaptureSessionStopping {
-    private var stopping = false
-    private var stopped = false
-    private var calls = 0
-    func stop() async {
-        stopping = true; calls += 1
-        try? await Task.sleep(nanoseconds: 200_000_000)
-        stopped = true
-    }
-    func state() -> (Bool, Bool, Int) { (stopping, stopped, calls) }
 }
 
 @MainActor
@@ -245,9 +233,6 @@ private final class CaptureTerminationProbe: NSObject, NSApplicationDelegate {
         case "delayed-result":
             rig.coordinator.capture(mode: "fullscreen", delay: 30, completion: captured)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { NSApp.terminate(nil) }
-        case "session-result":
-            rig.coordinator.testCaptureSession(FakeCameraSession(), completion: captured)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { NSApp.terminate(nil) }
         default:
             // Match production smoke: terminate from a main-dispatch callback.
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { NSApp.terminate(nil) }
@@ -304,7 +289,7 @@ private final class CaptureTerminationProbe: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        let captured = ["busy-result", "busy-void", "delayed-result", "session-result", "queued-result"].contains(scenario)
+        let captured = ["busy-result", "busy-void", "delayed-result", "queued-result"].contains(scenario)
         valid = valid && acknowledgementCount == 1 && captureCallbacks == (captured ? 1 : 0)
         journal.record(valid ? "will-terminate-pass" : "will-terminate-fail")
         journal.didTerminate()
@@ -353,7 +338,6 @@ private enum CaptureTests {
             try await delayedCancellation()
             try await nativeSelectionAndTiming()
             try await nativeSelectionFailures()
-            try await cameraCountdownDelay()
             try await nativePhaseCancellation()
             try await nativeCleanupReentrantStops()
             try await nativeCountdownWithoutSelection()
@@ -368,7 +352,6 @@ private enum CaptureTests {
             try await cleanupFailure()
             try await shutdownAdmission()
             try await shutdownVoidAPI()
-            try await serializedSessionStop()
             try await reentrantQueuedShutdown()
             for coordinator in coordinators {
                 let record = CaptureRecord()
@@ -536,9 +519,8 @@ private enum CaptureTests {
             try expect(flash.plays.last?.frame == NSRect(x: 40, y: 1860, width: 120, height: 80) && flash.plays.last?.deflash == quick,
                        "\(mode) flashes only the snapped rect (flipped from CG top-left to Cocoa) with the 0.1s deflash")
         }
-        let camera = OriginalCaptureFlashPlan.make(source: "camera", requested: nil, captured: nil, mainScreen: display)
-        try expect(camera?.frame == .zero && camera?.deflashDuration == OriginalCaptureFlashTiming.cameraDeflashDuration,
-                   "camera flashes NSZeroRect with the 0.2s deflash")
+        try expect(OriginalCaptureFlashPlan.make(source: "camera", requested: nil, captured: nil, mainScreen: display) == nil,
+                   "camera is not a capture source and never flashes")
         try expect(OriginalCaptureFlashPlan.make(source: "web", requested: nil, captured: nil, mainScreen: display) == nil,
                    "URL snaps never flash")
         let playsBefore = flash.plays.count
@@ -554,7 +536,7 @@ private enum CaptureTests {
 
     static func captureFlashTimingRamp() throws {
         typealias T = OriginalCaptureFlashTiming
-        let quick = T.captureDuration, slow = T.cameraDeflashDuration
+        let quick = T.captureDuration, slow = Float32(0.2)
         func check(_ elapsed: TimeInterval, _ duration: Float32, _ phase: T.Phase, _ want: Float32) throws {
             let got = T.alpha(elapsed: elapsed, duration: duration, phase: phase)
             try expect(abs(got - want) < 1e-3, "\(phase) alpha at \(elapsed)/\(duration) = \(got), want \(want)")
@@ -585,7 +567,7 @@ private enum CaptureTests {
                 return { invalidated += 1 }
             })
         controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50),
-                        deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
+                        deflashDuration: Float32(0.2))
         try expect(window.fronted == 1 && controller.isRunning, "play must order the flash window front")
         func tick(to elapsed: TimeInterval, expecting expected: Float32, _ what: String) throws {
             now = 100 + elapsed
@@ -616,22 +598,21 @@ private enum CaptureTests {
     static func queuedShutdown() async throws {
         let rig = try make()
         let screen = start(rig)
-        let web = CaptureRecord(), camera = CaptureRecord()
+        let web = CaptureRecord()
         rig.coordinator.captureURL(URL(string: "https://example.invalid/")!, completion: web.received)
-        rig.coordinator.captureCamera(completion: camera.received)
         let ack = CaptureRecord()
         rig.coordinator.cancelCapture(completion: ack.acknowledged)
         rig.coordinator.shutdown { result in
             ack.acknowledged(result)
-            if screen.results.count != 1 || web.results.count != 1 || camera.results.count != 1 { ack.allMain = false }
+            if screen.results.count != 1 || web.results.count != 1 { ack.allMain = false }
         }
         try await wait { ack.acknowledgements.count == 2 }
-        try expect([screen, web, camera].allSatisfy { cancellation($0.results.first) && $0.results.count == 1 },
-                   "shutdown must drain all queued screen/web/camera requests without creating resources")
+        try expect([screen, web].allSatisfy { cancellation($0.results.first) && $0.results.count == 1 },
+                   "shutdown must drain all queued screen/web requests without creating resources")
         try expect(ack.allMain, "every accepted callback must precede shutdown acknowledgement")
         try expect(ack.acknowledgements.allSatisfy { succeeded($0) }, "concurrent stops must both acknowledge")
         try expect(directories(rig).isEmpty && !FileManager.default.fileExists(atPath: rig.marker.path), "queued shutdown cannot create files/helpers")
-        try expect(NSApp == nil, "queued camera/web stop cannot open native UI or request permission")
+        try expect(NSApp == nil, "queued web stop cannot open native UI or request permission")
     }
 
     static func delayedCancellation() async throws {
@@ -696,44 +677,6 @@ private enum CaptureTests {
             try expect(record.results.count == 1 && countdown.requests.count == (expectedDelay > 0 ? 1 : 0),
                        "finished picker/countdown callbacks must not reopen or double-complete a capture")
         }
-    }
-
-    static func cameraCountdownDelay() async throws {
-        // snapSnap: runs the countdown before the camera path; the harness lacks
-        // NSCameraUsageDescription so the camera path fails right after it.
-        let journal = CapturePhaseJournal()
-        let countdown = FakeCaptureCountdown(journal)
-        let rig = try make(countdown: countdown)
-        let record = CaptureRecord()
-        rig.coordinator.captureCamera(delay: 3, completion: record.received)
-        try await wait { countdown.requests.count == 1 }
-        try expect(countdown.requests[0].delay == 3 && !countdown.requests[0].hasParent, "camera countdown must run 3 s first")
-        try await pause(0.05)
-        try expect(record.results.isEmpty, "no camera result while the countdown is running")
-        countdown.requests[0].completion()
-        try await wait { record.results.count == 1 }
-        try expect(errorCode(record.results.first) == 20 && record.allMain,
-                   "after the countdown the camera path must start (and fail on the missing usage description)")
-
-        let bypass = FakeCaptureCountdown(CapturePhaseJournal())
-        let rig2 = try make(countdown: bypass)
-        let immediate = CaptureRecord()
-        rig2.coordinator.captureCamera(delay: 0, completion: immediate.received)
-        try await wait { immediate.results.count == 1 }
-        try expect(bypass.requests.isEmpty && errorCode(immediate.results.first) == 20, "delay 0 must bypass the countdown")
-
-        let cancelling = FakeCaptureCountdown(CapturePhaseJournal())
-        let rig3 = try make(countdown: cancelling)
-        let cancelled = CaptureRecord(), ack = CaptureRecord()
-        rig3.coordinator.captureCamera(delay: 3, completion: cancelled.received)
-        try await wait { cancelling.requests.count == 1 }
-        rig3.coordinator.cancelCapture(completion: ack.acknowledged)
-        try await wait { cancelled.results.count == 1 }
-        try expect(cancellation(cancelled.results.first) && cancelling.cancellations >= 1,
-                   "cancel during the camera countdown must deliver cancellation and cancel the presenter")
-        cancelling.requests[0].completion()
-        try await pause(0.05)
-        try expect(cancelled.results.count == 1, "a late countdown completion cannot restart the camera")
     }
 
     static func nativeSelectionFailures() async throws {
@@ -1226,11 +1169,10 @@ private enum CaptureTests {
         // Exercise the nonisolated shutdown API from outside the main actor.
         await Task.detached { rig.coordinator.shutdown(completion: ack.acknowledged) }.value
         try await wait { ack.acknowledgements.count == 1 }
-        let screen = start(rig), web = CaptureRecord(), camera = CaptureRecord()
+        let screen = start(rig), web = CaptureRecord()
         rig.coordinator.captureURL(URL(string: "https://example.invalid/")!, completion: web.received)
-        rig.coordinator.captureCamera(completion: camera.received)
-        try await wait { screen.results.count == 1 && web.results.count == 1 && camera.results.count == 1 }
-        try expect([screen, web, camera].allSatisfy { errorCode($0.results.first) == 40 && $0.allMain },
+        try await wait { screen.results.count == 1 && web.results.count == 1 }
+        try expect([screen, web].allSatisfy { errorCode($0.results.first) == 40 && $0.allMain },
                    "shutdown must permanently reject every capture kind on main")
         rig.coordinator.shutdown(completion: ack.acknowledged)
         rig.coordinator.cancelCapture(completion: ack.acknowledged)
@@ -1275,32 +1217,6 @@ private enum CaptureTests {
         try expect(try processExited(busy), "void shutdown must acknowledge only after actual helper exit")
         try expect(record.events == ["capture", "ack"] && cancellation(record.results.first), "busy void shutdown must drain capture before ack")
         try expect(directories(busy).isEmpty, "busy void shutdown must remove helper files")
-    }
-
-    static func serializedSessionStop() async throws {
-        let rig = try make()
-        let resource = FakeCameraSession()
-        let record = CaptureRecord()
-        rig.coordinator.testCaptureSession(resource, completion: record.received)
-        try await pause(0.02)
-        rig.coordinator.cancelCapture(completion: record.acknowledged)
-        var shutdownAcknowledged = false
-        rig.coordinator.shutdown {
-            shutdownAcknowledged = true
-            record.acknowledged(.success(()))
-        }
-        try await pause(0.04)
-        let pending = await resource.state()
-        try expect(pending.0 && !pending.1 && !shutdownAcknowledged, "shutdown must await serialized session stop without blocking main")
-        let rejected = start(rig)
-        try await wait { rejected.results.count == 1 }
-        try expect(errorCode(rejected.results.first) == 40, "session teardown shutdown must immediately close capture admission")
-        try await wait { record.acknowledgements.count == 2 }
-        let ended = await resource.state()
-        try expect(ended.1 && ended.2 == 1, "concurrent cancel/shutdown must await exactly one session cleanup")
-        try expect(cancellation(record.results.first) && record.results.count == 1, "session cancellation must finish exactly once")
-        try expect(record.events == ["capture", "ack", "ack"] && record.allMain, "session cleanup must precede every main callback acknowledgement")
-        try expect(directories(rig).isEmpty && !FileManager.default.fileExists(atPath: rig.marker.path), "fake session teardown cannot invoke any capture helper")
     }
 
     static func reentrantQueuedShutdown() async throws {

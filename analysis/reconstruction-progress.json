@@ -302,7 +302,7 @@
       "native_startup_status": "passed_arm64",
       "desktop_status": "listed_interface_controls_only"
     },
-    "harness": "Controlled local workers and nonvisible AppKit test harness; actual universal startup/save/reopen/render/Quit and separate desktop/publication checks. No screen/camera or broad Photos access was granted.",
+    "harness": "Controlled local workers and nonvisible AppKit test harness; actual universal startup/save/reopen/render/Quit and separate desktop/publication checks. No screen or broad Photos access was granted.",
     "build_validation": {
       "path": "analysis/build-validation.json",
       "sha256": "855b1128b8ad1b3915a4f9f30ea8b3949ea50e1b135f1efa5b8eccb743f13ca0",
@@ -1139,7 +1139,7 @@
       "limits": [
         "Navigator non-key child window was not exposed in CUA main-window screenshot/accessibility capture; its native visual and desktop interaction remain unverified.",
         "No physical Intel desktop testing; x86_64 suites and startup run under Rosetta.",
-        "No original 32-bit app runtime comparison, capture/camera/Photos permission changes or publishing performed in this desktop check."
+        "No original 32-bit app runtime comparison, capture/Photos permission changes or publishing performed in this desktop check."
       ],
       "screenshots": "Actual native CUA screenshots displayed inline; no filesystem screenshot or native navigator visual verification claimed.",
       "original_parity": "unverified",
@@ -1285,7 +1285,7 @@
       "limits": [
         "Custom preset removal was covered only with isolated store tests; its desktop action was not invoked.",
         "No physical Intel desktop testing; x86_64 suites and startup run under Rosetta.",
-        "No original 32-bit runtime comparison, capture/camera/Photos permissions or publishing performed.",
+        "No original 32-bit runtime comparison, capture/Photos permissions or publishing performed.",
         "Original preferences domain migration is not automatic; store understands original SKPresetResizes dictionaries imported into the Redux preferences domain."
       ],
       "screenshots": "Actual native CUA screenshots reviewed inline; no filesystem desktop screenshot claimed.",
@@ -3016,7 +3016,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -3301,7 +3300,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -3592,7 +3590,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -3806,7 +3803,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -4446,7 +4442,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -4476,7 +4471,7 @@
         "ev-e7662f9bf4c8e500",
         "ev-f11a714597673b4b"
       ],
-      "required_original_behavior": "Cancel crosshair, frame, camera and timed capture without losing the prior document.",
+      "required_original_behavior": "Cancel crosshair, frame and timed capture without losing the prior document.",
       "status": "implemented_partial",
       "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks. A new Snap during a running capture cancels it silently and restarts.",
       "source_evidence": [
@@ -4484,13 +4479,6 @@
           "path": "Sources/Capture.swift",
           "line": 548,
           "anchor": "private func finish(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1095,
-          "anchor": "func cancelCamera(",
           "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
           "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
         },
@@ -4917,7 +4905,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -5198,7 +5185,7 @@
       ],
       "required_original_behavior": "Flash the captured screen region with original duration and preference behavior.",
       "status": "implemented_partial",
-      "implemented_scope": "White flash panel after each successful capture with the recovered 0.1 s (0.2 s camera) timings and per-source flash rect; never played for failed or cancelled captures.",
+      "implemented_scope": "White flash panel after each successful capture with the recovered 0.1 s timing and per-source flash rect; never played for failed or cancelled captures.",
       "source_evidence": [
         {
           "path": "Sources/OriginalCaptureFlash.swift",
@@ -5409,7 +5396,6 @@
         "Actual original runtime equivalence remains unverified.",
         "Hidden-app panel/input focus, physical displays, original magnifier/window hover, timed Escape outside selection and flash transitions remain unverified or incomplete.",
         "Modern helper includes its native cursor rather than the original forced arrow raster.",
-        "Camera preview/photo/timing integration remains outside this checkpoint.",
         "20-point size label and explicit custom delay are adaptations.",
         "Listed native editor/branding/control checks only. Live selection/countdown/capture remain unverified because Screen Recording permission is denied. Alert/menu screenshot capture unavailable or blank; their proof uses AX only. No permission settings changed. Prior hints/prefs/text desktop proof remains historical. Original runtime parity unverified."
       ],
@@ -5447,37 +5433,25 @@
         "ev-a289c22b3b99df72"
       ],
       "required_original_behavior": "Cam action starts live preview from available webcam/iSight.",
-      "status": "implemented_partial",
-      "implemented_scope": "AVFoundation camera permission, session, live preview sheet, photo delegate, errors and cleanup.",
-      "source_evidence": [
-        {
-          "path": "Sources/Capture.swift",
-          "line": 970,
-          "anchor": "private func startCameraCapture(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1002,
-          "anchor": "private func configureCamera(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1212,
-          "anchor": "func takePhoto(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        }
-      ],
+      "status": "unimplemented",
+      "implemented_scope": null,
+      "source_evidence": [],
       "test_evidence": [],
       "remaining_fidelity_gaps": [
-        "No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing."
+        "Cam action starts live preview from available webcam/iSight."
       ],
-      "next_action": "Close fidelity gaps and verify: No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing.",
-      "full_original_parity_claimed": false
+      "next_action": "None: removed by product decision.",
+      "full_original_parity_claimed": false,
+      "negative_evidence": {
+        "source_snapshot_id": "current-source-scan",
+        "inspected_paths": [
+          "Sources/Capture.swift",
+          "Sources/App.swift"
+        ],
+        "conclusion": "Camera functionality was deliberately removed; not an assertion that no related code exists."
+      },
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Removed by product decision 2026-10-08: OpenSkitch is screen capture only"
     },
     {
       "id": "capture.camera-photo",
@@ -5496,79 +5470,25 @@
         "ev-39c42b5d9ca5dd50"
       ],
       "required_original_behavior": "Default camera snapshot counts down; Shift bypasses countdown.",
-      "status": "implemented_partial",
-      "implemented_scope": "AVFoundation camera permission, session, live preview sheet, photo delegate, errors and cleanup. Camera snapshot counts down 3 s before the camera path; Shift bypasses the countdown.",
-      "source_evidence": [
-        {
-          "path": "Sources/Capture.swift",
-          "line": 970,
-          "anchor": "private func startCameraCapture(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1002,
-          "anchor": "private func configureCamera(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1212,
-          "anchor": "func takePhoto(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 529,
-          "anchor": "nonisolated func captureCamera(delay: Double,",
-          "sha256": "c542795278920c5c630f04b8bd706f338ba67bb1454d1f8aff4ac0a05e477e2e",
-          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/App.swift",
-          "line": 1881,
-          "anchor": "let delay = OriginalCaptureTiming.cameraDelay(flags: flags)",
-          "sha256": "5b2a5f8a742d09eb5c53d78c3898240818cb1e61070419fc69dbfe75e4339861",
-          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/OriginalCaptureTiming.swift",
-          "line": 21,
-          "anchor": "static func cameraDelay(",
-          "sha256": "0953a5c37dc2e4558fe30ffaea116091db998106a60ae2495f47c48cdf766806",
-          "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
-        }
-      ],
-      "test_evidence": [
-        {
-          "path": "tests/CaptureTests.swift",
-          "line": 701,
-          "anchor": "static func cameraCountdownDelay(",
-          "sha256": "71bc1e362e7bd364b66445c27742ef6b1831091f0d967d0acbd658c7f8a2cd88",
-          "suite": "capture",
-          "test_group": "camera countdown runs 3 s first",
-          "result": "passed",
-          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
-        },
-        {
-          "path": "tests/OriginalCaptureTimingTests.swift",
-          "line": 30,
-          "anchor": "Camera normally counts down three seconds",
-          "sha256": "786616a73d61ab7c7498d5c4c7bb1074b3664c7028584a3b5bd081e50481c1b0",
-          "suite": "capture-timing",
-          "test_group": "camera delay is 3 s, 0 with Shift",
-          "result": "passed",
-          "verification_kind": "executed_tools_test_py_on_branch_todo/2026-10-08b-progress-rows"
-        }
-      ],
+      "status": "unimplemented",
+      "implemented_scope": null,
+      "source_evidence": [],
+      "test_evidence": [],
       "remaining_fidelity_gaps": [
-        "No physical-camera execution here. Preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing."
+        "Default camera snapshot counts down; Shift bypasses countdown."
       ],
-      "next_action": "Close fidelity gaps and verify: No physical-camera execution here. Preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing.",
-      "full_original_parity_claimed": false
+      "next_action": "None: removed by product decision.",
+      "full_original_parity_claimed": false,
+      "negative_evidence": {
+        "source_snapshot_id": "current-source-scan",
+        "inspected_paths": [
+          "Sources/Capture.swift",
+          "Sources/App.swift"
+        ],
+        "conclusion": "Camera functionality was deliberately removed; not an assertion that no related code exists."
+      },
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Removed by product decision 2026-10-08: OpenSkitch is screen capture only"
     },
     {
       "id": "capture.camera-flip",
@@ -5594,16 +5514,15 @@
           "Sources/Capture.swift",
           "Sources/App.swift"
         ],
-        "conclusion": "No sufficiently concrete implementation and test mapping established for this feature; conservative default, not an assertion that no related code exists."
+        "conclusion": "Camera functionality was deliberately removed; not an assertion that no related code exists."
       },
       "remaining_fidelity_gaps": [
-        "Recover flipPreview visibility and whether mirror affects preview or saved image.",
-        "User-visible reachability and exact behavior require original call-site/runtime evidence."
+        "Recover flipPreview visibility and whether mirror affects preview or saved image."
       ],
-      "next_action": "Implement and test: Recover flipPreview visibility and whether mirror affects preview or saved image.",
+      "next_action": "None: removed by product decision.",
       "full_original_parity_claimed": false,
-      "disposition": "planned",
-      "disposition_reason": "Covered by WP-13 (camera timing and preview) in this cycle."
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Removed by product decision 2026-10-08: OpenSkitch is screen capture only"
     },
     {
       "id": "capture.camera-unavailable",
@@ -5621,37 +5540,25 @@
         "ev-3dcb6cb02f9960bd"
       ],
       "required_original_behavior": "Show original no-camera warning and leave preview cleanly.",
-      "status": "implemented_partial",
-      "implemented_scope": "AVFoundation camera permission, session, live preview sheet, photo delegate, errors and cleanup.",
-      "source_evidence": [
-        {
-          "path": "Sources/Capture.swift",
-          "line": 970,
-          "anchor": "private func startCameraCapture(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1002,
-          "anchor": "private func configureCamera(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        },
-        {
-          "path": "Sources/Capture.swift",
-          "line": 1212,
-          "anchor": "func takePhoto(",
-          "sha256": "39585fbe9c0a1fb6e51da769b45ab3ff34536bd36287508d1a0126596afb9d16",
-          "verification_stage": "verified_current_frozen_snapshot; scoped reconstruction tests, original parity unverified"
-        }
-      ],
+      "status": "unimplemented",
+      "implemented_scope": null,
+      "source_evidence": [],
       "test_evidence": [],
       "remaining_fidelity_gaps": [
-        "No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing."
+        "Show original no-camera warning and leave preview cleanly."
       ],
-      "next_action": "Close fidelity gaps and verify: No physical-camera execution here. Original countdown/Shift bypass, preview mirror, sounds, closure during device activity and original no-camera UI remain unverified or missing.",
-      "full_original_parity_claimed": false
+      "next_action": "None: removed by product decision.",
+      "full_original_parity_claimed": false,
+      "negative_evidence": {
+        "source_snapshot_id": "current-source-scan",
+        "inspected_paths": [
+          "Sources/Capture.swift",
+          "Sources/App.swift"
+        ],
+        "conclusion": "Camera functionality was deliberately removed; not an assertion that no related code exists."
+      },
+      "disposition": "not_reconstructed_retired_service",
+      "disposition_reason": "Removed by product decision 2026-10-08: OpenSkitch is screen capture only"
     },
     {
       "id": "capture.safari",
@@ -7899,9 +7806,9 @@
       ],
       "remaining_fidelity_gaps": [
         "Fake NSEvent and pure numerical tests cannot establish actual tablet hardware, driver/proximity delivery, calibration or pressure rendering parity.",
-        "No screen/camera/tablet permissions or hardware tests are claimed."
+        "No screen/tablet permissions or hardware tests are claimed."
       ],
-      "next_action": "Verify remaining fidelity gaps: Fake NSEvent and pure numerical tests cannot establish actual tablet hardware, driver/proximity delivery, calibration or pressure rendering parity. No screen/camera/tablet permissions or hardware tests are claimed.",
+      "next_action": "Verify remaining fidelity gaps: Fake NSEvent and pure numerical tests cannot establish actual tablet hardware, driver/proximity delivery, calibration or pressure rendering parity. No screen/tablet permissions or hardware tests are claimed.",
       "full_original_parity_claimed": false
     },
     {
@@ -30001,7 +29908,7 @@
         {
           "path": "Sources/GlobalHotkeys.swift",
           "line": 7,
-          "anchor": "case screen, window, fullscreen, frame, camera, upload, show",
+          "anchor": "case screen, window, fullscreen, frame, upload, show",
           "sha256": "bf9320ba88bff30a6b5b4aad44ba93459f8647a44b82184eabbdef17d3ea4fee",
           "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         },
@@ -30152,7 +30059,7 @@
         {
           "path": "Sources/GlobalHotkeys.swift",
           "line": 7,
-          "anchor": "case screen, window, fullscreen, frame, camera, upload, show",
+          "anchor": "case screen, window, fullscreen, frame, upload, show",
           "sha256": "bf9320ba88bff30a6b5b4aad44ba93459f8647a44b82184eabbdef17d3ea4fee",
           "verification_stage": "verified_current_worktree_source; reconstruction tests, original parity unverified"
         },
@@ -37279,7 +37186,7 @@
       ]
     },
     {
-      "id": "capture-web-camera",
+      "id": "capture-web",
       "priority": "P1",
       "feature_ids": [
         "capture.full-page",
@@ -37287,13 +37194,11 @@
         "capture.firefox",
         "capture.photoshop",
         "capture.countdown",
-        "capture.camera-photo",
-        "capture.camera-flip",
         "capture.cursor",
         "capture.magnifier",
         "capture.flash"
       ],
-      "action": "Actual Web Snap viewport GUI capture is verified at2560\u00d71800retina; view-only fit preserves document/export pixels. Implement original full-content page and Safari/Firefox/Photoshop integrations, countdown/mirror/cursor/magnifier/flash controls; verify actual screen/camera permissions/devices.",
+      "action": "Actual Web Snap viewport GUI capture is verified at2560\u00d71800retina; view-only fit preserves document/export pixels. Implement original full-content page and Safari/Firefox/Photoshop integrations, countdown/mirror/cursor/magnifier/flash controls; verify actual screen-capture permissions.",
       "completion_evidence": [
         "Executed targeted tests against pinned current source snapshot.",
         "Live comparison against original behavior where available; leave unresolved original contracts explicit."
@@ -37402,7 +37307,7 @@
   },
   "limitations": [
     "All 340 original feature IDs remain tracked; every original-parity flag remains unverified.",
-    "Original i386 runtime and historical interoperability, physical Intel hardware, actual screen/camera capture, real tablet input, system Photos picker and unfocused global shortcuts remain unverified.",
+    "Original i386 runtime and historical interoperability, physical Intel hardware, actual screen capture, real tablet input, system Photos picker and unfocused global shortcuts remain unverified.",
     "Modern vector Boolean fill/erase and recovered numeric pressure/fitting pipelines have scoped current suite evidence; original topology, separated-run fill semantics, stroke/nib numerical fidelity and smoothing migration remain unverified.",
     "Original window/crop/output sizing, presets/preferences and legacy services remain unfinished.",
     "Real legacy History index absent: 67 importer checks are synthetic. Native drop/Copy destination/Trash/deletion/Share completion remain unexercised.",

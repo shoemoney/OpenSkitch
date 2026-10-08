@@ -24,8 +24,6 @@
 	<string>13.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Take camera snapshots to annotate in OpenSkitch.</string>
 	<key>NSScreenCaptureUsageDescription</key>
 	<string>Capture screenshots to annotate in OpenSkitch.</string>
 	<key>NSAppTransportSecurity</key>

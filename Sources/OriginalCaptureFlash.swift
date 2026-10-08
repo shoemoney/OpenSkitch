@@ -7,8 +7,6 @@ enum OriginalCaptureFlashTiming {
     static let timerInterval: TimeInterval = 0.02
     /// 0x3dcccccd: flash-up duration, also used by the screen capture path.
     static let captureDuration = Float32(bitPattern: 0x3dcccccd)
-    /// 0x3e4ccccd: deflash duration used after a capture (decompiled.c:22301).
-    static let cameraDeflashDuration = Float32(bitPattern: 0x3e4ccccd)
 
     enum Phase { case flash, deflash }
 
@@ -56,7 +54,7 @@ final class OriginalCaptureFlashWindow: NSPanel {
 }
 
 /// What the original flashed per source: snapped rect (0.1s) for crosshair/window/frame,
-/// the main screen (0.1s) for fullscreen, NSZeroRect (0.2s) for the camera, nothing for URL snaps.
+/// the main screen (0.1s) for fullscreen, nothing for URL snaps.
 /// Rects are returned in Cocoa (bottom-left) coordinates; crosshair/window/frame rects arrive top-left (CG) and are flipped.
 struct OriginalCaptureFlashPlan: Equatable {
     let frame: NSRect
@@ -65,8 +63,6 @@ struct OriginalCaptureFlashPlan: Equatable {
     static func make(source: String, requested: NSRect?, captured: NSRect?, mainScreen: NSRect?) -> OriginalCaptureFlashPlan? {
         let quick = OriginalCaptureFlashTiming.captureDuration
         switch source {
-        case "camera":
-            return OriginalCaptureFlashPlan(frame: .zero, deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
         case "fullscreen":
             return mainScreen.map { OriginalCaptureFlashPlan(frame: $0, deflashDuration: quick) }
         case "crosshair", "window", "frame":

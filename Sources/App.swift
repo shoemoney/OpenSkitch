@@ -264,7 +264,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var currentArchiveID: UUID?
     var historyFollowTimer: Timer?
     var snapButton: NSButton!
-    var cameraButton: NSButton!
     var cancelFrameButton: NSButton!
     /// Located by its action on first use, so the window builder needs no extra reference.
     weak var wipeRailButton: NSButton?
@@ -335,7 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
-            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.runCameraSnap(flags: []) }, globalUpload: { [weak self] in self?.snapAndUpload() }, globalShow: { [weak self] in self?.makeVisible() })
+            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalUpload: { [weak self] in self?.snapAndUpload() }, globalShow: { [weak self] in self?.makeVisible() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
         writeLayoutEvidence()
         if CommandLine.arguments.contains("--smoke-test") {
@@ -648,7 +647,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             [("Cut", #selector(cut)), ("Copy", #selector(copyArtwork)), ("Paste", #selector(paste)),
              ("Delete", #selector(deleteSelection)), ("Select All", #selector(selectAll)), ("Duplicate", #selector(duplicate)), ("Show Fonts", #selector(chooseFont))],
             [("Crosshair Snapshot", #selector(screenSnap)), ("Fullscreen Snapshot", #selector(fullscreenSnap)), ("Frame Snapshot", #selector(frameSnap)),
-             ("Cam Snapshot...", #selector(cameraSnap)), ("Re-snap (Keep Pen)", #selector(resnap))],
+             ("Re-snap (Keep Pen)", #selector(resnap))],
             [("Set Snap to Normal Size", #selector(normalSize)), ("Flip", #selector(flipH)), ("Rotate 90° Clockwise", #selector(rotateCW)),
              ("Background Color to Transparent", #selector(transparent)), ("Crop Snap at Current View", #selector(trimSnap)), ("Wipe Snap Only", #selector(wipeSnap))]
         ]
@@ -720,7 +719,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
         snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imagePosition = .imageLeading
-        cameraButton = button("Cam", #selector(cameraSnap)); cameraButton.image = recoveredImage("SnapISight"); cameraButton.imagePosition = .imageLeading
         cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
         cancelFrameButton.image = recoveredImage("SnapCancel"); cancelFrameButton.imagePosition = .imageLeading
         var sidebarViews: [NSView] = [label("Tools")]
@@ -773,8 +771,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         trackHint(wipeButton, owner: "wipe") { OriginalHintMessages.hover(actionTag: 50) }
         trackHint(widthControl, owner: "drawing-size") { OriginalHintMessages.hover(actionTag: 20) }
         let font = button("Font", #selector(chooseFont)); font.image = recoveredImage("Font"); font.imagePosition = .imageLeading
-        let capture = stack([snapButton, cancelFrameButton, cameraButton]); capture.spacing = 4; capture.alignment = .centerX
-        for control in [snapButton!, cancelFrameButton!, cameraButton!] {
+        let capture = stack([snapButton, cancelFrameButton]); capture.spacing = 4; capture.alignment = .centerX
+        for control in [snapButton!, cancelFrameButton!] {
             control.widthAnchor.constraint(equalToConstant: 132).isActive = true
             control.heightAnchor.constraint(equalToConstant: 34).isActive = true
         }
@@ -906,7 +904,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             spelling.addItem(NSMenuItem(title: title, action: Selector(action), keyEquivalent: key))
         }
         let spellingItem = NSMenuItem(title: "Spelling", action: nil, keyEquivalent: ""); spellingItem.submenu = spelling; text.addItem(spellingItem)
-        let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Cancel Snapshot", #selector(cancelSnapshot), ""), ("Camera Snapshot…", #selector(cameraSnap), ""), ("Snap from Link…", #selector(webSnap), "")])
+        let snap = menu("Capture", items: [("Crosshair Snapshot", #selector(screenSnap), "1"), ("Fullscreen Snapshot", #selector(fullscreenSnap), "2"), ("Window Snapshot", #selector(windowSnap), "3"), ("Frame Snapshot", #selector(frameSnap), "4"), ("Re-snap (Keep Pen)", #selector(resnap), ""), ("Cancel Frame", #selector(cancelFrame), ""), ("Timed Snapshot…", #selector(timedSnap), ""), ("Cancel Snapshot", #selector(cancelSnapshot), ""), ("Snap from Link…", #selector(webSnap), "")])
         let drawing = menu("Drawing", items: [])
         let smoothing = menu("Pencil Smoothing", items: [])
         for mode in [StrokeSmoothing.precise, .medium, .loose] {
@@ -1690,7 +1688,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             self.receiveCapture(result, expectedGeneration: generation, afterInstalling: afterInstalling)
         }
     }
-    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil, fitOutput: Bool = true, afterInstalling: (() -> Void)? = nil) {
+    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil, afterInstalling: (() -> Void)? = nil) {
         guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
         switch result { case .success(let image):
             var proposed = CGRect(origin: .zero, size: image.size)
@@ -1699,11 +1697,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 return
             }
             // Captures may finish after editing resumes. Recheck pending changes
-            // here so timed, camera and web captures cannot silently replace them.
+            // here so timed and web captures cannot silently replace them.
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
             preferencesWindow?.orderOut(nil)
-            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; adoptRasterViewport(); nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
             playOriginalSound("snap")
             afterInstalling?()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
@@ -1776,7 +1774,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if modernChrome == nil { snapButton.image = recoveredImage("SnapSnap"); snapButton.imageScaling = .scaleProportionallyDown }
         (snapButton as? OriginalActionButton)?.alternateAction = nil
         snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
-        cameraButton.isHidden = true; cancelFrameButton.isHidden = false
+        cancelFrameButton.isHidden = false
         setModernFrameMode(true)
         status.stringValue = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
     }
@@ -1800,7 +1798,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if modernChrome == nil { snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imageScaling = .scaleNone }
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-        cameraButton.isHidden = false; cancelFrameButton.isHidden = true
+        cancelFrameButton.isHidden = true
         setModernFrameMode(false)
         updateStatus()
     }
@@ -1870,18 +1868,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let option = NSApp.currentEvent?.modifierFlags.contains(.option) == true
         if let s = prompt("Timed Snapshot", text: "Delay in seconds", value: "6"), let d = Double(s), d >= 0, d <= 120 {
             startCapture("crosshair", delay: d, manualOption: option)
-        }
-    }
-    @objc func cameraSnap() {
-        runCameraSnap(flags: NSApp.currentEvent?.modifierFlags ?? [])
-    }
-    func runCameraSnap(flags: NSEvent.ModifierFlags) {
-        guard !terminationStarted, !frameCaptureInProgress else { return }
-        let generation = documentGeneration
-        let delay = OriginalCaptureTiming.cameraDelay(flags: flags)
-        capture.captureCamera(delay: delay) { [weak self] result in
-            guard let self, self.documentGeneration == generation else { return }
-            self.receiveCapture(result, expectedGeneration: generation, fitOutput: false)
         }
     }
     @objc func webSnap() {

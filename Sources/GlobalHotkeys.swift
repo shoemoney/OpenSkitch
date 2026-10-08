@@ -4,14 +4,13 @@ import Carbon
 // Physical key positions and Carbon modifier masks come from the local macOS
 // HIToolbox/Events.h. No event tap, keyboard monitor or Accessibility API is used.
 enum GlobalHotkeyAction: String, Codable, CaseIterable, Sendable {
-    case screen, window, fullscreen, frame, camera, upload, show
+    case screen, window, fullscreen, frame, upload, show
     var title: String {
         switch self {
         case .screen: return "Screen region"
         case .window: return "Window"
         case .fullscreen: return "Full screen"
         case .frame: return "Frame"
-        case .camera: return "Camera"
         case .upload: return "Upload"
         case .show: return "Show Skitch"
         }
@@ -123,12 +122,12 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
     var window: GlobalHotkeyBinding = .none
     var fullscreen: GlobalHotkeyBinding = .none
     var frame: GlobalHotkeyBinding = .none
-    var camera: GlobalHotkeyBinding = .none
     var upload: GlobalHotkeyBinding = .none
     var show: GlobalHotkeyBinding = .none
 
     init() {}
-    // Preferences saved before Upload/Show existed lack those keys.
+    // Preferences saved before Upload/Show existed lack those keys. A legacy
+    // camera binding is not a coding key, so it is ignored on decode.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
@@ -137,7 +136,6 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
         window = try c.decode(GlobalHotkeyBinding.self, forKey: .window)
         fullscreen = try c.decode(GlobalHotkeyBinding.self, forKey: .fullscreen)
         frame = try c.decode(GlobalHotkeyBinding.self, forKey: .frame)
-        camera = try c.decode(GlobalHotkeyBinding.self, forKey: .camera)
         upload = try c.decodeIfPresent(GlobalHotkeyBinding.self, forKey: .upload) ?? .none
         show = try c.decodeIfPresent(GlobalHotkeyBinding.self, forKey: .show) ?? .none
     }
@@ -149,7 +147,6 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
             case .window: return window
             case .fullscreen: return fullscreen
             case .frame: return frame
-            case .camera: return camera
             case .upload: return upload
             case .show: return show
             }
@@ -160,7 +157,6 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
             case .window: window = newValue
             case .fullscreen: fullscreen = newValue
             case .frame: frame = newValue
-            case .camera: camera = newValue
             case .upload: upload = newValue
             case .show: show = newValue
             }
@@ -433,10 +429,9 @@ final class GlobalHotkeyManager: NSObject {
 
     func install(globalScreen: @escaping Callback, globalWindow: @escaping Callback,
                  globalFullscreen: @escaping Callback, globalFrame: @escaping Callback,
-                 globalCamera: @escaping Callback, globalUpload: @escaping Callback,
-                 globalShow: @escaping Callback) throws {
+                 globalUpload: @escaping Callback, globalShow: @escaping Callback) throws {
         callbacks = [.screen: globalScreen, .window: globalWindow, .fullscreen: globalFullscreen,
-                     .frame: globalFrame, .camera: globalCamera, .upload: globalUpload, .show: globalShow]
+                     .frame: globalFrame, .upload: globalUpload, .show: globalShow]
         generation &+= 1
         try register()
     }

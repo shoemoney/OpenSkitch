@@ -24,9 +24,9 @@ enum MenuSymbols {
         ("back", "square.3.layers.3d.bottom.filled"), ("group", "rectangle.3.group"),
         ("ungroup", "square.on.square.dashed"), ("chooseFont", "textformat"), ("defaultTextStyle", "textformat.abc"),
         ("toggleOutline", "a.square"), ("toggleTextShadow", "shadow"), ("screenSnap", "scope"),
-        ("fullscreenSnap", "rectangle.inset.filled"), ("windowSnap", "macwindow"), ("frameSnap", "camera.viewfinder"),
-        ("resnap", "arrow.triangle.2.circlepath.camera"), ("cancelFrame", "xmark"), ("timedSnap", "timer"),
-        ("cancelSnapshot", "xmark.circle"), ("cameraSnap", "camera"), ("webSnap", "link"),
+        ("fullscreenSnap", "rectangle.inset.filled"), ("windowSnap", "macwindow"), ("frameSnap", "viewfinder"),
+        ("resnap", "arrow.triangle.2.circlepath"), ("cancelFrame", "xmark"), ("timedSnap", "timer"),
+        ("cancelSnapshot", "xmark.circle"), ("webSnap", "link"),
     ].map { (Selector($0.0), $0.1) })
 
     /// Test seam for a symbol that is missing on the host.

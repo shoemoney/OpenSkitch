@@ -18,7 +18,7 @@ private enum FontAwesomeIconsTests {
 
     private static let sizes: [CGFloat] = [14, 18, 20, 22, 24.4, 30]
     private static let toolArtwork = ["ToolOffCursor", "ToolOffBrush", "ToolOffLine", "ToolOffCircle", "ToolOffRect", "ToolOffFill", "ToolOffEraser", "ToolOffText", "ToolOffArrow"]
-    private static let buildScriptArtwork = ["SnapCrosshair", "SnapISight", "Font", "ActualSizeToggleOff", "ActualSizeToggleOn", "Resize", "SaveToHistoryArrow", "Hide", "SnapSnap", "SnapCancel"]
+    private static let buildScriptArtwork = ["SnapCrosshair", "Font", "ActualSizeToggleOff", "ActualSizeToggleOn", "Resize", "SaveToHistoryArrow", "Hide", "SnapSnap", "SnapCancel"]
 
     static func main() {
         _ = NSApplication.shared
@@ -104,7 +104,7 @@ private enum FontAwesomeIconsTests {
     // MARK: table
 
     private static func table() {
-        expect(FAIcon.allCases.count == 26, "Icon table lists the 26 mapped controls")
+        expect(FAIcon.allCases.count == 25, "Icon table lists the 25 mapped controls")
         expect(Set(FAIcon.allCases.map(\.rawValue)).count == FAIcon.allCases.count, "Icon names are unique")
         expect(FAIcon.allCases.allSatisfy { $0.rawValue == $0.rawValue.lowercased() && !$0.rawValue.contains(" ") }, "Icon names are lowercase kebab-case")
         expect(FAIcon(rawValue: "eye-slash") == .eyeSlash && FAIcon(rawValue: "arrow-up-from-bracket") == .arrowUpFromBracket, "Raw values are the icons.yml keys")
@@ -251,7 +251,7 @@ private enum FontAwesomeIconsTests {
         let original = ChromeIcons.symbolName
         ChromeIcons.symbolName = { _ in "no.such.symbol.anywhere" }
         defer { ChromeIcons.symbolName = original }
-        expect(ChromeIcons.resolve(.camera, classic: "Missing", bundle: bundle).source == .fontAwesome(.regular), "Font Awesome outranks every fallback")
+        expect(ChromeIcons.resolve(.font, classic: "Missing", bundle: bundle).source == .fontAwesome(.regular), "Font Awesome outranks every fallback")
         expect(FontAwesomeIcons.glyphIndex(0x1F600, in: FontAwesomeFont.font(.regular, pointSize: 20)! as CTFont) == nil, "Codepoints outside the subset have no glyph")
     }
 }

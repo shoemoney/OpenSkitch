@@ -80,7 +80,7 @@ extension AppDelegate {
         let actions = ModernEditorChrome.Actions(
             target: self, hide: #selector(vanish), photos: #selector(showPhotos), saveHistory: #selector(saveHistory),
             showHistory: #selector(showHistory), chooseTool: #selector(chooseTool(_:)), snap: #selector(snapButtonPressed),
-            camera: #selector(cameraSnap), cancelFrame: #selector(cancelFrame), font: #selector(chooseFont), undo: #selector(undo),
+            cancelFrame: #selector(cancelFrame), font: #selector(chooseFont), undo: #selector(undo),
             wipe: #selector(wipe), actualSize: #selector(toggleActualSize), resize: #selector(resize), share: #selector(share(_:)))
         let originalToolOrder: [SketchTool] = [.select, .brush, .line, .ellipse, .rectangle, .fill, .eraser, .text, .arrow]
         let chrome = ModernEditorChrome(controls: controls, actions: actions, toolOrder: (originalToolOrder + [.crop]).map(\.rawValue))
@@ -93,7 +93,7 @@ extension AppDelegate {
         content.canvasScrollView = chrome.scrollView
         modernChrome = chrome
 
-        snapButton = chrome.snapButton; cameraButton = chrome.cameraButton; cancelFrameButton = chrome.cancelFrameButton
+        snapButton = chrome.snapButton; cancelFrameButton = chrome.cancelFrameButton
         actualButton = chrome.actualButton; resizeButton = chrome.resizeButton
         chrome.snapButton.alternateTarget = self
         chrome.snapButton.alternateAction = #selector(fullscreenSnap)

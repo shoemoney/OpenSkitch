@@ -126,7 +126,7 @@ PY
 SDK=$(xcrun --show-sdk-path)
 if ! xcrun swiftc -swift-version 5 -O -D APP_SAFETY_TESTS -sdk "$SDK" \
     -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit \
-    -framework AVFoundation -framework CoreMedia -framework ImageIO \
+    -framework ImageIO \
     "$EVIDENCE"/sources/*.swift -o "$EVIDENCE/$BIN" >"$EVIDENCE/compile.log" 2>&1; then
     cat "$EVIDENCE/compile.log" >&2
     exit 1

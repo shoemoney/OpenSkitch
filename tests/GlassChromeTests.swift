@@ -17,7 +17,6 @@ private final class ActionTarget: NSObject {
     @objc func showHistory(_ sender: Any?) { hits.append("showHistory") }
     @objc func chooseTool(_ sender: Any?) { hits.append("tool:" + ((sender as? NSControl)?.identifier?.rawValue ?? "?")) }
     @objc func snap(_ sender: Any?) { hits.append("snap") }
-    @objc func camera(_ sender: Any?) { hits.append("camera") }
     @objc func cancelFrame(_ sender: Any?) { hits.append("cancelFrame") }
     @objc func font(_ sender: Any?) { hits.append("font") }
     @objc func undo(_ sender: Any?) { hits.append("undo") }
@@ -180,7 +179,7 @@ private enum GlassChromeTests {
         actual.state = .on
         if case .sfSymbol(let name) = actual.iconSource { expect(name == FAIcon.minimize.sfSymbolFallback, "On shows minimize") }
         expect(actual.activeFamily == .solid, "Actual Size on is the solid family")
-        let blank = GlassChromeButton(title: "Cam", target: nil, action: nil)
+        let blank = GlassChromeButton(title: "Plain", target: nil, action: nil)
         expect(blank.iconSource == .none && blank.image == nil && blank.imagePosition == .noImage, "Without an icon the title stands alone")
 
         // contentTintColor per state.
@@ -283,7 +282,7 @@ private enum GlassChromeTests {
         momentary.performClick(nil)
         expect(target.hits == ["undo"] && !momentary.tracksState, "A momentary button is not a two-state button")
         expect(!momentary.showsSelection && momentary.activeFamily == .regular && sameColor(momentary.contentTintColor, .labelColor), "A momentary click never reads as selected")
-        momentary.icon = .camera
+        momentary.icon = .font
         momentary.refreshIcon()
         expect(!momentary.showsSelection && momentary.activeFamily == .regular, "Redrawing a clicked momentary button keeps the regular glyph")
         momentary.state = .on
@@ -608,7 +607,7 @@ private enum GlassChromeTests {
         let actions = ModernEditorChrome.Actions(
             target: target, hide: #selector(ActionTarget.hide(_:)), photos: #selector(ActionTarget.photos(_:)), saveHistory: #selector(ActionTarget.saveHistory(_:)),
             showHistory: #selector(ActionTarget.showHistory(_:)), chooseTool: #selector(ActionTarget.chooseTool(_:)), snap: #selector(ActionTarget.snap(_:)),
-            camera: #selector(ActionTarget.camera(_:)), cancelFrame: #selector(ActionTarget.cancelFrame(_:)), font: #selector(ActionTarget.font(_:)),
+            cancelFrame: #selector(ActionTarget.cancelFrame(_:)), font: #selector(ActionTarget.font(_:)),
             undo: #selector(ActionTarget.undo(_:)), wipe: #selector(ActionTarget.wipe(_:)), actualSize: #selector(ActionTarget.actualSize(_:)),
             resize: #selector(ActionTarget.resize(_:)), share: #selector(ActionTarget.share(_:)))
         let chrome = ModernEditorChrome(controls: controls, actions: actions, toolOrder: toolOrder, accessibility: { box.value })
@@ -645,6 +644,12 @@ private enum GlassChromeTests {
         }
         walk(rig.chrome)
         return found
+    }
+
+    @available(macOS 26, *)
+    private static func allButtons(in view: NSView) -> [NSButton] {
+        let own: [NSButton] = (view as? NSButton).map { [$0] } ?? []
+        return own + view.subviews.flatMap { allButtons(in: $0) }
     }
 
     @available(macOS 26, *)
@@ -791,7 +796,7 @@ private enum GlassChromeTests {
         }
         expect(Set(chrome.toolButtons.values.compactMap { chrome.surface(for: $0).map(ObjectIdentifier.init) }).count == 10, "\(label): tool surfaces are distinct")
         for (button, title, hit) in [(chrome.hideButton, "Hide", "hide"), (chrome.photosButton, "Photos", "photos"), (chrome.saveButton, "Save", "saveHistory"),
-                                     (chrome.historyButton, "History", "showHistory"), (chrome.snapButton, "Snap", "snap"), (chrome.cameraButton, "Cam", "camera"),
+                                     (chrome.historyButton, "History", "showHistory"), (chrome.snapButton, "Snap", "snap"),
                                      (chrome.cancelFrameButton, "Cancel", "cancelFrame"), (chrome.fontButton, "Font", "font"), (chrome.undoButton, "Undo", "undo"),
                                      (chrome.wipeButton, "Wipe", "wipe"), (chrome.actualButton, "Actual Size", "actualSize"), (chrome.resizeButton, "Resize…", "resize"),
                                      (chrome.shareButton, "Webpost…", "share")] {
@@ -815,7 +820,10 @@ private enum GlassChromeTests {
         let primaries = surfaces(rig).filter { $0.prominence == .primary }
         expect(primaries.count == 1, "\(label): exactly one primary surface")
         expect(chrome.cancelFrameButton.isHidden && chrome.surface(for: chrome.cancelFrameButton)?.isHidden == true, "\(label): Cancel starts hidden")
-        expect(!chrome.cameraButton.isHidden && !chrome.frameMode, "\(label): Cam starts visible")
+        expect(!chrome.frameMode, "\(label): starts outside Frame mode")
+        let controlTitles = allButtons(in: chrome).flatMap { [$0.title, $0.accessibilityLabel() ?? "", $0.toolTip ?? ""] }
+        expect(!controlTitles.contains { $0.lowercased().contains("cam") }, "\(label): no Cam/Camera button exists in the Modern rail (screen capture only)")
+        expect(Mirror(reflecting: chrome).children.allSatisfy { $0.label?.lowercased().contains("camera") != true }, "\(label): the chrome owns no camera control")
         expect(chrome.actualButton.selectedIcon == .minimize && !chrome.actualButton.selectionTints, "\(label): Actual Size swaps its glyph without tinting")
         expect(chrome.surface(for: chrome.actualButton)?.fixedSize?.width ?? 0 >= 160, "\(label): Actual Size is wide enough for Normal View")
         chrome.actualButton.title = "Normal View"
@@ -867,21 +875,20 @@ private enum GlassChromeTests {
         expect(selected?.isSelected == false && selected?.currentTint == nil, "\(label): deselecting clears the tint")
 
         // Hiding a button hides its glass wherever the caller does it.
-        chrome.cameraButton.isHidden = true
-        expect(chrome.surface(for: chrome.cameraButton)?.isHidden == true, "\(label): a hidden Cam leaves no empty glass")
-        chrome.cameraButton.isHidden = false
-        expect(chrome.surface(for: chrome.cameraButton)?.isHidden == false, "\(label): Cam returns with its glass")
+        chrome.cancelFrameButton.isHidden = false
+        expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == false, "\(label): a shown Cancel returns with its glass")
+        chrome.cancelFrameButton.isHidden = true
+        expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == true, "\(label): a hidden Cancel leaves no empty glass")
         for toolbox in [shared.toolbox] { expect(chrome.surface(for: toolbox)?.fixedSize?.width ?? 0 >= 64, "\(label): the Toolbox surface has room for icon and chevron") }
     }
 
     @available(macOS 26, *)
     private static func frameModeChecks(_ rig: Rig, _ label: String) {
         let chrome = rig.chrome
-        expect(chrome.snapButton.title == "Snap Frame" && chrome.snapButton.icon == .cameraViewfinder, "\(label): Snap becomes Snap Frame with the viewfinder")
+        expect(chrome.snapButton.title == "Snap Frame" && chrome.snapButton.icon == .frameViewfinder, "\(label): Snap becomes Snap Frame with the viewfinder")
         expect(chrome.snapButton.toolTip == snapFrameToolTip, "\(label): Snap Frame tooltip")
         expect(chrome.snapButton.isPrimary && chrome.surface(for: chrome.snapButton)?.prominence == .primary, "\(label): Snap Frame stays primary")
         expect(!chrome.cancelFrameButton.isHidden && chrome.surface(for: chrome.cancelFrameButton)?.isHidden == false, "\(label): Cancel appears in Frame mode")
-        expect(chrome.cameraButton.isHidden && chrome.surface(for: chrome.cameraButton)?.isHidden == true, "\(label): Cam hides in Frame mode")
         expect(!chrome.backdropIsVisible && !chrome.bleedIsVisible, "\(label): backdrop and bleed give way to the Frame hole")
         let cancel = rect(chrome.cancelFrameButton, in: rig), snap = rect(chrome.snapButton, in: rig)
         expect(abs(cancel.width - 148) < 0.5 && abs(cancel.height - 36) < 0.5 && cancel.maxY <= snap.minY, "\(label): Cancel is a full pill under Snap Frame")

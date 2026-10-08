@@ -38,7 +38,7 @@ final class ModernEditorChrome: NSView {
 
     struct Actions {
         weak var target: AnyObject?
-        var hide, photos, saveHistory, showHistory, chooseTool, snap, camera, cancelFrame, font, undo, wipe, actualSize, resize, share: Selector
+        var hide, photos, saveHistory, showHistory, chooseTool, snap, cancelFrame, font, undo, wipe, actualSize, resize, share: Selector
     }
 
     static let snapToolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
@@ -51,12 +51,12 @@ final class ModernEditorChrome: NSView {
     let scrollView = NSScrollView()
     let header = NSView()
     private(set) var toolButtons: [String: GlassChromeButton] = [:]
-    let hideButton, photosButton, saveButton, historyButton, snapButton, cameraButton, cancelFrameButton,
+    let hideButton, photosButton, saveButton, historyButton, snapButton, cancelFrameButton,
         fontButton, undoButton, wipeButton, actualButton, resizeButton, shareButton: GlassChromeButton
     var backdropIsVisible: Bool { !backdrop.isHidden }
     var bleedIsVisible: Bool { !bleed.isHidden }
 
-    /// Snap becomes Snap Frame, Cancel replaces Cam, and the translucent backdrop gives way to the Frame-mode hole.
+    /// Snap becomes Snap Frame, Cancel appears beneath it, and the translucent backdrop gives way to the Frame-mode hole.
     var frameMode = false {
         didSet { if frameMode != oldValue { applyFrameMode() } }
     }
@@ -97,7 +97,6 @@ final class ModernEditorChrome: NSView {
         saveButton = make("Save", .floppyDisk, actions.saveHistory)
         historyButton = make("History", .clockRotateLeft, actions.showHistory)
         snapButton = make("Snap", .crosshairs, actions.snap)
-        cameraButton = make("Cam", .camera, actions.camera)
         cancelFrameButton = make("Cancel", .xmark, actions.cancelFrame)
         fontButton = make("Font", .font, actions.font)
         undoButton = make("Undo", .arrowRotateLeft, actions.undo)
@@ -137,12 +136,11 @@ final class ModernEditorChrome: NSView {
     // MARK: state
 
     private func applyFrameMode() {
-        snapButton.icon = frameMode ? .cameraViewfinder : .crosshairs
-        snapButton.classicArtworkName = ChromeIcons.classicArtworkName(for: frameMode ? .cameraViewfinder : .crosshairs)
+        snapButton.icon = frameMode ? .frameViewfinder : .crosshairs
+        snapButton.classicArtworkName = ChromeIcons.classicArtworkName(for: frameMode ? .frameViewfinder : .crosshairs)
         snapButton.title = frameMode ? "Snap Frame" : "Snap"
         snapButton.toolTip = frameMode ? Self.snapFrameToolTip : Self.snapToolTip
         cancelFrameButton.isHidden = !frameMode
-        cameraButton.isHidden = frameMode
         updateBackdropAndBleed()
     }
 
@@ -281,14 +279,13 @@ final class ModernEditorChrome: NSView {
         let leftRail = NSView()
         leftRail.addSubview(toolGroup)
 
-        // Right rail: Snap / Cancel / Cam · Color / Font / Size · (flexible) · Undo / Wipe
+        // Right rail: Snap / Cancel · Color / Font / Size · (flexible) · Undo / Wipe
         snapButton.isPrimary = true
         snapButton.toolTip = Self.snapToolTip
         cancelFrameButton.isHidden = true
         let snapSurface = pill(snapButton, width: railPill)
         snapSurface.prominence = .primary
         let cancelSurface = pill(cancelFrameButton, width: railPill)
-        let cameraSurface = pill(cameraButton, width: railPill)
         let colorSurface = pill(controls.paletteButton, width: railPill)
         let fontSurface = pill(fontButton, width: railPill)
         let sizeStack = NSStackView(views: [controls.sizeLabel, controls.widthControl])
@@ -304,7 +301,7 @@ final class ModernEditorChrome: NSView {
         register(sizeSurface, for: sizeStack, controls.sizeLabel, controls.widthControl)
         let undoSurface = pill(undoButton, width: railPill)
         let wipeSurface = pill(wipeButton, width: railPill)
-        let captureGroup = GlassChrome.group([snapSurface, cancelSurface, cameraSurface], orientation: .vertical, identifier: "GlassCaptureGroup")
+        let captureGroup = GlassChrome.group([snapSurface, cancelSurface], orientation: .vertical, identifier: "GlassCaptureGroup")
         let drawingGroup = GlassChrome.group([colorSurface, fontSurface, sizeSurface], orientation: .vertical, identifier: "GlassDrawingGroup")
         let historyGroup = GlassChrome.group([undoSurface, wipeSurface], orientation: .vertical, identifier: "GlassHistoryGroup")
         let rightRail = NSView()

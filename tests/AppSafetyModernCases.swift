@@ -12,7 +12,7 @@ extension AppSafetyTests {
             ("Modern chrome fills the Frame-aware content view and replaces every Classic control", modernWindowStructure),
             ("Modern shared controls keep the Classic accessibility labels, tooltips, titles and hint tracking", modernControlStrings),
             ("setTool selects one glass surface in the solid family for every path that changes the tool", modernToolSelection),
-            ("Frame enter and leave swap Snap, Cancel and Cam, clear and restore the Fullscreen alternate, and dim Resize", modernFrameMode),
+            ("Frame enter and leave swap Snap and Cancel, clear and restore the Fullscreen alternate, and dim Resize", modernFrameMode),
             ("Modern Frame mode drops the window shadow, raises the level and sets alpha 0.8, and leaving restores the pre-Frame values", modernFrameWindowShadowLevelAlpha),
             ("updateDragPreview feeds the canvas bleed, and Frame mode and Reduce Transparency hide it", modernCanvasBleed),
             ("Injected display options reach every glass surface and clear again", modernAccessibilityInjection),
@@ -82,10 +82,10 @@ extension AppSafetyTests {
         var popoverAppearance: NSAppearance.Name?
     }
 
-    /// The 13 command buttons, each found by the Classic action it sends so both windows are read the same way.
+    /// The 12 command buttons, each found by the Classic action it sends so both windows are read the same way.
     private static let commandActions: [(name: String, action: Selector)] = [
         ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
-        ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)), ("cam", #selector(AppDelegate.cameraSnap)),
+        ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)),
         ("cancel", #selector(AppDelegate.cancelFrame)), ("font", #selector(AppDelegate.chooseFont)), ("undo", #selector(AppDelegate.undo)),
         ("wipe", #selector(AppDelegate.wipe)), ("actual", #selector(AppDelegate.toggleActualSize)), ("resize", #selector(AppDelegate.resize)),
         ("share", #selector(AppDelegate.share(_:)))
@@ -168,8 +168,8 @@ extension AppSafetyTests {
         try expect(app.window.minSize == NSSize(width: 900, height: 640), "The minimum window size is unchanged")
 
         // Controls the app keeps by reference are the chrome's own.
-        try expect(app.snapButton === chrome.snapButton && app.cameraButton === chrome.cameraButton && app.cancelFrameButton === chrome.cancelFrameButton
-                   && app.actualButton === chrome.actualButton && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cam, Cancel, Actual Size and Resize through the chrome's buttons")
+        try expect(app.snapButton === chrome.snapButton && app.cancelFrameButton === chrome.cancelFrameButton
+                   && app.actualButton === chrome.actualButton && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cancel, Actual Size and Resize through the chrome's buttons")
         let tools = toolOrder.compactMap { SketchTool(rawValue: $0).flatMap { app.toolButtons[$0] } }
         try expect(tools.count == 10 && app.toolButtons.count == 10, "All ten tools, Crop included, are registered")
         try expect(tools.allSatisfy { $0 is GlassChromeButton && !($0 is ToolButton) }, "Modern tools are glass buttons, not the Classic ToolButton")
@@ -213,7 +213,7 @@ extension AppSafetyTests {
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool" && modern["share.label"] == "Share drawing"
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
         // At launch the rail Wipe reads its Blank stage; every other command reads its title, and Webpost… keeps its explicit label.
-        let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cam": "Cam", "cancel": "Cancel", "font": "Font",
+        let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cancel": "Cancel", "font": "Font",
                       "undo": "Undo", "wipe": "Blank", "actual": "Actual Size", "resize": "Resize…", "share": "Share drawing"]
         let misread = spoken.keys.sorted().filter { modern["axLabel.\($0)"] != spoken[$0] }
             .map { "\($0): '\(modern["axLabel.\($0)"] ?? "")' instead of '\(spoken[$0] ?? "")'" }
@@ -284,18 +284,17 @@ extension AppSafetyTests {
         let app = fixture.app
         guard let content = app.window.contentView as? FrameChromeView else { throw Failure(description: "Frame content view") }
         let fullscreen = #selector(AppDelegate.fullscreenSnap)
-        let snap = chrome.snapButton, cancel = chrome.cancelFrameButton, camera = chrome.cameraButton
+        let snap = chrome.snapButton, cancel = chrome.cancelFrameButton
         func state(_ label: String, frame: Bool) throws {
             try expect(app.frameMode == frame && chrome.frameMode == frame, "\(label): both layers agree on Frame mode")
-            try expect(snap.title == (frame ? "Snap Frame" : "Snap") && snap.icon == (frame ? .cameraViewfinder : .crosshairs), "\(label): Snap title and glyph '\(snap.title)'")
+            try expect(snap.title == (frame ? "Snap Frame" : "Snap") && snap.icon == (frame ? .frameViewfinder : .crosshairs), "\(label): Snap title and glyph '\(snap.title)'")
             try expect(snap.accessibilityLabel() == (frame ? "Snap Frame" : "Snap"), "\(label): VoiceOver reads '\(snap.accessibilityLabel() ?? "nil")' for Snap")
-            try expect(cancel.accessibilityLabel() == "Cancel" && camera.accessibilityLabel() == "Cam", "\(label): Cancel and Cam keep their spoken labels")
+            try expect(cancel.accessibilityLabel() == "Cancel", "\(label): Cancel keeps its spoken label")
             try expect(snap.toolTip == (frame ? ModernEditorChrome.snapFrameToolTip : ModernEditorChrome.snapToolTip), "\(label): Snap tooltip")
             try expect(snap.alternateAction == (frame ? nil : fullscreen), "\(label): the Fullscreen alternate is \(frame ? "cleared" : "restored")")
             try expect(snap.alternateTarget === app, "\(label): the alternate target")
             try expect(snap.isPrimary && (try surface(chrome, snap)).prominence == .primary, "\(label): Snap stays the one primary command")
             try expect(cancel.isHidden == !frame && (try surface(chrome, cancel)).isHidden == !frame, "\(label): Cancel \(frame ? "shows" : "hides") with its glass")
-            try expect(camera.isHidden == frame && (try surface(chrome, camera)).isHidden == frame, "\(label): Cam \(frame ? "hides" : "shows") with its glass")
             try expect(chrome.backdropIsVisible == !frame && content.showsCanvasHole == frame, "\(label): backdrop gives way to the Frame hole")
             app.updateViewportChrome()
             try expect(chrome.resizeButton.isEnabled == !frame && (try surface(chrome, chrome.resizeButton)).isDisabled == frame, "\(label): Resize is \(frame ? "dimmed" : "live")")
@@ -458,7 +457,7 @@ extension AppSafetyTests {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
         let surfaces = collect(GlassSurfaceView.self, in: app.window.contentView!)
-        try expect(surfaces.count >= 29, "Header, rails and footer have their glass surfaces (\(surfaces.count))")
+        try expect(surfaces.count >= 28, "Header, rails and footer have their glass surfaces (\(surfaces.count))")
         let snap = try surface(chrome, chrome.snapButton), arrow = try surface(chrome, app.toolButtons[.arrow]), undo = try surface(chrome, chrome.undoButton)
         undo.setHovered(true)
         try expect(surfaces.allSatisfy { $0.accessibility == .none && $0.lastAnimationDuration == GlassSurfaceView.animationDuration }, "Surfaces start with no display options and animate")
@@ -482,7 +481,7 @@ extension AppSafetyTests {
         let routes: [(String, GlassChromeButton, Selector)] = [
             ("Hide", chrome.hideButton, #selector(AppDelegate.vanish)), ("Photos", chrome.photosButton, #selector(AppDelegate.showPhotos)),
             ("Save", chrome.saveButton, #selector(AppDelegate.saveHistory)), ("History", chrome.historyButton, #selector(AppDelegate.showHistory)),
-            ("Snap", chrome.snapButton, #selector(AppDelegate.snapButtonPressed)), ("Cam", chrome.cameraButton, #selector(AppDelegate.cameraSnap)),
+            ("Snap", chrome.snapButton, #selector(AppDelegate.snapButtonPressed)),
             ("Cancel", chrome.cancelFrameButton, #selector(AppDelegate.cancelFrame)), ("Font", chrome.fontButton, #selector(AppDelegate.chooseFont)),
             ("Undo", chrome.undoButton, #selector(AppDelegate.undo)), ("Wipe", chrome.wipeButton, #selector(AppDelegate.wipe)),
             ("Actual Size", chrome.actualButton, #selector(AppDelegate.toggleActualSize)), ("Resize…", chrome.resizeButton, #selector(AppDelegate.resize)),
@@ -493,6 +492,11 @@ extension AppSafetyTests {
         }
         try expect(chrome.snapButton.menu == nil && chrome.snapButton.alternateTarget === app && chrome.snapButton.alternateAction == #selector(AppDelegate.fullscreenSnap),
                    "Snap keeps a primary crosshair with the Fullscreen secondary and no menu")
+        // Screen capture only: no Cam/Camera button or selector exists in the Modern chrome.
+        try expect(!app.responds(to: NSSelectorFromString("cameraSnap")) && !app.responds(to: NSSelectorFromString("runCameraSnap:")), "The AppDelegate has no camera action")
+        let modernButtons = collect(NSButton.self, in: app.window.contentView!)
+        try expect(!modernButtons.contains { $0.title.lowercased().contains("cam") || ($0.accessibilityLabel() ?? "").lowercased().contains("camera") },
+                   "No Cam or Camera button exists in the Modern chrome")
         // The route reaches behavior, not only selectors.
         let before = app.canvas.document
         app.canvas.setBackgroundColor(.yellow)

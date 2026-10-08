@@ -62,7 +62,7 @@ enum OriginalGeneralPreferencesTests {
         for include in [false, true] {
             defaults.set(include, forKey: "skitchInSnap")
             for option in [false, true] {
-                for mode in ["crosshair", "fullscreen", "window", "frame", "camera", "web"] {
+                for mode in ["crosshair", "fullscreen", "window", "frame", "web"] {
                     let before = defaults.persistentDomain(forName: domain)!
                     try expect(store.includeApp(mode: mode, manualOption: option) == ((mode == "crosshair" || mode == "fullscreen") && (include != option)),
                                "Manual Option policy \(mode)/\(include)/\(option)")

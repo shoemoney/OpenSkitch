@@ -1,5 +1,4 @@
 import AppKit
-import AVFoundation
 import CoreGraphics
 import CoreFoundation
 import Darwin
@@ -132,21 +131,6 @@ struct CaptureMetadata: Equatable, Sendable {
     let pixelSize: NSSize
     let requestedFrameRect: NSRect?
     let capturedFrameRect: NSRect?
-}
-
-// The coordinator awaits hardware teardown, independent of photo delivery.
-// Tests substitute a serial fake session without opening any capture device.
-protocol CaptureSessionStopping: Sendable {
-    func stop() async
-    func stop(completion: @escaping @Sendable () -> Void)
-}
-
-extension CaptureSessionStopping {
-    func stop(completion: @escaping @Sendable () -> Void) {
-        // Generic actor/test resources can bridge without inheriting MainActor.
-        // The native session implements this directly on its serial AV queue.
-        Task.detached { await self.stop(); completion() }
-    }
 }
 
 // Keep visibility ownership in the coordinator; tests replace only native UI.
@@ -340,7 +324,7 @@ private func captureCleanupError(_ errors: [Error]) -> Error? {
 /// The original Skitch see-through frame preview belongs to the parent UI and
 /// is not implemented here.
 @MainActor
-final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate {
+final class CaptureCoordinator: NSObject, WKNavigationDelegate {
     /// Global screen coordinates with a top-left origin (main display baseline),
     /// matching screencapture -R. Negative origins support secondary displays.
     /// The parent supplies its canvas rectangle; a missing frame is an error.
@@ -389,15 +373,6 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     private var webWindow: NSWindow?
     private var snapshotStarted = false
 
-    private var camera: CameraCaptureSession?
-    private var cameraResource: (any CaptureSessionStopping)?
-    private var cameraPanel: NSPanel?
-    private weak var cameraParent: NSWindow?
-    private var cameraPreview: CameraPreviewView?
-    private var cameraStatus: NSTextField?
-    private var cameraCaptureButton: NSButton?
-    private var takingPhoto = false
-
     nonisolated override init() {
         environment = CaptureEnvironment()
         nativeSelection = true; nativeCountdown = true
@@ -428,19 +403,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     }
     #endif
 
-    #if CAPTURE_TESTS
-    func testCaptureSession(_ session: any CaptureSessionStopping,
-                            completion: @escaping (Result<NSImage, Error>) -> Void) {
-        submit(completion) { callback in
-            guard self.begin(callback) != nil else { return }
-            self.source = "camera"
-            self.cameraResource = session
-        }
-    }
-    #endif
-
     /// Cancels accepted/queued work. Acknowledges on main only after helper exit,
-    /// file removal and camera session stop. Captures may resume after this ack.
+    /// file removal. Captures may resume after this ack.
     /// The cancelled capture completes exactly once before ack; a real teardown
     /// failure is reported instead of being hidden as NSUserCancelledError.
     nonisolated func cancelCapture(completion: @escaping (Result<Void, Error>) -> Void) {
@@ -451,7 +415,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     /// Rejected requests subsequently receive a shutdown error on main. Accepted
     /// callbacks are drained before this ack; late native delegates are ignored.
     /// macOS-owned permission prompts/WebKit child processes cannot be killed by
-    /// this API; our views/delegates are detached and camera hardware is stopped.
+    /// this API; our views/delegates are detached and the helper process is stopped.
     /// When called on the main thread, idle acknowledgement is synchronous.
     /// Busy acknowledgements service AppKit's modal termination run-loop mode.
     nonisolated func shutdown(completion: @escaping (Result<Void, Error>) -> Void) {
@@ -521,16 +485,6 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         submit(completion) { callback in self.startURLCapture(url, callback: callback) }
     }
 
-    nonisolated func captureCamera(completion: @escaping (Result<NSImage, Error>) -> Void) {
-        captureCamera(delay: 0, completion: completion)
-    }
-
-    /// snapSnap: (decompiled.c:22327-22442) runs the countdown before doISightSnap:.
-    nonisolated func captureCamera(delay: Double,
-                                   completion: @escaping (Result<NSImage, Error>) -> Void) {
-        submit(completion) { callback in self.startCameraCapture(delay: delay, callback: callback) }
-    }
-
     private func begin(_ callback: CaptureCompletion) -> UUID? {
         guard operationID == nil, !cleaningUp else {
             callback.callback(.failure(captureFailure(1, "Another capture is already in progress.")))
@@ -591,23 +545,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         webWindow = nil
         snapshotStarted = false
 
-        cameraPreview?.previewLayer?.session = nil
-        cameraPreview = nil
-        let session = cameraResource
-        cameraResource = nil
-        camera = nil
-        if let panel = cameraPanel {
-            panel.delegate = nil
-            if let parent = panel.sheetParent { parent.endSheet(panel, returnCode: .cancel) }
-            panel.orderOut(nil)
-            panel.close()
-        }
-        cameraPanel = nil
-        cameraParent = nil
-        cameraStatus = nil
-        cameraCaptureButton = nil
-        takingPhoto = false
-        guard request != nil || session != nil else {
+        guard request != nil else {
             completeCleanup(error: nil)
             return
         }
@@ -618,10 +556,6 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         if let request {
             group.enter()
             request.teardown { error in errors.record(error); group.leave() }
-        }
-        if let session {
-            group.enter()
-            session.stop { group.leave() }
         }
         group.notify(queue: .global(qos: .utility)) { @Sendable in
             let error = errors.result
@@ -987,352 +921,5 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         guard webView === self.webView, let id = operationID else { return }
         finish(.failure(captureFailure(15, "The webpage rendering process terminated.")), id: id)
-    }
-
-    private func startCameraCapture(delay: Double, callback: CaptureCompletion) {
-        guard let id = begin(callback) else { return }
-        source = "camera"
-        guard delay.isFinite, delay > 0 else { enterCameraPath(id: id); return }
-        armTimeout(delay + 10, id: id, message: "The camera countdown did not complete.")
-        let proceed = { [weak self] in
-            guard let self, self.operationID == id else { return }
-            self.enterCameraPath(id: id)
-        }
-        if nativeCountdown {
-            if countdown == nil { countdown = OriginalCaptureCountdown() }
-            let screen = NSScreen.main?.frame ?? NSScreen.screens.first?.frame ?? .zero
-            countdown?.start(rect: NSRect(x: screen.midX, y: screen.midY, width: 0, height: 0),
-                             parent: nil, delay: delay, cue: { [weak self] in
-                guard let self, self.operationID == id else { return }
-                self.onSound?("pre-snap-countdown")
-            }, completion: proceed)
-        } else {
-            delayedCapture = Task {
-                do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }
-                catch { return }
-                proceed()
-            }
-        }
-    }
-
-    private func enterCameraPath(id: UUID) {
-        guard operationID == id else { return }
-        // Calling the permission API without this key terminates the host process.
-        guard let purpose = Bundle.main.object(forInfoDictionaryKey: "NSCameraUsageDescription") as? String,
-              !purpose.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            finish(.failure(captureFailure(20, "Camera capture requires NSCameraUsageDescription in this app's Info.plist.")), id: id)
-            return
-        }
-        showCameraSheet()
-        guard operationID == id else { return }
-        armTimeout(60, id: id, message: "Camera permission was not resolved within 60 seconds.")
-        switch AVCaptureDevice.authorizationStatus(for: .video) {
-        case .authorized: configureCamera(id: id)
-        case .notDetermined:
-            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
-                Task { @MainActor [weak self] in
-                    guard let self, self.operationID == id else { return }
-                    if granted { self.configureCamera(id: id) }
-                    else { self.cameraPermissionDenied(id: id) }
-                }
-            }
-        case .denied, .restricted: cameraPermissionDenied(id: id)
-        @unknown default:
-            finish(.failure(captureFailure(21, "macOS reported an unknown camera authorization status.")), id: id)
-        }
-    }
-
-    private func cameraPermissionDenied(id: UUID) {
-        finish(.failure(captureFailure(22, "Camera access is denied or restricted. Check System Settings > Privacy & Security > Camera and the app's camera entitlement.")), id: id)
-    }
-
-    private func configureCamera(id: UUID) {
-        guard operationID == id else { return }
-        cameraStatus?.stringValue = "Starting camera…"
-        armTimeout(30, id: id, message: "The camera did not start within 30 seconds.")
-        let session = CameraCaptureSession(onReady: { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, self.operationID == id, let camera = self.camera else { return }
-                self.cameraPreview?.attach(camera.session)
-                self.cameraCaptureButton?.isEnabled = true
-                self.cameraStatus?.stringValue = "Ready. Capture a photo or cancel."
-                self.armTimeout(300, id: id, message: "Camera capture timed out while waiting for a photo.")
-            }
-        }, onResult: { [weak self] result in
-            Task { @MainActor [weak self] in
-                guard let self, self.operationID == id else { return }
-                self.finish(self.decode(result), id: id)
-            }
-        })
-        camera = session // Retain before any asynchronous configuration can fail.
-        cameraResource = session
-        session.start()
-    }
-
-    private func showCameraSheet() {
-        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 550),
-                            styleMask: [.titled, .closable], backing: .buffered, defer: false)
-        panel.title = "Camera Capture"
-        panel.isReleasedWhenClosed = false
-        panel.delegate = self
-        let content = NSView()
-        panel.contentView = content
-        let heading = NSTextField(labelWithString: "Camera Capture")
-        heading.font = .systemFont(ofSize: 24, weight: .semibold)
-        let status = NSTextField(wrappingLabelWithString: "Waiting for camera permission…")
-        status.font = .systemFont(ofSize: 20)
-        let preview = CameraPreviewView()
-        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelCamera(_:)))
-        cancel.font = .systemFont(ofSize: 20)
-        cancel.bezelStyle = .rounded
-        cancel.keyEquivalent = "\u{1b}"
-        let capture = NSButton(title: "Capture Photo", target: self, action: #selector(takeCameraPhoto(_:)))
-        capture.font = .systemFont(ofSize: 20)
-        capture.bezelStyle = .rounded
-        capture.keyEquivalent = "\r"
-        capture.isEnabled = false
-        for view in [heading, status, preview, cancel, capture] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            content.addSubview(view)
-        }
-        NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 24),
-            heading.topAnchor.constraint(equalTo: content.topAnchor, constant: 20),
-            status.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
-            status.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -24),
-            status.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 8),
-            preview.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
-            preview.trailingAnchor.constraint(equalTo: status.trailingAnchor),
-            preview.topAnchor.constraint(equalTo: status.bottomAnchor, constant: 16),
-            preview.bottomAnchor.constraint(equalTo: capture.topAnchor, constant: -20),
-            capture.trailingAnchor.constraint(equalTo: status.trailingAnchor),
-            capture.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -20),
-            capture.heightAnchor.constraint(greaterThanOrEqualToConstant: 40),
-            cancel.trailingAnchor.constraint(equalTo: capture.leadingAnchor, constant: -16),
-            cancel.centerYAnchor.constraint(equalTo: capture.centerYAnchor),
-            cancel.heightAnchor.constraint(greaterThanOrEqualToConstant: 40)
-        ])
-        cameraPanel = panel
-        cameraStatus = status
-        cameraPreview = preview
-        cameraCaptureButton = capture
-        let app = NSApplication.shared
-        if let parent = app.keyWindow ?? app.mainWindow, parent.attachedSheet == nil {
-            cameraParent = parent
-            parent.beginSheet(panel) { [weak self] _ in
-                guard let self, self.cameraPanel === panel, let id = self.operationID else { return }
-                self.finish(.failure(captureCancellation()), id: id)
-            }
-        } else {
-            panel.center()
-            panel.makeKeyAndOrderFront(nil)
-        }
-        app.activate(ignoringOtherApps: true)
-    }
-
-    @objc private func takeCameraPhoto(_ sender: NSButton) {
-        guard let id = operationID, let camera, !takingPhoto else { return }
-        takingPhoto = true
-        cameraCaptureButton?.isEnabled = false
-        cameraStatus?.stringValue = "Capturing photo…"
-        armTimeout(20, id: id, message: "The camera did not deliver a photo within 20 seconds.")
-        camera.takePhoto()
-    }
-
-    @objc private func cancelCamera(_ sender: Any?) {
-        guard cameraPanel != nil, let id = operationID else { return }
-        finish(.failure(captureCancellation()), id: id)
-    }
-
-    func windowShouldClose(_ sender: NSWindow) -> Bool {
-        if sender === cameraPanel { cancelCamera(nil); return false }
-        return true
-    }
-}
-
-@MainActor
-private final class CameraPreviewView: NSView {
-    private(set) var previewLayer: AVCaptureVideoPreviewLayer?
-
-    override init(frame frameRect: NSRect) {
-        super.init(frame: frameRect)
-        wantsLayer = true
-        layer?.backgroundColor = NSColor.black.cgColor
-        setAccessibilityLabel("Live camera preview")
-    }
-
-    required init?(coder: NSCoder) { fatalError("Use init(frame:)") }
-
-    func attach(_ session: AVCaptureSession) {
-        let preview = AVCaptureVideoPreviewLayer(session: session)
-        preview.videoGravity = .resizeAspect // Same framing as the resulting photo.
-        layer?.addSublayer(preview)
-        previewLayer = preview
-        needsLayout = true
-    }
-
-    override func layout() {
-        super.layout()
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        previewLayer?.frame = bounds
-        CATransaction.commit()
-    }
-}
-
-// AVFoundation configuration, start/stop, capture state and delegate results are
-// serialized here, never on AppKit's main thread. All coordinator callbacks hop
-// to the main actor. Queued cleanup retains this object until the hardware stops.
-private final class CameraCaptureSession: NSObject, AVCapturePhotoCaptureDelegate, CaptureSessionStopping, @unchecked Sendable {
-    let session = AVCaptureSession()
-    private let output = AVCapturePhotoOutput()
-    private let queue = DispatchQueue(label: "SkitchRedux.Camera", qos: .userInitiated)
-    private let onReady: @Sendable () -> Void
-    private let onResult: @Sendable (Result<Data, Error>) -> Void
-    private var observers: [NSObjectProtocol] = []
-    private var finished = false
-    private var cleanedUp = false
-    private var photoRequested = false
-    private var photoID: Int64?
-    private var photoResult: Result<Data, Error>?
-
-    init(onReady: @escaping @Sendable () -> Void,
-         onResult: @escaping @Sendable (Result<Data, Error>) -> Void) {
-        self.onReady = onReady
-        self.onResult = onResult
-        super.init()
-    }
-
-    func start() {
-        queue.async { [self] in
-            guard !finished else { return }
-            do {
-                guard let device = AVCaptureDevice.default(for: .video) else {
-                    throw captureFailure(23, "No camera is connected or available.")
-                }
-                let input = try AVCaptureDeviceInput(device: device)
-                session.beginConfiguration()
-                do {
-                    if session.canSetSessionPreset(.photo) { session.sessionPreset = .photo }
-                    guard session.canAddInput(input) else {
-                        throw captureFailure(24, "The camera input cannot be added to the capture session.")
-                    }
-                    session.addInput(input)
-                    guard session.canAddOutput(output) else {
-                        throw captureFailure(25, "This camera does not support native still-photo capture.")
-                    }
-                    session.addOutput(output)
-                    session.commitConfiguration()
-                } catch {
-                    session.commitConfiguration()
-                    throw error
-                }
-                observeFailures()
-                session.startRunning()
-                guard session.isRunning else {
-                    // Per the SDK, startup failure arrives as a runtime-error
-                    // notification. Let the queued observer report its actual
-                    // NSError; the coordinator deadline guards a missing event.
-                    return
-                }
-                onReady()
-            } catch { deliver(.failure(error)) }
-        }
-    }
-
-    private func observeFailures() {
-        let center = NotificationCenter.default
-        observers.append(center.addObserver(forName: .AVCaptureSessionRuntimeError,
-                                            object: session, queue: nil) { [weak self] notification in
-            let error = notification.userInfo?[AVCaptureSessionErrorKey] as? Error
-                ?? captureFailure(27, "The camera capture session reported a runtime error.")
-            self?.queue.async { [weak self] in self?.deliver(.failure(error)) }
-        })
-        observers.append(center.addObserver(forName: .AVCaptureSessionWasInterrupted,
-                                            object: session, queue: nil) { [weak self] _ in
-            self?.queue.async { [weak self] in
-                self?.deliver(.failure(captureFailure(28, "The camera session was interrupted by macOS or another application.")))
-            }
-        })
-    }
-
-    func takePhoto() {
-        queue.async { [self] in
-            guard !finished, !photoRequested else { return }
-            guard session.isRunning, let connection = output.connection(with: .video),
-                  connection.isEnabled, connection.isActive else {
-                deliver(.failure(captureFailure(29, "The camera has no active video connection.")))
-                return
-            }
-            photoRequested = true
-            let codecs = output.availablePhotoCodecTypes
-            guard let codec = codecs.contains(.jpeg) ? AVVideoCodecType.jpeg : codecs.first else {
-                deliver(.failure(captureFailure(32, "This camera has no supported encoded photo format.")))
-                return
-            }
-            let settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: codec])
-            photoID = settings.uniqueID
-            output.capturePhoto(with: settings, delegate: self)
-        }
-    }
-
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto,
-                     error: Error?) {
-        let result: Result<Data, Error>
-        if let error { result = .failure(error) }
-        else if let data = photo.fileDataRepresentation(), !data.isEmpty { result = .success(data) }
-        else { result = .failure(captureFailure(30, "The camera returned no decodable photo data.")) }
-        let id = photo.resolvedSettings.uniqueID
-        queue.async { [self] in
-            guard !finished, photoID == id else { return }
-            photoResult = result
-        }
-    }
-
-    func photoOutput(_ output: AVCapturePhotoOutput,
-                     didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
-        let id = resolvedSettings.uniqueID
-        queue.async { [self] in
-            guard !finished, photoID == id else { return }
-            if let error { deliver(.failure(error)) }
-            else { deliver(photoResult ?? .failure(captureFailure(31, "The camera finished capture without delivering a photo."))) }
-        }
-    }
-
-    private func deliver(_ result: Result<Data, Error>) {
-        guard !finished else { return }
-        finished = true
-        // Report the actual capture error immediately, even if hardware teardown
-        // takes time. The serial queue retains us until cleanup has completed.
-        onResult(result)
-        cleanup()
-    }
-
-    func stop() async {
-        await withCheckedContinuation { continuation in
-            stop { continuation.resume() }
-        }
-    }
-
-    func stop(completion: @escaping @Sendable () -> Void) {
-        queue.async { [self] in
-            finished = true
-            cleanup()
-            completion()
-        }
-    }
-
-    private func cleanup() {
-        guard !cleanedUp else { return }
-        cleanedUp = true
-        observers.forEach { NotificationCenter.default.removeObserver($0) }
-        observers.removeAll()
-        if session.isRunning { session.stopRunning() }
-        session.beginConfiguration()
-        session.inputs.forEach { session.removeInput($0) }
-        session.outputs.forEach { session.removeOutput($0) }
-        session.commitConfiguration()
-        photoResult = nil
-        photoID = nil
     }
 }

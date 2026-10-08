@@ -13,8 +13,8 @@ enum FAFamily: String, CaseIterable, Sendable {
 enum FAIcon: String, CaseIterable, Sendable {
     case eyeSlash = "eye-slash", toolbox, images, floppyDisk = "floppy-disk", clockRotateLeft = "clock-rotate-left",
          arrowPointer = "arrow-pointer", paintbrush, slashForward = "slash-forward", circle, square, fillDrip = "fill-drip",
-         eraser, text, arrowUpRight = "arrow-up-right", cropSimple = "crop-simple", crosshairs, cameraViewfinder = "camera-viewfinder",
-         xmark, camera, font, arrowRotateLeft = "arrow-rotate-left", broom, maximize, minimize, rulerCombined = "ruler-combined",
+         eraser, text, arrowUpRight = "arrow-up-right", cropSimple = "crop-simple", crosshairs, frameViewfinder = "camera-viewfinder",
+         xmark, font, arrowRotateLeft = "arrow-rotate-left", broom, maximize, minimize, rulerCombined = "ruler-combined",
          arrowUpFromBracket = "arrow-up-from-bracket"
 
     var codepoint: UInt32 {
@@ -35,9 +35,8 @@ enum FAIcon: String, CaseIterable, Sendable {
         case .arrowUpRight: return 0xE09F
         case .cropSimple: return 0xF565
         case .crosshairs: return 0xF05B
-        case .cameraViewfinder: return 0xE0DA
+        case .frameViewfinder: return 0xE0DA
         case .xmark: return 0xF00D
-        case .camera: return 0xF030
         case .font: return 0xF031
         case .arrowRotateLeft: return 0xF0E2
         case .broom: return 0xF51A
@@ -66,9 +65,8 @@ enum FAIcon: String, CaseIterable, Sendable {
         case .arrowUpRight: return "arrow.up.right"
         case .cropSimple: return "crop"
         case .crosshairs: return "scope"
-        case .cameraViewfinder: return "camera.viewfinder"
+        case .frameViewfinder: return "viewfinder"
         case .xmark: return "xmark"
-        case .camera: return "camera"
         case .font: return "textformat.size"
         case .arrowRotateLeft: return "arrow.uturn.backward"
         case .broom: return "clear"

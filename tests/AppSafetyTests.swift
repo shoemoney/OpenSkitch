@@ -116,7 +116,6 @@ final class AppSafetyHotkeyManager {
                  globalWindow: @escaping @MainActor () -> Void,
                  globalFullscreen: @escaping @MainActor () -> Void,
                  globalFrame: @escaping @MainActor () -> Void,
-                 globalCamera: @escaping @MainActor () -> Void,
                  globalUpload: @escaping @MainActor () -> Void,
                  globalShow: @escaping @MainActor () -> Void) throws {
         Self.installations += 1
@@ -233,12 +232,6 @@ final class AppSafetyCaptureCoordinator {
     }
     func capture(mode: String, delay: Double = 0, includeApp: Bool = false, completion: @escaping (Result<NSImage, Error>) -> Void) {
         Self.requests.append(mode); Self.screenRequests.append(.init(mode: mode, delay: delay, includeApp: includeApp)); deliver(completion)
-    }
-    func captureCamera(completion: @escaping (Result<NSImage, Error>) -> Void) {
-        Self.requests.append("camera"); deliver(completion)
-    }
-    func captureCamera(delay: Double, completion: @escaping (Result<NSImage, Error>) -> Void) {
-        captureCamera(completion: completion)
     }
     func captureURL(_ url: URL, completion: @escaping (Result<NSImage, Error>) -> Void) {
         Self.requests.append("web"); deliver(completion)
@@ -602,11 +595,10 @@ enum AppSafetyTests {
         let text = try editor(app, text: "Keep edits during capture")
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
         app.startCapture("crosshair", delay: 30)
-        app.cameraSnap()
         AppSafetyAlert.answers.append(.init(title: "Snap from Link", response: .alertFirstButtonReturn,
                                           text: "http://127.0.0.1:9/not-requested"))
         app.webSnap()
-        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "camera", "web"], "Capture starts must not ask to discard existing edits")
+        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "web"], "Capture starts must not ask to discard existing edits")
         try expect(AppSafetyAlert.seen == ["Snap from Link"], "Capture cancellation must not show a discard prompt")
         answer(.alertSecondButtonReturn)
         app.receiveCapture(.success(try image()))
@@ -624,10 +616,10 @@ enum AppSafetyTests {
         let undoName = app.canvas.editingUndoManager.undoActionName
         app.frameSnap()
         try expect(app.frameMode && !app.frameKeepsAnnotations && app.canvas.framePreview &&
-                   AppSafetyCaptureCoordinator.requests == ["crosshair", "camera", "web"],
+                   AppSafetyCaptureCoordinator.requests == ["crosshair", "web"],
                    "Frame enters preview without starting a capture or asking to discard")
         app.snapButtonPressed()
-        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "camera", "web", "frame"] &&
+        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "web", "frame"] &&
                    app.frameMode && app.canvas.framePreview && !app.frameCaptureInProgress,
                    "The Snap button in Frame mode must request frame capture; cancellation must leave it ready")
         try expect(app.canvas.document == framed && app.currentURL == a && app.dirty &&
@@ -1474,14 +1466,13 @@ enum AppSafetyTests {
             }
         }
     }
-    static func staleScreenCameraWebCallbacks() throws {
-        for mode in ["crosshair", "camera", "web"] {
+    static func staleScreenWebCallbacks() throws {
+        for mode in ["crosshair", "web"] {
             try autoreleasepool {
                 let fixture = try Fixture(), app = fixture.app
                 AppSafetyAlert.seen = []
                 _ = try fixture.saveA(); AppSafetyCaptureCoordinator.holdCapture = true
                 switch mode {
-                case "camera": app.cameraSnap()
                 case "web":
                     AppSafetyAlert.answers.append(.init(title: "Snap from Link", response: .alertFirstButtonReturn,
                                                         text: "http://127.0.0.1:9/not-requested"))
@@ -2267,9 +2258,11 @@ enum AppSafetyTests {
             return own + view.subviews.flatMap { actionButtons($0) }
         }
         let others = actionButtons(app.window.contentView!).filter { $0 !== snap }
-        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.cameraButton } &&
-                   others.contains { $0.action == #selector(AppDelegate.cameraSnap) },
-                   "No-alternate checks cover actual tool and Camera controls rather than fabricated buttons")
+        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.cancelFrameButton },
+                   "No-alternate checks cover actual tool and Cancel controls rather than fabricated buttons")
+        try expect(!actionButtons(app.window.contentView!).contains { $0.title.lowercased().contains("cam") || $0.action == NSSelectorFromString("cameraSnap") } &&
+                   !app.responds(to: NSSelectorFromString("cameraSnap")),
+                   "The Classic rail has no Cam or Camera button; OpenSkitch is screen capture only")
         let otherRequests = AppSafetyCaptureCoordinator.screenRequests.count
         let selectedTool = app.canvas.tool, selectedElements = app.canvas.selection
         for button in others {
@@ -2313,7 +2306,7 @@ enum AppSafetyTests {
         let frameItem = app.copiedMainMenuItem(#selector(AppDelegate.frameSnap))!
         NSApp.sendAction(frameItem.action!, to: frameItem.target, from: frameItem)
         try expect(app.frameMode && snap.alternateAction == nil && snap.action == #selector(AppDelegate.snapButtonPressed) &&
-                   app.cameraButton.isHidden && !app.cancelFrameButton.isHidden,
+                   !app.cancelFrameButton.isHidden,
                    "Native Frame menu clears Snap's Fullscreen alternate while keeping its primary frame action")
         let framedModel = app.canvas.document, framedUndoName = canvasUndo.undoActionName
         try expect(pending.superview == nil && framedModel.elements.contains { $0.text == "Pending capture annotation" } && canvasUndo.canUndo,
@@ -2329,7 +2322,7 @@ enum AppSafetyTests {
                    app.canvas.document == framedModel && canvasUndo.undoActionName == framedUndoName && canvasUndo.canUndo,
                    "Frame-mode secondary gestures cannot capture, leave Frame, mutate committed text or clear Undo")
         app.cancelFrameButton.performClick(nil)
-        try expect(!app.frameMode && !app.cameraButton.isHidden && app.cancelFrameButton.isHidden &&
+        try expect(!app.frameMode && app.cancelFrameButton.isHidden &&
                    snap.alternateAction == #selector(AppDelegate.fullscreenSnap) && snap.alternateTarget === app &&
                    app.canvas.document == framedModel && canvasUndo.canUndo && canvasUndo.undoActionName == framedUndoName,
                    "Actual Frame Cancel restores the Fullscreen alternate and retains drawing/committed typing Undo")
@@ -2871,7 +2864,7 @@ enum AppSafetyTests {
                    !app.canvas.editingUndoManager.canUndo, "Committed crop is one Undo including hidden source pixels")
         app.redo(); try expect(try app.canvas.snapshotDocumentData() == after, "Crop Redo retains the complete cropped pan state")
     }
-    static func rasterFitAndCameraOutput() throws {
+    static func rasterFitOutput() throws {
         let fixture = try Fixture(), app = fixture.app
         guard let capacity = app.maximumNormalCanvas else { throw Failure(description: "Hidden fixture needs a screen capacity") }
         let size = CGSize(width: ceil(capacity.width + 300), height: ceil(capacity.height + 150))
@@ -2887,19 +2880,7 @@ enum AppSafetyTests {
         app.toggleActualSize(); app.dragOriginalControl.state = .off
         try expect(app.dragAtOriginalSize && app.canvas.document.backgroundPNG == background,
                    "Actual drag forces original size without replacing source pixels")
-        AppSafetyCaptureCoordinator.holdCapture = true
-        app.cameraSnap()
-        try expect(AppSafetyCaptureCoordinator.requests.last == "camera" && AppSafetyCaptureCoordinator.captureCallbacks.count == 1,
-                   "Camera test must use the wired callback")
-        let callback = AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()
-        answer(.alertThirdButtonReturn)
-        callback(.success(raster))
-        // Capture adapters currently deliver synchronously; queued main-actor
-        // delivery is also accepted without a desktop capture request.
-        try waitForMain("Camera completion", until: { !app.isActualSize })
-        try expect(app.canvas.canvasSize == size && app.canvas.outputSize == size && app.canvas.document.backgroundPNG == background,
-                   "Camera fitOutput:false exits Actual and retains full output instead of automatic screen fitting")
-        app.dragOriginalControl.state = .off
+        app.leaveActualSize(); app.dragOriginalControl.state = .off
         try expect(!app.dragAtOriginalSize, "Normal mode does not force full-size drag solely because it followed Actual")
     }
     static func actualEditUndoNormalOutput() throws {
@@ -3303,7 +3284,7 @@ enum AppSafetyTests {
             ("successful New/native/raster/capture replacement exits Actual across generations", actualSuccessfulReplacement),
             ("normal corners are width-driven, blank axes independent, with one resize Undo", borderResizeLifecycle),
             ("Option crop Cancel/Undo/Redo retains hidden pan pixels, selection and editable geometry", borderCropPanLifecycle),
-            ("ordinary raster fitting and camera full output retain raw source and drag original-size gates", rasterFitAndCameraOutput),
+            ("ordinary raster fitting retains raw source and drag original-size gates", rasterFitOutput),
             ("Undo/Redo after Actual edit and exit cannot restore transient full output", actualEditUndoNormalOutput),
             ("normal resize Undo in Actual survives exit, Redo and Undo with correct export pixels", actualPriorResizeHistory),
             ("Shift corner resets output and fits the window before the cancelable drag baseline", shiftCornerResetBaseline),
@@ -3606,7 +3587,7 @@ enum AppSafetyTests {
             ("Shift palette changes undoable backdrop; normal palette styles selected annotations", shiftPaletteBackground),
             ("non-text recovery survives deferred Discard and failed shutdown", nonTextRecoveryDuringShutdown),
             ("old Frame/Resnap callbacks cannot mutate new/native/raster/capture replacements", staleFrameDocumentReplacement),
-            ("screen/camera/Web callback generations protect new documents but retain same-document prompts", staleScreenCameraWebCallbacks),
+            ("screen/Web callback generations protect new documents but retain same-document prompts", staleScreenWebCallbacks),
             ("Resnap requires a full visible canvas and rejects geometry changes during capture", resnapRequiresFullView),
             ("raster Open uses valid pixels when TIFF logical points are invalid", rasterPointSizeNormalization),
             ("queued publishing callbacks remain silent during Quit; cancellation remains silent afterward", publishingCallbacksDuringQuit),
@@ -3841,10 +3822,13 @@ enum AppSafetyTests {
                     #selector(AppDelegate.exportFile), #selector(AppDelegate.saveAs), #selector(AppDelegate.printImage), #selector(AppDelegate.cut), #selector(AppDelegate.copyArtwork),
                     #selector(AppDelegate.paste), #selector(AppDelegate.deleteSelection), #selector(AppDelegate.selectAll), #selector(AppDelegate.duplicate),
                     #selector(AppDelegate.chooseFont), #selector(AppDelegate.screenSnap), #selector(AppDelegate.fullscreenSnap), #selector(AppDelegate.frameSnap),
-                    #selector(AppDelegate.cameraSnap), #selector(AppDelegate.resnap), #selector(AppDelegate.normalSize), #selector(AppDelegate.flipH),
+                    #selector(AppDelegate.resnap), #selector(AppDelegate.normalSize), #selector(AppDelegate.flipH),
                     #selector(AppDelegate.rotateCW), #selector(AppDelegate.transparent), #selector(AppDelegate.trimSnap), #selector(AppDelegate.wipeSnap)]
                 let actual = choices.items.compactMap(\.action).filter { expected.contains($0) }
                 try expect(actual == expected, "Original common commands are direct Toolbox items in original group order")
+                func menuTitles(_ menu: NSMenu) -> [String] { menu.items.flatMap { [$0.title] + ($0.submenu.map(menuTitles) ?? []) } }
+                try expect(!menuTitles(choices).contains { $0.lowercased().contains("cam") },
+                           "No Cam or Camera item exists anywhere in the Toolbox menus; OpenSkitch is screen capture only")
                 // AppKit assigns its own popup-cell actions to the title and separators.
                 // Only the recovered commands belong to our application target.
                 for item in choices.items {

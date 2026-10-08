@@ -17,7 +17,7 @@ enum OriginalCaptureTimingTests {
     static func main() {
         delayPolicy()
         sixSecondFixture()
-        cameraFixture()
+        threeSecondFixture()
         boundaryDelays()
         print("OriginalCaptureTimingTests: \(checks) checks passed")
     }
@@ -27,12 +27,10 @@ enum OriginalCaptureTimingTests {
         expect(OriginalCaptureTiming.timerInterval == 0.1, "Original repeating timer interval")
         for flags: NSEvent.ModifierFlags in [[], .option, .command, [.control, .capsLock]] {
             expect(OriginalCaptureTiming.manualDelay(flags: flags) == 0, "Only Shift requests timed screen capture")
-            expect(OriginalCaptureTiming.cameraDelay(flags: flags) == 3, "Camera normally counts down three seconds")
             expect(OriginalCaptureTiming.selectedDelay(flags: flags, explicitDelay: 0) == 0, "Untimed selection stays immediate")
         }
         for flags: NSEvent.ModifierFlags in [.shift, [.shift, .option, .command, .control]] {
             expect(OriginalCaptureTiming.manualDelay(flags: flags) == 6, "Shift times fullscreen/frame")
-            expect(OriginalCaptureTiming.cameraDelay(flags: flags) == 0, "Shift reverses camera timing")
             expect(OriginalCaptureTiming.selectedDelay(flags: flags, explicitDelay: 0) == 6, "Shift at selection completion times crosshair")
             expect(OriginalCaptureTiming.selectedDelay(flags: flags, explicitDelay: 2.5) == 2.5, "Explicit selection delay takes precedence")
         }
@@ -67,19 +65,19 @@ enum OriginalCaptureTimingTests {
         expect(countdown.remaining.bitPattern == 0xbdcccafb, "Extra tick cannot mutate a finished countdown")
     }
 
-    private static func cameraFixture() {
+    private static func threeSecondFixture() {
         var countdown = OriginalCaptureTiming(delay: 3)!
         var cues: [Int] = [], invisible: [Int] = []
         for tick in 1...31 {
             let frame = countdown.tick()
             if frame.playCue { cues.append(tick) }
             if frame.alpha == 0 { invisible.append(tick) }
-            expect(frame.imageNumber == (tick <= 10 ? 3 : tick <= 20 ? 2 : 1), "Camera image segment boundaries")
-            expect(frame.finished == (tick == 31), "Camera Float32 residual expires on tick thirty-one")
+            expect(frame.imageNumber == (tick <= 10 ? 3 : tick <= 20 ? 2 : 1), "Three-second image segment boundaries")
+            expect(frame.finished == (tick == 31), "Three-second Float32 residual expires on tick thirty-one")
         }
-        expect(cues == [1, 11, 21], "Camera cue boundaries")
-        expect(invisible == [1] + Array(7...11) + Array(17...21) + Array(27...31), "Camera blink threshold remains half a second")
-        expect(countdown.remaining.bitPattern == 0xbdcccc7b, "Camera final residual bits")
+        expect(cues == [1, 11, 21], "Three-second cue boundaries")
+        expect(invisible == [1] + Array(7...11) + Array(17...21) + Array(27...31), "Three-second blink threshold remains half a second")
+        expect(countdown.remaining.bitPattern == 0xbdcccc7b, "Three-second final residual bits")
     }
 
     private static func boundaryDelays() {
