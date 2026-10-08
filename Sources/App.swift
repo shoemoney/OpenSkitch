@@ -260,6 +260,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var snapButton: NSButton!
     var cameraButton: NSButton!
     var cancelFrameButton: NSButton!
+    /// Located by its action on first use, so the window builder needs no extra reference.
+    weak var wipeRailButton: NSButton?
     var frameMode = false
     var frameKeepsAnnotations = false
     var frameCaptureInProgress = false
@@ -284,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.onSound = { [weak self] name in self?.playOriginalSound(name) }
         capture.onSound = { [weak self] name in self?.playOriginalSound(name) }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
-        canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection() }
+        canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection(); self?.updateWipeButton() }
         canvas.onViewportEditCancelled = { [weak self] in
             self?.endWindowGesture(cancelled: true)
             self?.activeResizeSession?.cancel()
@@ -305,7 +307,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             catch { restoring = false; status.stringValue = "Previous session could not be restored." }
         }
         if let fixture = ProcessInfo.processInfo.environment["SKITCH_FIXTURE"] { openURL(URL(fileURLWithPath: fixture)) }
-        updateStatus()
+        updateStatus(); updateWipeButton()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in self?.saveRecovery() } }
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
@@ -1109,12 +1111,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func changed() {
         if isActualSize { _ = canvas.setPresentationOutputSize(canvas.fullResolutionOutputSize); scheduleNavigatorImage() }
         if !restoring { dirty = true }
-        window?.isDocumentEdited = dirty; updateStatus()
+        window?.isDocumentEdited = dirty; updateStatus(); updateWipeButton()
         historyFollowTimer?.invalidate()
         if currentArchiveID != nil {
             let timer = Timer(timeInterval: 1, repeats: false) { [weak self] _ in Task { @MainActor in self?.followHistory() } }
             historyFollowTimer = timer; RunLoop.main.add(timer, forMode: .common)
         }
+    }
+    /// Original updateWipeButton: Blank (disabled) / Clear / Wipe, derived from the canvas.
+    func updateWipeButton() {
+        if wipeRailButton == nil { wipeRailButton = findWipeButton(in: window?.contentView) }
+        guard let button = wipeRailButton else { return }
+        let stage = canvas.wipeStage
+        if button.title != stage.title { button.title = stage.title }
+        if button.isEnabled != stage.isEnabled { button.isEnabled = stage.isEnabled }
+    }
+    private func findWipeButton(in view: NSView?) -> NSButton? {
+        guard let view else { return nil }
+        if let button = view as? NSButton, button.action == #selector(wipe) { return button }
+        for sub in view.subviews { if let found = findWipeButton(in: sub) { return found } }
+        return nil
     }
     func updateStatus() { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
