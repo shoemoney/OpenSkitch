@@ -13,6 +13,7 @@ extension AppSafetyTests {
             ("Modern shared controls keep the Classic accessibility labels, tooltips, titles and hint tracking", modernControlStrings),
             ("setTool selects one glass surface in the solid family for every path that changes the tool", modernToolSelection),
             ("Frame enter and leave swap Snap, Cancel and Cam, clear and restore the Fullscreen alternate, and dim Resize", modernFrameMode),
+            ("Modern Frame mode drops the window shadow, raises the level and sets alpha 0.8, and leaving restores the pre-Frame values", modernFrameWindowShadowLevelAlpha),
             ("updateDragPreview feeds the canvas bleed, and Frame mode and Reduce Transparency hide it", modernCanvasBleed),
             ("Injected display options reach every glass surface and clear again", modernAccessibilityInjection),
             ("Header and footer buttons reach the real AppDelegate actions", modernActionRouting),
@@ -257,6 +258,23 @@ extension AppSafetyTests {
         try verify(.rectangle, "second click on the selected tool")
         app.setTool(.crop)
         try verify(.crop, "Crop")
+    }
+
+    @available(macOS 26, *)
+    private static func modernFrameWindowShadowLevelAlpha() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
+        let alpha = CGFloat(Float32(bitPattern: 0x3f4ccccd))
+        app.window.hasShadow = true; app.window.alphaValue = 0.9; app.window.level = .floating
+        app.frameSnap()
+        try expect(chrome.frameMode && !app.window.hasShadow && app.window.level == level && app.window.alphaValue == alpha,
+                   "Modern Frame must drop the shadow, use the screen-saver level and alpha 0.8 while the glass chrome mirrors Frame")
+        app.leaveFrame()
+        try expect(!chrome.frameMode && app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9,
+                   "Leaving Modern Frame must restore the pre-Frame values and clear the chrome mirror")
+        app.frameSnap(); app.cancelFrame()
+        try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "Cancel must restore them too")
     }
 
     @available(macOS 26, *)

@@ -662,6 +662,38 @@ enum AppSafetyTests {
                    history.undoActionName == undoName && history.redoActionName == redoName,
                    "Preview enter, switch and Cancel must leave document identity and both history directions intact")
     }
+    static func frameWindowShadowLevelAlpha() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let level = NSWindow.Level(rawValue: Int(CGWindowLevelForKey(.screenSaverWindow)))
+        let alpha = CGFloat(Float32(bitPattern: 0x3f4ccccd))
+        app.window.hasShadow = true; app.window.alphaValue = 0.9; app.window.level = .floating
+        for leave in ["leaveFrame", "cancelFrame"] {
+            app.frameSnap()
+            try expect(!app.window.hasShadow && app.window.level == level && app.window.alphaValue == alpha,
+                       "Frame must drop the shadow, use the screen-saver level and alpha 0.8")
+            app.frameSnap()
+            try expect(!app.window.hasShadow && app.window.alphaValue == alpha, "Re-entering Frame must not store the Frame values")
+            if leave == "leaveFrame" { app.leaveFrame() } else { app.cancelFrame() }
+            try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9,
+                       "\(leave) must restore the stored pre-Frame shadow, level and alpha")
+        }
+        app.frameSnap(); app.newFile()
+        try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "newFile must restore the pre-Frame window values")
+        // Alerts open at modal level, so the Frame level must not be in force while one is showing.
+        _ = try editor(app, text: "Dirty so the Discard prompt appears")
+        app.frameSnap()
+        var seenLevel: NSWindow.Level?, seenAlpha: CGFloat?, seenShadow: Bool?
+        AppSafetyAlert.beforeReply = { seenLevel = app.window.level; seenAlpha = app.window.alphaValue; seenShadow = app.window.hasShadow }
+        answer(.alertSecondButtonReturn)
+        app.receiveFrameCapture(.success(try image()), keepingAnnotations: false)
+        AppSafetyAlert.beforeReply = nil
+        try expect(AppSafetyAlert.seen.last == "Save your drawing?" && (seenLevel ?? level) <= .modalPanel && seenLevel == .floating && seenAlpha == 0.9 && seenShadow == true,
+                   "The Frame-completion Discard prompt must show with the pre-Frame level, alpha and shadow, not under the screen-saver window")
+        try expect(app.frameMode && !app.window.hasShadow && app.window.level == level && app.window.alphaValue == alpha,
+                   "Cancel at the prompt leaves Frame active, so the Frame window values return after the modal")
+        app.cancelFrame()
+        try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "Cancel Frame restores after a prompt")
+    }
     static func resnapPreservesAnnotations() throws {
         let fixture = try Fixture(), app = fixture.app
         var initial = SketchDocument(size: CGSize(width: 320, height: 180))
@@ -3183,6 +3215,7 @@ enum AppSafetyTests {
             ("capture completion Discard replaces explicitly", captureDiscard),
             ("capture completion Save persists pending text first", captureSave),
             ("Frame preview enter, switch and Cancel preserve document, recovery and history", framePreviewCancellation),
+            ("Frame mode drops the window shadow, raises the level and sets alpha 0.8 from the recovered setSnapMode:, and leaving restores the pre-Frame values", frameWindowShadowLevelAlpha),
             ("Resnap preserves annotations, destination and usable Undo/Redo", resnapPreservesAnnotations),
             ("normal Frame picker and completion cancellation; Discard prompts exactly once", normalFrameDiscard),
             ("filename focus retains command-menu behavior", filenameCommands),
