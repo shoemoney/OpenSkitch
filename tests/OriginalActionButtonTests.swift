@@ -18,7 +18,9 @@ private final class ActionReceiver: NSObject {
     }
 }
 
-/// Observe tracking without NSButton's blocking native mouse-tracking loop.
+/// Observe tracking without NSButton's blocking native mouse-tracking loop. Returning
+/// true ends tracking at once; returning false makes NSControl.mouseDown wait for input
+/// forever, which a test only discovers once its click really reaches the cell.
 @MainActor
 private final class TrackingCell: NSButtonCell {
     var trackedEvents: [NSEvent] = []
@@ -27,7 +29,7 @@ private final class TrackingCell: NSButtonCell {
                              of controlView: NSView, untilMouseUp flag: Bool) -> Bool {
         trackedEvents.append(event)
         trackedViews.append(controlView)
-        return false
+        return true
     }
 }
 
@@ -71,11 +73,21 @@ private enum OriginalActionButtonTests {
         }
     }
 
+    /// NSControl.mouseDown only reaches the cell's tracking for a click inside the control,
+    /// so a left-down built at the default foreign location (999,888) can never be observed
+    /// tracking and every "never enters primary tracking" check would pass vacuously. Left-downs
+    /// must therefore be built `inside:` their button; all other events keep the foreign
+    /// location so anchoring checks cannot pass by echoing the click.
     private static func mouse(_ type: NSEvent.EventType,
-                              flags: NSEvent.ModifierFlags = []) -> NSEvent {
-        NSEvent.mouseEvent(with: type, location: NSPoint(x: 999, y: 888),
-                          modifierFlags: flags, timestamp: 123.25, windowNumber: 731,
-                          context: nil, eventNumber: 91, clickCount: 2, pressure: 0.625)!
+                              flags: NSEvent.ModifierFlags = [],
+                              inside view: NSView? = nil) -> NSEvent {
+        precondition(type != .leftMouseDown || view != nil,
+                     "A left-down outside its button never reaches native tracking, so it proves nothing")
+        let location = view.map { $0.convert(NSPoint(x: $0.bounds.maxX - 5, y: $0.bounds.minY + 5), to: nil) }
+            ?? NSPoint(x: 999, y: 888)
+        return NSEvent.mouseEvent(with: type, location: location,
+                                  modifierFlags: flags, timestamp: 123.25, windowNumber: 731,
+                                  context: nil, eventNumber: 91, clickCount: 2, pressure: 0.625)!
     }
 
     private static func populatedMenu() -> NSMenu {
@@ -109,22 +121,24 @@ private enum OriginalActionButtonTests {
 
     private static func primaryAndAlternate() {
         let rig = Rig()
-        let down = mouse(.leftMouseDown, flags: [.shift, .option, .command])
+        let flags: NSEvent.ModifierFlags = [.shift, .option, .command]
+        let down = mouse(.leftMouseDown, flags: flags, inside: rig.button)
         let baseline = NSButton(frame: rig.button.frame)
         let baselineCell = TrackingCell(textCell: "Test")
         baseline.cell = baselineCell
         baseline.target = rig.receiver
         baseline.action = #selector(ActionReceiver.primary(_:))
-        baseline.mouseDown(with: down)
+        let baselineDown = mouse(.leftMouseDown, flags: flags, inside: baseline)
+        baseline.mouseDown(with: baselineDown)
         rig.button.mouseDown(with: down)
-        // Detached NSButtons may ignore mouseDown before reaching their cell.
-        // Compare against native behavior without creating/ordering a window.
-        expect(rig.cell.trackedEvents.count == baselineCell.trackedEvents.count,
-               "Ordinary left down retains native NSButton tracking behavior")
-        if let tracked = rig.cell.trackedEvents.first {
-            expect(tracked === down && rig.cell.trackedViews[0] === rig.button,
-                   "Primary tracking preserves incoming event and actual button")
-        }
+        // Fixture guard: a stock NSButton must be seen tracking this very event, otherwise
+        // the "never enters primary tracking" checks below could not fail.
+        expect(baselineCell.trackedEvents.count == 1 && baselineCell.trackedEvents[0] === baselineDown
+               && baselineCell.trackedViews[0] === baseline,
+               "Fixture observes native NSButton tracking of an in-bounds left down")
+        expect(rig.cell.trackedEvents.count == 1 && rig.cell.trackedEvents[0] === down
+               && rig.cell.trackedViews[0] === rig.button,
+               "Ordinary left down tracks exactly the incoming event on the actual button")
         baseline.mouseUp(with: mouse(.leftMouseUp))
         rig.button.mouseUp(with: mouse(.leftMouseUp))
         expect(rig.receiver.alternateSenders.isEmpty && rig.button.highlights.isEmpty,
@@ -133,6 +147,34 @@ private enum OriginalActionButtonTests {
         expect(rig.receiver.primarySenders.count == 1 && rig.receiver.primarySenders[0] === rig.button,
                "Native performClick retains the actual primary selector, target and sender")
         expect(rig.receiver.alternateSenders.isEmpty, "Native primary action cannot also fire alternate")
+
+        // Press/highlight/release transitions of a secondary click, as an exact sequence.
+        let secondary = Rig()
+        secondary.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: secondary.button))
+        expect(secondary.cell.trackedEvents.isEmpty && secondary.cell.isHighlighted
+               && secondary.button.highlights == [true],
+               "Control-left down highlights once and never enters primary tracking")
+        secondary.button.mouseUp(with: mouse(.leftMouseUp))
+        expect(!secondary.cell.isHighlighted && secondary.button.highlights == [true, false]
+               && secondary.receiver.alternateSenders.count == 1,
+               "Control-left up dispatches once and releases the highlight")
+        secondary.button.rightMouseDown(with: mouse(.rightMouseDown))
+        expect(secondary.cell.isHighlighted && secondary.button.highlights == [true, false, true],
+               "Right down highlights once")
+        secondary.button.rightMouseUp(with: mouse(.rightMouseUp))
+        expect(secondary.button.highlights == [true, false, true, false],
+               "Right up releases the highlight")
+        clean(secondary, alternateCount: 2)
+
+        // A populated menu does not hijack a native left click when the left-menu policy is off.
+        let menuIdle = Rig()
+        menuIdle.button.menu = populatedMenu()
+        let plainDown = mouse(.leftMouseDown, inside: menuIdle.button)
+        menuIdle.button.mouseDown(with: plainDown)
+        menuIdle.button.mouseUp(with: mouse(.leftMouseUp))
+        expect(menuIdle.cell.trackedEvents.count == 1 && menuIdle.cell.trackedEvents[0] === plainDown
+               && menuIdle.button.highlights.isEmpty && menuIdle.receiver.alternateSenders.isEmpty,
+               "Left click with showMenuOnLeftClick off tracks natively even when a menu is assigned")
 
         for emptyMenu in [false, true] {
             let r = Rig()
@@ -254,7 +296,7 @@ private enum OriginalActionButtonTests {
                 rig.button.showMenuOnLeftClick = true
                 let menu = populated ? populatedMenu() : NSMenu()
                 rig.button.menu = menu
-                let event = mouse(.leftMouseDown, flags: control ? [.control, .shift] : [.shift])
+                let event = mouse(.leftMouseDown, flags: control ? [.control, .shift] : [.shift], inside: rig.button)
                 var presentations = 0
                 rig.button.menuPresenter = { receivedMenu, receivedEvent, button in
                     presentations += 1
@@ -278,7 +320,7 @@ private enum OriginalActionButtonTests {
         disabled.button.showMenuOnLeftClick = true
         disabled.button.menu = populatedMenu()
         disabled.button.isEnabled = false
-        disabled.button.mouseDown(with: mouse(.leftMouseDown))
+        disabled.button.mouseDown(with: mouse(.leftMouseDown, inside: disabled.button))
         disabled.button.isEnabled = true
         disabled.button.menu = nil
         disabled.button.mouseUp(with: mouse(.leftMouseUp))
@@ -286,9 +328,13 @@ private enum OriginalActionButtonTests {
 
         let menuFree = Rig()
         menuFree.button.showMenuOnLeftClick = true
-        menuFree.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
+        menuFree.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: menuFree.button))
         menuFree.button.mouseUp(with: mouse(.leftMouseUp))
         clean(menuFree, alternateCount: 1)
+        let menuFreeDown = mouse(.leftMouseDown, inside: menuFree.button)
+        menuFree.button.mouseDown(with: menuFreeDown)
+        expect(menuFree.cell.trackedEvents.count == 1 && menuFree.cell.trackedEvents[0] === menuFreeDown,
+               "Menu-free bezel tracks a plain left click natively instead of swallowing it")
         menuFree.button.performClick(nil)
         expect(menuFree.receiver.primarySenders.count == 1 && menuFree.receiver.primarySenders[0] === menuFree.button,
                "Menu-free bezel keeps ordinary native primary action")
@@ -297,7 +343,7 @@ private enum OriginalActionButtonTests {
     private static func controlRouting() {
         for upFlags: NSEvent.ModifierFlags in [[.control], []] {
             let rig = Rig()
-            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control, .shift]))
+            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control, .shift], inside: rig.button))
             expect(rig.cell.isHighlighted, "Control-left down routes to secondary highlight")
             rig.button.rightMouseUp(with: mouse(.rightMouseUp))
             expect(rig.receiver.alternateSenders.isEmpty && rig.cell.isHighlighted,
@@ -321,7 +367,7 @@ private enum OriginalActionButtonTests {
             expect(sender === rig.button && event.locationInWindow == NSPoint(x: 35, y: 40),
                    "Control menu uses the same original anchor and actual sender")
         }
-        rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control, .option, .shift]))
+        rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control, .option, .shift], inside: rig.button))
         rig.button.mouseUp(with: mouse(.leftMouseUp))
         expect(presentations == 1, "Control menu presents once despite Control released before up")
         clean(rig)
@@ -382,7 +428,7 @@ private enum OriginalActionButtonTests {
         // AX can arrive while a Control-left alternate is armed. Displaying
         // the menu consumes that intention even if its callback removes it.
         rig.button.menu = nil
-        rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
+        rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: rig.button))
         expect(rig.cell.isHighlighted, "AX cancellation fixture has pending alternate")
         rig.button.menu = menu
         rig.button.menuPresenter = { receivedMenu, event, button in
@@ -410,7 +456,7 @@ private enum OriginalActionButtonTests {
                 let parent = NSView(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
                 parent.addSubview(rig.button)
                 let down = mouse(control ? .leftMouseDown : .rightMouseDown,
-                                 flags: control ? [.control] : [])
+                                 flags: control ? [.control] : [], inside: control ? rig.button : nil)
                 if control { rig.button.mouseDown(with: down) }
                 else { rig.button.rightMouseDown(with: down) }
                 expect(rig.cell.isHighlighted, "Cancellation fixture begins with an armed alternate")
@@ -448,16 +494,19 @@ private enum OriginalActionButtonTests {
             rig.button.isEnabled = false
             rig.button.rightMouseDown(with: mouse(.rightMouseDown))
             rig.button.rightMouseUp(with: mouse(.rightMouseUp))
-            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
+            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: rig.button))
             rig.button.isEnabled = true
             rig.button.mouseUp(with: mouse(.leftMouseUp))
             clean(rig)
         }
         let replacement = Rig()
-        replacement.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
-        replacement.button.mouseDown(with: mouse(.leftMouseDown))
-        expect(!replacement.cell.isHighlighted,
+        replacement.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: replacement.button))
+        let ordinary = mouse(.leftMouseDown, inside: replacement.button)
+        replacement.button.mouseDown(with: ordinary)
+        expect(!replacement.cell.isHighlighted && replacement.button.highlights == [true, false],
                "A new ordinary primary gesture clears pending secondary highlight")
+        expect(replacement.cell.trackedEvents.count == 1 && replacement.cell.trackedEvents[0] === ordinary,
+               "The replacing ordinary gesture then tracks natively as a primary press")
         replacement.button.rightMouseUp(with: mouse(.rightMouseUp))
         expect(replacement.receiver.alternateSenders.isEmpty, "Replaced gesture has no latent alternate")
     }
@@ -467,8 +516,8 @@ private enum OriginalActionButtonTests {
         rig.receiver.onAlternate = {
             rig.button.rightMouseUp(with: mouse(.rightMouseUp))
             rig.button.rightMouseDown(with: mouse(.rightMouseDown))
-            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
-            rig.button.mouseDown(with: mouse(.leftMouseDown))
+            rig.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: rig.button))
+            rig.button.mouseDown(with: mouse(.leftMouseDown, inside: rig.button))
             rig.button.mouseUp(with: mouse(.leftMouseUp))
             rig.button.cancelOperation(nil)
         }
@@ -492,13 +541,13 @@ private enum OriginalActionButtonTests {
                 button.menu = nil
                 button.rightMouseDown(with: mouse(.rightMouseDown))
                 button.rightMouseUp(with: mouse(.rightMouseUp))
-                button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
+                button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: button))
                 button.mouseUp(with: mouse(.leftMouseUp))
                 if change == 0 { button.cancelOperation(nil) }
                 if change == 1 { button.isEnabled = false; button.isEnabled = true }
                 if change == 2 { button.removeFromSuperview(); parent.addSubview(button) }
             }
-            r.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control]))
+            r.button.mouseDown(with: mouse(.leftMouseDown, flags: [.control], inside: r.button))
             r.button.mouseUp(with: mouse(.leftMouseUp))
             expect(presentations == 1, "Menu callback reentry cannot recursively present")
             clean(r)
