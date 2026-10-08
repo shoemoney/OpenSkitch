@@ -256,7 +256,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var currentArchiveID: UUID?
     var historyFollowTimer: Timer?
     var snapButton: NSButton!
-    var frameButton: NSButton!
+    var cameraButton: NSButton!
     var cancelFrameButton: NSButton!
     var frameMode = false
     var frameKeepsAnnotations = false
@@ -664,18 +664,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         companyName.setContentCompressionResistancePriority(.required, for: .horizontal)
         let title = stack([companyLogo, companyName], horizontal: true); title.spacing = 8
         title.identifier = NSUserInterfaceItemIdentifier("OpenSkitchBrand")
-        let beforeTitle = NSView(), afterTitle = NSView()
-        let top = stack([toolbox, photos, beforeTitle, title, afterTitle, button("Save", #selector(saveHistory)), button("History", #selector(showHistory))], horizontal: true)
-        beforeTitle.widthAnchor.constraint(equalTo: afterTitle.widthAnchor).isActive = true
-        top.spacing = 8
+        let hide = button("Hide", #selector(vanish)); hide.image = recoveredImage("Hide"); hide.imagePosition = .imageLeading
+        let save = button("Save", #selector(saveHistory)); save.image = recoveredImage("SaveToHistoryArrow"); save.imagePosition = .imageTrailing
+        let leadingCommands = stack([hide, toolbox, photos], horizontal: true); leadingCommands.spacing = 8
+        let trailingCommands = stack([save, button("History", #selector(showHistory))], horizontal: true)
+        trailingCommands.spacing = 8
+        let top = NSView(); top.identifier = NSUserInterfaceItemIdentifier("OpenSkitchHeader")
+        for group in [leadingCommands, title, trailingCommands] {
+            group.translatesAutoresizingMaskIntoConstraints = false; top.addSubview(group)
+        }
+        NSLayoutConstraint.activate([
+            leadingCommands.leadingAnchor.constraint(equalTo: top.leadingAnchor),
+            trailingCommands.trailingAnchor.constraint(equalTo: top.trailingAnchor),
+            title.centerXAnchor.constraint(equalTo: top.centerXAnchor),
+            title.leadingAnchor.constraint(greaterThanOrEqualTo: leadingCommands.trailingAnchor, constant: 12),
+            trailingCommands.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 12),
+            leadingCommands.centerYAnchor.constraint(equalTo: top.centerYAnchor),
+            title.centerYAnchor.constraint(equalTo: top.centerYAnchor),
+            trailingCommands.centerYAnchor.constraint(equalTo: top.centerYAnchor)
+        ])
         snapButton = button("Snap", #selector(snapButtonPressed))
         (snapButton as? OriginalActionButton)?.alternateTarget = self
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-        frameButton = button("Frame", #selector(frameSnap))
+        snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imagePosition = .imageLeading
+        cameraButton = button("Cam", #selector(cameraSnap)); cameraButton.image = recoveredImage("SnapISight"); cameraButton.imagePosition = .imageLeading
         cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
+        cancelFrameButton.image = recoveredImage("SnapCancel"); cancelFrameButton.imagePosition = .imageLeading
         var sidebarViews: [NSView] = [label("Tools")]
-        for tool in SketchTool.allCases {
+        let originalToolOrder: [SketchTool] = [.select, .brush, .line, .ellipse, .rectangle, .fill, .eraser, .text, .arrow]
+        for tool in originalToolOrder + [.crop] {
             let b = ToolButton(title: tool == .crop ? "Crop" : "", target: self, action: #selector(chooseTool(_:)))
             b.isBordered = false; b.font = .systemFont(ofSize: 18)
             b.identifier = NSUserInterfaceItemIdentifier(tool.rawValue); b.setButtonType(.toggle)
@@ -688,7 +706,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             sidebarViews.append(b); toolButtons[tool] = b
             trackHint(b, owner: "tool-" + tool.rawValue) { OriginalHintMessages.hover(tool: tool) }
         }
-        sidebarViews.append(button("Font", #selector(chooseFont)))
         let sidebar = stack(sidebarViews); sidebar.spacing = 4; sidebar.alignment = .centerX
         let sidebarRail = NSView(); sidebarRail.addSubview(sidebar)
         sidebar.translatesAutoresizingMaskIntoConstraints = false
@@ -707,7 +724,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         widthControl.onEnd = { [weak self] in self?.endDrawingSizeGesture() }
         let actual = button("Actual Size", #selector(toggleActualSize)); actualButton = actual
+        actual.setButtonType(.toggle); actual.image = recoveredImage("ActualSizeToggleOff"); actual.alternateImage = recoveredImage("ActualSizeToggleOn")
+        actual.imagePosition = .imageLeading
         let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
+        numericResize.image = recoveredImage("Resize"); numericResize.imagePosition = .imageLeading
+        let sizing = stack([actual, numericResize]); sizing.spacing = 4; sizing.alignment = .centerX
+        for control in [actual, numericResize] {
+            control.widthAnchor.constraint(equalToConstant: 142).isActive = true
+            control.heightAnchor.constraint(equalToConstant: 34).isActive = true
+        }
         dragOriginalControl.title = "Original size"; dragOriginalControl.font = .systemFont(ofSize: 18)
         dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
         dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
@@ -715,7 +740,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let wipeButton = button("Wipe", #selector(wipe))
         trackHint(wipeButton, owner: "wipe") { OriginalHintMessages.hover(actionTag: 50) }
         trackHint(widthControl, owner: "drawing-size") { OriginalHintMessages.hover(actionTag: 20) }
-        let right = stack([snapButton, frameButton, cancelFrameButton, button("Camera", #selector(cameraSnap)), paletteButton, sizeLabel, widthControl, actual, numericResize, dragOriginalControl, button("Undo", #selector(undo)), wipeButton])
+        let font = button("Font", #selector(chooseFont)); font.image = recoveredImage("Font"); font.imagePosition = .imageLeading
+        let capture = stack([snapButton, cancelFrameButton, cameraButton]); capture.spacing = 4; capture.alignment = .centerX
+        for control in [snapButton!, cancelFrameButton!, cameraButton!] {
+            control.widthAnchor.constraint(equalToConstant: 132).isActive = true
+            control.heightAnchor.constraint(equalToConstant: 34).isActive = true
+        }
+        let undoWipe = stack([button("Undo", #selector(undo)), wipeButton]); undoWipe.spacing = 4; undoWipe.alignment = .centerX
+        for control in undoWipe.arrangedSubviews {
+            control.widthAnchor.constraint(equalToConstant: 132).isActive = true
+            control.heightAnchor.constraint(equalToConstant: 30).isActive = true
+        }
+        let railSpace = NSView()
+        let right = stack([capture, paletteButton, font, sizeLabel, widthControl, dragOriginalControl, railSpace, undoWipe])
         right.spacing = 4; right.alignment = .centerX
         for control in right.arrangedSubviews where control is NSButton || control is NSPopUpButton {
             control.widthAnchor.constraint(equalToConstant: 132).isActive = true; control.heightAnchor.constraint(equalToConstant: 30).isActive = true
@@ -723,6 +760,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let rightRail = NSView(); rightRail.addSubview(right)
         right.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([right.leadingAnchor.constraint(equalTo: rightRail.leadingAnchor), right.topAnchor.constraint(equalTo: rightRail.topAnchor), right.widthAnchor.constraint(equalToConstant: 138)])
+        right.bottomAnchor.constraint(equalTo: rightRail.bottomAnchor).isActive = true
         let scroll = NSScrollView(); scroll.documentView = canvas; scroll.hasHorizontalScroller = true; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.backgroundColor = .windowBackgroundColor
         (content as? FrameChromeView)?.canvasScrollView = scroll
         nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
@@ -763,13 +801,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
         let options = stack([zoomControl, dragSizeLabel, status], horizontal: true); options.spacing = 12
         status.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        for v in [top, sidebarRail, rightRail, scroll, bottom, options] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
+        for v in [top, sidebarRail, rightRail, scroll, sizing, bottom, options] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
         NSLayoutConstraint.activate([
             top.topAnchor.constraint(equalTo: content.topAnchor, constant: 8), top.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), top.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), top.heightAnchor.constraint(equalToConstant: 36),
-            sidebarRail.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 6), sidebarRail.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 8), sidebarRail.widthAnchor.constraint(equalToConstant: 62), sidebarRail.bottomAnchor.constraint(equalTo: bottom.topAnchor, constant: -8),
+            sidebarRail.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 6), sidebarRail.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 8), sidebarRail.widthAnchor.constraint(equalToConstant: 62), sidebarRail.bottomAnchor.constraint(equalTo: sizing.topAnchor, constant: -8),
             rightRail.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -6), rightRail.topAnchor.constraint(equalTo: sidebarRail.topAnchor), rightRail.widthAnchor.constraint(equalToConstant: 142), rightRail.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
             scroll.leadingAnchor.constraint(equalTo: sidebarRail.trailingAnchor, constant: 8), scroll.trailingAnchor.constraint(equalTo: rightRail.leadingAnchor, constant: -8), scroll.topAnchor.constraint(equalTo: sidebarRail.topAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
-            bottom.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), bottom.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -4), bottom.heightAnchor.constraint(equalToConstant: 50),
+            sizing.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), sizing.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -4), sizing.heightAnchor.constraint(equalToConstant: 72), sizing.widthAnchor.constraint(equalToConstant: 142),
+            bottom.leadingAnchor.constraint(equalTo: sizing.trailingAnchor, constant: 12), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), bottom.centerYAnchor.constraint(equalTo: sizing.centerYAnchor), bottom.heightAnchor.constraint(equalToConstant: 50),
             options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), options.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 30)
         ])
         content.addSubview(canvasBorder)
@@ -1628,9 +1667,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.framePreview = true
         snapButton.cancelOperation(nil)
         snapButton.title = "Snap Frame"
+        snapButton.image = recoveredImage("SnapSnap"); snapButton.imageScaling = .scaleProportionallyDown
         (snapButton as? OriginalActionButton)?.alternateAction = nil
         snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
-        frameButton.isHidden = true; cancelFrameButton.isHidden = false
+        cameraButton.isHidden = true; cancelFrameButton.isHidden = false
         status.stringValue = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
     }
     @objc func cancelFrame() {
@@ -1647,9 +1687,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
         snapButton.title = "Snap"
+        snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imageScaling = .scaleNone
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-        frameButton.isHidden = false; cancelFrameButton.isHidden = true
+        cameraButton.isHidden = false; cancelFrameButton.isHidden = true
         updateStatus()
     }
     func performFrameSnap(delay: Double = 0) {
@@ -1947,13 +1988,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                            "hoverOpened": colorOpenedByHover, "controlHovered": colorControlHovered, "paletteHovered": colorPaletteHovered]
             evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize),
                                        "recoveredArtwork": (content as? FrameChromeView)?.usesRecoveredBezel ?? false]
+            if let header = content.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
+               let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) {
+                let frame = brand.convert(brand.bounds, to: content)
+                evidence["bezelHeader"] = ["brandFrame": NSStringFromRect(frame), "windowCenterX": content.bounds.midX,
+                                           "brandCenterOffset": frame.midX - content.bounds.midX,
+                                           "commandFrames": header.subviews.filter { $0 !== brand }.map { NSStringFromRect($0.convert($0.bounds, to: content)) }]
+            }
         }
         let printInfo = NSPrintInfo.shared
         evidence["printInfo"] = ["paperSize": NSStringFromSize(printInfo.paperSize),
                                 "orientation": printInfo.orientation == .portrait ? "portrait" : "landscape",
                                 "margins": [printInfo.leftMargin, printInfo.rightMargin, printInfo.topMargin, printInfo.bottomMargin]]
         if let panel = fontPanel {
-            evidence["fontPanel"] = ["frame": NSStringFromRect(panel.frame), "visible": panel.isVisible,
+            evidence["fontPanel"] = ["frame": NSStringFromRect(panel.frame), "visible": panel.isVisible, "windowNumber": panel.windowNumber,
                                      "key": panel.isKeyWindow, "modeMask": validModesForFontPanel(panel).rawValue,
                                      "typography": TextStyleForm.fontPanelTypographyEvidence(panel),
                                      "layout": TextStyleForm.fontPanelLayoutEvidence(panel)]

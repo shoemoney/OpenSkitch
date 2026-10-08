@@ -2124,9 +2124,9 @@ enum AppSafetyTests {
             return own + view.subviews.flatMap { actionButtons($0) }
         }
         let others = actionButtons(app.window.contentView!).filter { $0 !== snap }
-        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.frameButton } &&
+        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.cameraButton } &&
                    others.contains { $0.action == #selector(AppDelegate.cameraSnap) },
-                   "No-alternate checks cover actual tool, Frame and Camera controls rather than fabricated buttons")
+                   "No-alternate checks cover actual tool and Camera controls rather than fabricated buttons")
         let otherRequests = AppSafetyCaptureCoordinator.screenRequests.count
         let selectedTool = app.canvas.tool, selectedElements = app.canvas.selection
         for button in others {
@@ -2167,9 +2167,11 @@ enum AppSafetyTests {
         try expect(app.canvas.document == afterStale && AppSafetyCaptureCoordinator.captureCallbacks.isEmpty,
                    "Fresh secondary cancellation preserves the drawing committed by Frame entry")
 
-        app.frameButton.performClick(nil)
-        try expect(app.frameMode && snap.alternateAction == nil && snap.action == #selector(AppDelegate.snapButtonPressed),
-                   "Actual Frame control clears Snap's Fullscreen alternate while keeping its primary frame action")
+        let frameItem = app.copiedMainMenuItem(#selector(AppDelegate.frameSnap))!
+        NSApp.sendAction(frameItem.action!, to: frameItem.target, from: frameItem)
+        try expect(app.frameMode && snap.alternateAction == nil && snap.action == #selector(AppDelegate.snapButtonPressed) &&
+                   app.cameraButton.isHidden && !app.cancelFrameButton.isHidden,
+                   "Native Frame menu clears Snap's Fullscreen alternate while keeping its primary frame action")
         let framedModel = app.canvas.document, framedUndoName = canvasUndo.undoActionName
         try expect(pending.superview == nil && framedModel.elements.contains { $0.text == "Pending capture annotation" } && canvasUndo.canUndo,
                    "Frame entry deliberately commits pending typing, preserving it as drawing history")
@@ -2184,7 +2186,8 @@ enum AppSafetyTests {
                    app.canvas.document == framedModel && canvasUndo.undoActionName == framedUndoName && canvasUndo.canUndo,
                    "Frame-mode secondary gestures cannot capture, leave Frame, mutate committed text or clear Undo")
         app.cancelFrameButton.performClick(nil)
-        try expect(!app.frameMode && snap.alternateAction == #selector(AppDelegate.fullscreenSnap) && snap.alternateTarget === app &&
+        try expect(!app.frameMode && !app.cameraButton.isHidden && app.cancelFrameButton.isHidden &&
+                   snap.alternateAction == #selector(AppDelegate.fullscreenSnap) && snap.alternateTarget === app &&
                    app.canvas.document == framedModel && canvasUndo.canUndo && canvasUndo.undoActionName == framedUndoName,
                    "Actual Frame Cancel restores the Fullscreen alternate and retains drawing/committed typing Undo")
         AppSafetyEvents.current = nil
@@ -3476,6 +3479,11 @@ enum AppSafetyTests {
                     for child in view.subviews { collect(child) }
                 }
                 collect(content)
+                let ordered = controls.compactMap { $0 as? ToolButton }.compactMap { $0.identifier?.rawValue }
+                try expect(ordered == ["select", "brush", "line", "ellipse", "rectangle", "fill", "eraser", "text", "arrow", "crop"],
+                           "Original nine drawing tools retain archive order; existing Crop is a separate additional command")
+                try expect(!controls.contains { ($0 as? NSButton)?.action == #selector(AppDelegate.frameSnap) },
+                           "Frame remains a menu command instead of a permanent capture-rail button")
                 guard let toolbox = controls.compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Toolbox" }), let choices = toolbox.menu else { throw Failure(description: "Recovered Toolbox") }
                 let more = choices.items.first { $0.title == "More Commands" }!.submenu!
                 for title in ["File", "Image", "Drawing", "Text", "Capture"] {
@@ -3502,6 +3510,18 @@ enum AppSafetyTests {
                 for size in [app.window.frame.size, app.window.minSize] {
                     app.window.setFrame(NSRect(origin: app.window.frame.origin, size: size), display: false)
                     content.layoutSubtreeIfNeeded()
+                    guard let header = content.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
+                          let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) else {
+                        throw Failure(description: "Centered company header")
+                    }
+                    try expect(abs(brand.convert(brand.bounds, to: content).midX - content.bounds.midX) < 0.5,
+                               "Company logo/name stay centered on the window despite unequal command group widths")
+                    let brandFrame = brand.convert(brand.bounds, to: content)
+                    for group in header.subviews where group !== brand {
+                        let frame = group.convert(group.bounds, to: content)
+                        try expect(frame.maxX <= brandFrame.minX - 11.5 || frame.minX >= brandFrame.maxX + 11.5,
+                                   "Header commands keep a readable gap and cannot overlap the company brand")
+                    }
                     for control in controls where !control.isHiddenOrHasHiddenAncestor {
                         try expect((control.font?.pointSize ?? 0) >= 18, "Every readable bezel control retains at least18-point type")
                         let rect = control.convert(control.bounds, to: content)
@@ -3516,6 +3536,14 @@ enum AppSafetyTests {
                     }
                     let view = app.canvas.enclosingScrollView!
                     let viewport = view.convert(view.bounds, to: content)
+                    let font = controls.compactMap { $0 as? NSButton }.first { $0.action == #selector(AppDelegate.chooseFont) }!
+                    try expect(font.convert(font.bounds, to: content).minX >= viewport.maxX,
+                               "Fonts occupies the original right rail")
+                    for control in [app.actualButton!, app.resizeButton!] {
+                        let frame = control.convert(control.bounds, to: content)
+                        try expect(frame.midX < content.bounds.midX && frame.maxY <= viewport.minY,
+                                   "Actual Size and Resize occupy the original lower-left group below the canvas")
+                    }
                     let tools = controls.compactMap { $0 as? NSTextField }.first { $0.stringValue == "Tools" }!
                     try expect(abs(tools.convert(tools.bounds, to: content).maxY - viewport.maxY) < 1 && abs(app.snapButton.convert(app.snapButton.bounds, to: content).maxY - viewport.maxY) < 1,
                                "Tool and capture groups begin beside the top of the canvas rather than sinking to the bottom")

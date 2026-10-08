@@ -12,6 +12,9 @@ for ARCH in arm64; do
 done
 cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
+for NAME in SnapCrosshair SnapISight Font ActualSizeToggleOff ActualSizeToggleOn Resize SaveToHistoryArrow Hide SnapSnap SnapCancel; do
+  cp "$ROOT/original/Skitch.app/Contents/Resources/$NAME.png" "$APP/Contents/Resources/"
+done
 cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 ICONSET="$ROOT/build/OpenSkitch.iconset"
 mkdir -p "$ICONSET"

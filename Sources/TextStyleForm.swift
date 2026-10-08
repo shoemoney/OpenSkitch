@@ -1,10 +1,17 @@
 import AppKit
 
+private final class TextStyleContentView: NSView {
+    override var isFlipped: Bool { true }
+}
+
 /// Original NSFontPanel accessory. Nil means mixed and preserves each item.
 final class TextStyleForm: NSView {
     let outline = NSButton(checkboxWithTitle: "Text outline", target: nil, action: nil)
     let shadowControl = NSButton(checkboxWithTitle: "Text shadow", target: nil, action: nil)
     let defaults = NSButton(title: "Default Skitch Style", target: nil, action: nil)
+    private let overflow = NSScrollView()
+    private let content = TextStyleContentView()
+    private let stack = NSStackView()
     var onOutlineChange: ((Bool) -> Void)?
     var onShadowChange: ((Bool) -> Void)?
     var onDefaultRequested: (() -> Void)?
@@ -17,19 +24,39 @@ final class TextStyleForm: NSView {
         outline.target = self; outline.action = #selector(changeOutline)
         shadowControl.target = self; shadowControl.action = #selector(changeShadow)
         defaults.target = self; defaults.action = #selector(restoreDefault)
-        let stack = NSStackView(views: [outline, shadowControl, defaults])
+        for control in [outline, shadowControl, defaults] { stack.addArrangedSubview(control) }
         stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10
-        stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
-        for control in [outline, shadowControl, defaults] { control.font = .systemFont(ofSize: 20) }
+        stack.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(stack)
+        overflow.frame = bounds; overflow.autoresizingMask = [.width, .height]
+        overflow.drawsBackground = false; overflow.borderType = .noBorder
+        overflow.hasVerticalScroller = true; overflow.hasHorizontalScroller = true
+        overflow.autohidesScrollers = true; overflow.scrollerStyle = .overlay
+        overflow.documentView = content; addSubview(overflow)
+        for control in [outline, shadowControl, defaults] {
+            control.font = .systemFont(ofSize: 20)
+            control.setContentCompressionResistancePriority(.required, for: .horizontal)
+            control.setContentCompressionResistancePriority(.required, for: .vertical)
+        }
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
-            stack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -12),
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 10),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -10)
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -12),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: content.bottomAnchor, constant: -10)
         ])
         setChoices(outlined: outlined, shadowed: shadowed)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func layout() {
+        super.layout()
+        let controls = [outline, shadowControl, defaults]
+        let required = NSSize(width: (controls.map { $0.fittingSize.width }.max() ?? 0) + 24,
+                              height: controls.reduce(0) { $0 + $1.fittingSize.height } + 40)
+        let viewport = overflow.contentSize
+        content.setFrameSize(NSSize(width: max(required.width, viewport.width),
+                                    height: max(required.height, viewport.height)))
+        content.layoutSubtreeIfNeeded()
+    }
+
     func setChoices(outlined: Bool?, shadowed: Bool?) {
         outline.state = outlined.map { $0 ? .on : .off } ?? .mixed
         shadowControl.state = shadowed.map { $0 ? .on : .off } ?? .mixed
@@ -92,14 +119,21 @@ final class TextStyleForm: NSView {
     /// Leave room for the collection title and full family names at readable sizes.
     /// Apply on Show only; subsequent refreshes must not fight a user's divider drag.
     static func prepareFontPanelLayout(_ panel: NSFontPanel) {
-        func visit(_ view: NSView) {
-            if let split = view as? NSSplitView, split.isVertical, split.arrangedSubviews.count >= 2,
-               split.bounds.width >= 800, let first = split.arrangedSubviews.min(by: { $0.frame.minX < $1.frame.minX }) {
-                if first.frame.width < 360 { split.setPosition(360, ofDividerAt: 0) }
-            }
-            for child in view.subviews { visit(child) }
+        guard let content = panel.contentView, let accessory = panel.accessoryView else { return }
+        func contains(_ root: NSView, matching predicate: (NSView) -> Bool) -> Bool {
+            predicate(root) || root.subviews.contains { contains($0, matching: predicate) }
         }
-        if let content = panel.contentView { visit(content) }
+        // The loaded native panel has one outer vertical split: the family
+        // outline on the left, and font table plus accessory on the right.
+        // Do not touch nested preview/accessory splits or unknown hierarchies.
+        for case let split as NSSplitView in content.subviews {
+            let panes = split.arrangedSubviews.sorted { $0.frame.minX < $1.frame.minX }
+            guard split.isVertical, panes.count == 2, split.bounds.width >= 800,
+                  contains(panes[0], matching: { $0 is NSOutlineView }),
+                  contains(panes[1], matching: { $0 is NSTableView && !($0 is NSOutlineView) }),
+                  contains(panes[1], matching: { $0 === accessory }) else { continue }
+            if panes[0].frame.width < 360 { split.setPosition(360, ofDividerAt: 0) }
+        }
     }
 
     static func prepareFontPanel(_ panel: NSFontPanel) {
@@ -144,18 +178,29 @@ final class TextStyleForm: NSView {
                 visit(view)
                 if let popup = view as? NSPopUpButton {
                     popup.cell?.lineBreakMode = .byTruncatingTail
-                    // AppKit's collection menu supplies an attributed title,
-                    // which otherwise ignores the popup control's larger font.
+                    // Keep attributed menu styling and native flexible sizing.
+                    // sizeToFit here used to overwrite AppKit's toolbar allocation
+                    // and pin both minSize and maxSize to the same small width.
+                    popup.menu?.font = .systemFont(ofSize: 20)
                     for choice in popup.itemArray {
                         let title = NSMutableAttributedString(attributedString: choice.attributedTitle ?? NSAttributedString(string: choice.title))
-                        if title.length > 0 {
-                            title.addAttribute(.font, value: NSFont.systemFont(ofSize: 20), range: NSRange(location: 0, length: title.length))
-                            choice.attributedTitle = title
+                        var updates: [(NSRange, NSFont)] = []
+                        title.enumerateAttribute(.font, in: NSRange(location: 0, length: title.length)) { value, range, _ in
+                            let font = value as? NSFont ?? popup.font ?? .systemFont(ofSize: 20)
+                            if value == nil || font.pointSize < 20 {
+                                updates.append((range, NSFontManager.shared.convert(font, toSize: max(20, font.pointSize))))
+                            }
                         }
+                        for (range, font) in updates { title.addAttribute(.font, value: font, range: range) }
+                        if !updates.isEmpty { choice.attributedTitle = title }
                     }
-                    popup.sizeToFit()
-                    let required = NSSize(width: max(220, popup.frame.width), height: max(32, popup.frame.height))
-                    item.minSize = required; item.maxSize = required
+                    let measured = popup.intrinsicContentSize
+                    let minimum = NSSize(width: max(item.minSize.width, 220),
+                                         height: max(item.minSize.height, max(32, measured.height)))
+                    let maximum = NSSize(width: max(item.maxSize.width, minimum.width),
+                                         height: max(item.maxSize.height, minimum.height))
+                    if item.minSize != minimum { item.minSize = minimum }
+                    if item.maxSize != maximum { item.maxSize = maximum }
                 }
             }
             if let search = item as? NSSearchToolbarItem { visit(search.searchField) }
