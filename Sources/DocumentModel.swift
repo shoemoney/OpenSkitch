@@ -295,6 +295,20 @@ enum OriginalTextEffects {
     }
 }
 
+extension NSShadow {
+    /// Installs this shadow so a negative `shadowOffset.height` falls down the page (the original's
+    /// drawImage passes (dx, -dy)) on every surface. CoreGraphics reads the offset in the context's
+    /// base space and `NSShadow.set()` does not compensate. A flipped offscreen export keeps an
+    /// unflipped base (y runs against page y), but AppKit hands a view's draw(_:) a base that is
+    /// already flipped, so the same offset cast the shadow upward on screen. `onViewSurface`
+    /// is true only for drawing done inside an NSView.
+    func cast(in context: CGContext, onViewSurface: Bool) {
+        context.setShadow(offset: CGSize(width: shadowOffset.width,
+                                         height: onViewSurface ? -shadowOffset.height : shadowOffset.height),
+                          blur: shadowBlurRadius, color: (shadowColor as? NSColor)?.cgColor)
+    }
+}
+
 /// SkitchTextFieldEditor updateFrameSize (0x1c1e6): natural string width
 /// plus four points and two outline margins; glyph height plus eight points.
 /// Explicit line breaks determine rows, independently of a historical box width.
@@ -353,7 +367,7 @@ enum SketchRenderer {
         image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true,
                    hints: [.interpolation: NSImageInterpolation.high])
     }
-    static func draw(_ document: SketchDocument, includeBackground: Bool = true) {
+    static func draw(_ document: SketchDocument, includeBackground: Bool = true, onViewSurface: Bool = false) {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(rect: document.canvasRect).addClip()
         if includeBackground {
@@ -362,8 +376,8 @@ enum SketchRenderer {
             if let image = document.backgroundImage { drawImage(image, in: document.canvasRect) }
         }
         // Original Skitch text always floats above the drawing shapes.
-        for element in document.elements where element.kind != .text { draw(element) }
-        for element in document.elements where element.kind == .text { draw(element) }
+        for element in document.elements where element.kind != .text { draw(element, onViewSurface: onViewSurface) }
+        for element in document.elements where element.kind == .text { draw(element, onViewSurface: onViewSurface) }
         NSGraphicsContext.restoreGraphicsState()
     }
     static func path(for element: SketchElement) -> NSBezierPath {
@@ -383,7 +397,7 @@ enum SketchRenderer {
         }
         return path
     }
-    static func draw(_ element: SketchElement) {
+    static func draw(_ element: SketchElement, onViewSurface: Bool = false) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
         cg.concatenate(element.transform.cg)
@@ -392,7 +406,7 @@ enum SketchRenderer {
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
             shadow.shadowBlurRadius = 4
             shadow.shadowOffset = NSSize(width: 2, height: -3)
-            shadow.set()
+            shadow.cast(in: cg, onViewSurface: onViewSurface)
         }
         element.color.nsColor.set()
         switch element.kind {
@@ -418,7 +432,7 @@ enum SketchRenderer {
             // The recovered layout manager paints a positive-width outline,
             // then the colored fill. A combined negative-width stroke obscures
             // glyph interiors at the original thick outline sizes.
-            if element.shadowed { OriginalTextEffects.shadow().set() }
+            if element.shadowed { OriginalTextEffects.shadow().cast(in: cg, onViewSurface: onViewSurface) }
             cg.beginTransparencyLayer(auxiliaryInfo: nil)
             if element.outlined {
                 attributes[.strokeColor] = OriginalTextEffects.outlineColor(element.color)

@@ -16,7 +16,7 @@ private final class SketchTextLayoutManager: NSLayoutManager {
         context.setAlpha(annotationAlpha)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         context.setAlpha(1)
-        if annotationShadowed { OriginalTextEffects.shadow().set() }
+        if annotationShadowed { OriginalTextEffects.shadow().cast(in: context, onViewSurface: true) }
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         let characters = characterRange(forGlyphRange: glyphsToShow, actualGlyphRange: nil)
         // Rendering attributes are temporary: typing history and staged style
@@ -1339,8 +1339,8 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if !framePreview { drawCheckerboard(in: document.canvasRect) }
         var visible = documentIncludingPendingText()
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
-        SketchRenderer.draw(visible, includeBackground: !framePreview)
-        if let preview { SketchRenderer.draw(preview) }
+        SketchRenderer.draw(visible, includeBackground: !framePreview, onViewSurface: true)
+        if let preview { SketchRenderer.draw(preview, onViewSurface: true) }
         NSGraphicsContext.restoreGraphicsState()
         drawSelectionChrome()
         if framePreview {

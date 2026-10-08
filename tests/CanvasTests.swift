@@ -219,6 +219,7 @@ struct CanvasTests {
             ("Re-Snap validates before mutation and fits retina background", resnap),
             ("frame preview retains annotation pixels and capture boundary only", framePreview),
             ("Justype focus, native typing/recovery/undo, Escape commit and pointer clamp", justype),
+            ("shadows fall down-right on screen and in export", shadowDirection),
             ("native canvas visual proof", visualProof)
         ]
         let selectedTests = tests.filter { name, _ in
@@ -2500,10 +2501,7 @@ struct CanvasTests {
         var ink = 0
         for y in Int(textBounds.minY)..<Int(textBounds.maxY) { for x in Int(textBounds.minX)..<Int(textBounds.maxX) where channels(live, x, y).min()! < 0.8 { ink += 1 } }
         try expect(ink > 300, "Live text block must leave glyph pixels in its rect (found \(ink))")
-        // Full-frame parity with SketchRenderer, the export path. Shadows are switched off for this pass: the live view
-        // casts them on the opposite vertical side from the renderer, so including them would measure that known
-        // difference rather than guard everything else.
-        c.document.elements = c.document.elements.map { var element = $0; element.shadowed = false; return element }
+        // Full-frame parity with SketchRenderer, the export path, with every shadow (arrow and text) switched on.
         let plainLive = try rgba(try capture()), plainOffscreen = try rgba(SketchRenderer.bitmap(document: c.document))
         let chromeOuter = ellipse.rect.insetBy(dx: -8, dy: -8), chromeInner = ellipse.rect.insetBy(dx: 8, dy: 8)
         var compared = 0, mismatched = 0, worst: CGFloat = 0, firstMismatch = ""
@@ -2519,6 +2517,72 @@ struct CanvasTests {
         } }
         print("Visual proof: \(mismatched) of \(compared) pixels differ from the offscreen render, worst channel delta \(String(format: "%.3f", worst))")
         try expect(mismatched == 0, "Live canvas draw must match SketchRenderer output outside the selection chrome (\(mismatched) of \(compared) pixels differ, first \(firstMismatch))")
+    }
+    /// Centroid, in top-down pixel coordinates, of the darkness cast outside `shape`.
+    static func shadowCentroid(_ bytes: [UInt8], width: Int, height: Int, excluding shape: CGRect) -> CGPoint? {
+        var weight: CGFloat = 0, sumX: CGFloat = 0, sumY: CGFloat = 0
+        for y in 0..<height { for x in 0..<width where !shape.contains(CGPoint(x: x, y: y)) {
+            let i = (y * width + x) * 4
+            let dark = 1 - CGFloat(min(bytes[i], bytes[i + 1], bytes[i + 2])) / 255
+            weight += dark; sumX += dark * (CGFloat(x) + 0.5); sumY += dark * (CGFloat(y) + 0.5)
+        } }
+        return weight > 0 ? CGPoint(x: sumX / weight, y: sumY / weight) : nil
+    }
+    static func shadowDirection() throws {
+        let size = NSSize(width: 160, height: 120)
+        let c = canvas(size)
+        var shape = rectangle(CGRect(x: 60, y: 40, width: 40, height: 30), color: .systemBlue)
+        shape.shadowed = true
+        var text = SketchElement(kind: .text)
+        text.rect = CGRect(x: 20, y: 85, width: 120, height: 30)
+        text.text = "Shadow"; text.fontSize = 22; text.color = SketchColor(.white); text.outlined = false; text.shadowed = true
+        let window = host(c); defer { window.close() }
+        window.setContentSize(c.canvasSize)
+        let w = Int(size.width), h = Int(size.height)
+        func liveBytes() throws -> [UInt8] {
+            c.displayIfNeeded()
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
+                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0),
+                  let bytes = { () -> [UInt8]? in rep.size = c.bounds.size; c.cacheDisplay(in: c.bounds, to: rep); return rgbaBytes(rep, width: w, height: h) }()
+            else { throw Failure(description: "Native view capture") }
+            return bytes
+        }
+        func exportBytes() throws -> [UInt8] {
+            guard let rep = SketchRenderer.bitmap(document: c.document), let bytes = rgbaBytes(rep, width: w, height: h) else {
+                throw Failure(description: "Export render")
+            }
+            return bytes
+        }
+        let center = CGPoint(x: shape.rect.midX, y: shape.rect.midY)
+        let footprint = shape.rect.insetBy(dx: -shape.strokeWidth, dy: -shape.strokeWidth)
+        c.document.elements = [shape]
+        for (name, bytes) in [("on screen", try liveBytes()), ("in export", try exportBytes())] {
+            guard let centroid = shadowCentroid(bytes, width: w, height: h, excluding: footprint) else {
+                throw Failure(description: "Rect shadow \(name) cast no pixels outside the shape")
+            }
+            try expect(centroid.x > center.x + 0.3 && centroid.y > center.y + 0.3,
+                       "Rect shadow \(name) must fall below and right of the shape, centroid (\(centroid.x), \(centroid.y)) vs centre (\(center.x), \(center.y))")
+        }
+        // Text shadow (original offset is straight down): the extra darkness the shadow adds over the unshadowed glyphs
+        // must sit below the ink, and not drift sideways.
+        text.color = SketchColor(.black)
+        var plain = text; plain.shadowed = false
+        c.document.elements = [plain]
+        let plainLive = try liveBytes(), plainExport = try exportBytes()
+        c.document.elements = [text]
+        for (name, bytes, base) in [("on screen", try liveBytes(), plainLive), ("in export", try exportBytes(), plainExport)] {
+            var added: CGFloat = 0, addedX: CGFloat = 0, addedY: CGFloat = 0, ink: CGFloat = 0, inkX: CGFloat = 0, inkY: CGFloat = 0
+            for y in 0..<h { for x in 0..<w {
+                let i = (y * w + x) * 4
+                let extra = CGFloat(Int(base[i]) - Int(bytes[i])) / 255
+                if extra > 0 { added += extra; addedX += extra * CGFloat(x); addedY += extra * CGFloat(y) }
+                let dark = 1 - CGFloat(base[i]) / 255
+                ink += dark; inkX += dark * CGFloat(x); inkY += dark * CGFloat(y)
+            } }
+            try expect(added > 1 && ink > 1, "Text shadow \(name) cast no pixels")
+            let dx = addedX / added - inkX / ink, dy = addedY / added - inkY / ink
+            try expect(dy > 0.5 && abs(dx) < 1.5, "Text shadow \(name) must fall below the glyphs, offset from ink (\(dx), \(dy))")
+        }
     }
     /// Top-down premultiplied sRGB RGBA bytes of a bitmap, drawn 1:1 at the given pixel size.
     static func rgbaBytes(_ bitmap: NSBitmapImageRep, width: Int, height: Int) -> [UInt8]? {
