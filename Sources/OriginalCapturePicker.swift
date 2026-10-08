@@ -34,8 +34,16 @@ private func pickerCancellation() -> NSError {
 }
 
 /// Owns selection only: no screenshot, waiting, app activation, document, or history changes.
+struct OriginalCaptureScreenImage {
+    let image: CGImage
+    /// Pixels per point.
+    let scale: CGFloat
+}
+
 @MainActor
 final class OriginalCapturePicker: CaptureSelectionPicking {
+    /// Argument is the total overlay frame in AppKit global coordinates; nil leaves the lens grey.
+    typealias ScreenImage = @MainActor (NSRect) -> OriginalCaptureScreenImage?
     typealias DisplayFrames = @MainActor () -> [NSRect]
     typealias WindowRecords = @MainActor () -> [OriginalCaptureWindowRecord]
     typealias PanelFactory = @MainActor (NSRect) -> NSPanel
@@ -54,6 +62,7 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     private let displayFrames: DisplayFrames
     private let windowRecords: WindowRecords
     private let makePanel: PanelFactory
+    private let screenImage: ScreenImage
     private var session: Session?
     private var cleaningUp = false
     private var lifetime: OriginalCapturePicker?
@@ -64,7 +73,8 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     /// Records are CG global top-left, in WindowServer front-to-back order.
     /// Tests must inject a factory overriding ALL ordering/focus/close methods.
     init(displayFrames: DisplayFrames? = nil, windowRecords: WindowRecords? = nil,
-         makePanel: PanelFactory? = nil) {
+         makePanel: PanelFactory? = nil, screenImage: ScreenImage? = nil) {
+        self.screenImage = screenImage ?? { Self.nativeScreenImage($0) }
         self.displayFrames = displayFrames ?? { NSScreen.screens.map(\.frame) }
         self.windowRecords = windowRecords ?? { Self.nativeWindowRecords() }
         self.makePanel = makePanel ?? { frame in
@@ -121,6 +131,12 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
         view.onCancel = { [weak self] in
             self?.finish(.failure(pickerCancellation()), id: request.id)
         }
+        // Grabbed before the overlay is ordered in, so our own panels are never in the pixels.
+        if let grab = screenImage(total) {
+            view.magnifierImage = grab.image
+            view.magnifierImageScale = grab.scale
+        }
+        guard session?.id == request.id else { return }
         panel.contentView = view
         panel.makeFirstResponder(view)
         guard session?.id == request.id else { return }
@@ -204,6 +220,15 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
         cleaningUp = false
         lifetime = nil
         request.completion(result) // No overlays remain when the parent starts delay/capture.
+    }
+
+    /// Real screen grab for the magnifier. Never prompts: without Screen Recording it returns nil (grey lens).
+    private static func nativeScreenImage(_ frame: NSRect) -> OriginalCaptureScreenImage? {
+        guard CGPreflightScreenCaptureAccess(), let primary = NSScreen.screens.first else { return nil }
+        let cgRect = flip(frame, primaryTop: primary.frame.maxY)
+        guard let image = CGWindowListCreateImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]),
+              image.width > 0, frame.width > 0 else { return nil }
+        return OriginalCaptureScreenImage(image: image, scale: CGFloat(image.width) / frame.width)
     }
 
     private static func flip(_ rect: NSRect, primaryTop: CGFloat) -> NSRect {
@@ -317,6 +342,8 @@ final class OriginalCaptureSelectionView: NSView {
     override func mouseMoved(with event: NSEvent) {
         guard live else { return }
         cursorPoint = point(event); needsDisplay = true
+        // The preference can be switched on after the overlay appeared; mount on first movement.
+        mountMagnifierIfEnabled(pointer: cursorPoint!)
         updateMagnifier(pointer: cursorPoint!)
     }
     override func mouseDown(with event: NSEvent) {
