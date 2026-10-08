@@ -341,6 +341,7 @@ private enum CaptureTests {
             try await nativePhaseCancellation()
             try await nativeCleanupReentrantStops()
             try await nativeCountdownWithoutSelection()
+            try await fullscreenTargetsActiveDisplay()
             try await runningCancellation()
             try await lateExitShutdown()
             try await repeatedFrame()
@@ -408,7 +409,8 @@ private enum CaptureTests {
                      visibility: FakeApplicationVisibility? = nil,
                      selectionPicker: (any CaptureSelectionPicking)? = nil,
                      countdown: (any CaptureCountdownPresenting)? = nil,
-                     captureFlash: (any CaptureFlashPresenting)? = nil) throws -> Rig {
+                     captureFlash: (any CaptureFlashPresenting)? = nil,
+                     displays: [NSRect]? = nil, mouse: NSPoint? = nil) throws -> Rig {
         let directory = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
         let temporary = directory.appendingPathComponent("captures", isDirectory: true)
         let marker = directory.appendingPathComponent("helper.json")
@@ -417,7 +419,9 @@ private enum CaptureTests {
             : URL(fileURLWithPath: CommandLine.arguments[0]).standardizedFileURL
         let coordinator = CaptureCoordinator(testHelper: helper,
             arguments: ["--capture-test-helper", behavior, marker.path, fixture.path],
-            temporaryRoot: temporary, timeout: timeout, killDelay: killDelay,
+            temporaryRoot: temporary,
+            displays: displays ?? [NSRect(x: -1000, y: -1000, width: 3000, height: 3000)], mouseLocation: mouse,
+            timeout: timeout, killDelay: killDelay,
             applicationVisibility: visibility, selectionPicker: selectionPicker, countdown: countdown,
             captureFlash: captureFlash)
         coordinators.append(coordinator)
@@ -834,6 +838,37 @@ private enum CaptureTests {
         try expect(NSApp == nil, "reentrant cleanup fixtures must not construct native windows or NSApplication")
     }
 
+    /// Product rule: a snap covers only the display under the pointer (deviation from the original, which spanned all).
+    /// Displays are top-left global points; mouse is in the same space.
+    static func fullscreenTargetsActiveDisplay() async throws {
+        let primary = NSRect(x: 0, y: 0, width: 1440, height: 900)      // 2x laptop panel
+        let left = NSRect(x: -1920, y: -180, width: 1920, height: 1080) // 1x, left of primary
+        let above = NSRect(x: 100, y: -1200, width: 1280, height: 1200) // above primary
+        let right = NSRect(x: 1440, y: 0, width: 2560, height: 1440)    // 1x, wider
+        let all = [primary, left, above, right]
+        let cases: [(NSPoint, String)] = [
+            (NSPoint(x: 700, y: 400), "0,0,1440,900"),
+            (NSPoint(x: -500, y: 300), "-1920,-180,1920,1080"),
+            (NSPoint(x: 600, y: -500), "100,-1200,1280,1200"),
+            (NSPoint(x: 3000, y: 700), "1440,0,2560,1440"),
+            (NSPoint(x: 9999, y: 9999), "0,0,1440,900"), // pointer off every display falls back to primary
+        ]
+        for (mouse, region) in cases {
+            let rig = try make(displays: all, mouse: mouse)
+            let record = start(rig)
+            try await wait { record.results.count == 1 }
+            let args = try launch(rig)["arguments"] as! [String]
+            try expect(Array(args.dropLast()) == ["-x", "-t", "png", "-R", region],
+                       "fullscreen must target the display under the pointer \(mouse), not -m (got \(args))")
+            try expect(!args.contains("-m"), "fullscreen must never use -m (main display)")
+        }
+        let flash = FakeCaptureFlash()
+        let rig = try make(captureFlash: flash, displays: all, mouse: NSPoint(x: -500, y: 300))
+        let record = start(rig)
+        try await wait { record.results.count == 1 }
+        try expect(flash.plays.first?.frame == left, "fullscreen flash covers the active display only")
+    }
+
     static func nativeCountdownWithoutSelection() async throws {
         for mode in ["fullscreen", "frame"] {
             let journal = CapturePhaseJournal()
@@ -848,7 +883,7 @@ private enum CaptureTests {
             countdown.requests[0].completion()
             try await wait { record.results.count == 1 }
             let args = try launch(rig)["arguments"] as! [String]
-            let expected = mode == "fullscreen" ? ["-m", "-C"] : ["-R", "-50,20,160,90", "-C"]
+            let expected = mode == "fullscreen" ? ["-R", "-1000,-1000,3000,3000", "-C"] : ["-R", "-50,20,160,90", "-C"]
             try expect(Array(args.dropLast()) == ["-x", "-t", "png"] + expected, "timed fullscreen/frame must retain its mode and include the cursor")
             try expect(errorCode(record.results.first) == nil && record.results.count == 1 && record.allMain,
                        "native fullscreen/frame countdown must deliver exactly one successful main result")

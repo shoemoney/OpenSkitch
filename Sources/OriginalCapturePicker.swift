@@ -40,6 +40,16 @@ struct OriginalCaptureScreenImage {
     let scale: CGFloat
 }
 
+/// The "active desktop" of a snap: the display under the mouse pointer.
+/// DEVIATION from the original, whose crosshair overlay and fullscreen snap spanned all displays.
+enum OriginalCaptureActiveDisplay {
+    /// Frames must share one coordinate space with the pointer. Falls back to the first (primary) frame.
+    static func resolve(mouse: NSPoint?, in frames: [NSRect]) -> NSRect? {
+        if let mouse, let hit = frames.first(where: { $0.contains(mouse) }) { return hit }
+        return frames.first
+    }
+}
+
 @MainActor
 final class OriginalCapturePicker: CaptureSelectionPicking {
     /// Argument is the total overlay frame in AppKit global coordinates; nil leaves the lens grey.
@@ -47,12 +57,15 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     typealias DisplayFrames = @MainActor () -> [NSRect]
     typealias WindowRecords = @MainActor () -> [OriginalCaptureWindowRecord]
     typealias PanelFactory = @MainActor (NSRect) -> NSPanel
+    /// Pointer in AppKit global coordinates; resolved once when the snap starts.
+    typealias MouseLocation = @MainActor () -> NSPoint
 
     private final class Session {
         let id = UUID()
         let windowOnly: Bool
         let completion: (Result<OriginalCaptureSelection, Error>) -> Void
         var displays: [NSRect] = []
+        var primaryTop: CGFloat = 0
         init(windowOnly: Bool, completion: @escaping (Result<OriginalCaptureSelection, Error>) -> Void) {
             self.windowOnly = windowOnly
             self.completion = completion
@@ -63,6 +76,7 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     private let windowRecords: WindowRecords
     private let makePanel: PanelFactory
     private let screenImage: ScreenImage
+    private let mouseLocation: MouseLocation
     private var session: Session?
     private var cleaningUp = false
     private var lifetime: OriginalCapturePicker?
@@ -73,7 +87,9 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     /// Records are CG global top-left, in WindowServer front-to-back order.
     /// Tests must inject a factory overriding ALL ordering/focus/close methods.
     init(displayFrames: DisplayFrames? = nil, windowRecords: WindowRecords? = nil,
-         makePanel: PanelFactory? = nil, screenImage: ScreenImage? = nil) {
+         makePanel: PanelFactory? = nil, screenImage: ScreenImage? = nil,
+         mouseLocation: MouseLocation? = nil) {
+        self.mouseLocation = mouseLocation ?? { NSEvent.mouseLocation }
         self.screenImage = screenImage ?? { Self.nativeScreenImage($0) }
         self.displayFrames = displayFrames ?? { NSScreen.screens.map(\.frame) }
         self.windowRecords = windowRecords ?? { Self.nativeWindowRecords() }
@@ -98,9 +114,11 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
             finish(.failure(pickerFailure(2, "No valid display geometry is available.")), id: request.id)
             return
         }
-        request.displays = frames
-        // CrosshairScreenshot.totalFrame (0x1ce8e): one overlay spans ALL screens.
-        let total = frames.dropFirst().reduce(frames[0]) { $0.union($1) }
+        // DEVIATION: the original (CrosshairScreenshot.totalFrame, 0x1ce8e) spanned ALL
+        // screens. Here one overlay covers only the display under the pointer.
+        let total = OriginalCaptureActiveDisplay.resolve(mouse: mouseLocation(), in: frames) ?? frames[0]
+        request.displays = [total]
+        request.primaryTop = frames[0].maxY // Flip origin stays the primary display's top.
         let panel = makePanel(total)
         guard session?.id == request.id else {
             panel.orderOut(nil); panel.close()
@@ -161,7 +179,7 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
             finish(.failure(pickerCancellation()), id: id)
             return
         }
-        let primaryTop = request.displays[0].maxY
+        let primaryTop = request.primaryTop
         // CrosshairScreenshot.didSnap (0x1d0e3), kMinCrosshairSize at
         // 0x2606d4 = Float(3); DAT_0026045c = Float(3), read from Mach-O.
         if !request.windowOnly && (global.width > 3 || global.height > 3) {
@@ -180,7 +198,11 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
         let ignored = Set(panels.compactMap { $0.windowNumber > 0 ? CGWindowID($0.windowNumber) : nil })
         let records = windowRecords() // Refresh at SELECTION, not at begin.
         guard session?.id == id else { return } // Injected/provider callbacks may cancel/reenter.
-        let hit = Self.windowHit(in: records, ignoring: ignored, appKitProbe: probe, primaryTop: primaryTop)
+        let onActive = records.filter { record in
+            let rect = Self.flip(record.rect, primaryTop: primaryTop)
+            return request.displays.contains { rect.intersects($0) }
+        }
+        let hit = Self.windowHit(in: onActive, ignoring: ignored, appKitProbe: probe, primaryTop: primaryTop)
         if let hit {
             finish(.success(OriginalCaptureSelection(rect: hit.rect, windowID: hit.windowID,
                                                     modifiers: modifiers)), id: id)

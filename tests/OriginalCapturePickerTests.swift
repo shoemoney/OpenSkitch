@@ -37,6 +37,7 @@ private final class PickerRig {
     var displays = [NSRect(x: 0, y: 0, width: 1000, height: 800)]
     var records: [OriginalCaptureWindowRecord] = []
     var displayCalls = 0
+    var mouse = NSPoint(x: 500, y: 400)
     var recordCalls = 0
     var created: [PickerPanel] = []
     var results: [Result<OriginalCaptureSelection, Error>] = []
@@ -51,7 +52,7 @@ private final class PickerRig {
                                 backing: .buffered, defer: true)
         self.created.append(panel); self.onFactory?(panel)
         return panel
-    }, screenImage: { _ in nil })
+    }, screenImage: { _ in nil }, mouseLocation: { [unowned self] in self.mouse })
     var panel: PickerPanel { picker.panels.first as! PickerPanel }
     var view: OriginalCaptureSelectionView { panel.contentView as! OriginalCaptureSelectionView }
     func begin(windowOnly: Bool = false, onResult: ((Result<OriginalCaptureSelection, Error>) -> Void)? = nil) {
@@ -111,6 +112,7 @@ private enum OriginalCapturePickerTests {
         rendering()
         reachability()
         magnifier()
+        activeDisplayOnly()
         print("PASS OriginalCapturePickerTests (\(checks) checks; nonordering panels, local events, no desktop/permissions)")
     }
     private static func magnifier() {
@@ -163,9 +165,11 @@ private enum OriginalCapturePickerTests {
         let feeding = OriginalCapturePicker(displayFrames: { [NSRect(x: 0, y: 0, width: 600, height: 400), NSRect(x: 600, y: 0, width: 400, height: 800)] },
                                             windowRecords: { [] },
                                             makePanel: { PickerPanel(contentRect: $0, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true) },
-                                            screenImage: { asked.append($0); return OriginalCaptureScreenImage(image: screen, scale: 2) })
+                                            screenImage: { asked.append($0); return OriginalCaptureScreenImage(image: screen, scale: 2) },
+                                            mouseLocation: { NSPoint(x: 100, y: 100) })
         feeding.begin(windowOnly: false) { _ in }
-        expect(asked == [bounds], "Provider called once with the total overlay frame at begin")
+        expect(asked == [NSRect(x: 0, y: 0, width: 600, height: 400)],
+               "Provider called once with ONLY the active display rect (pointer defaults to it), not the union")
         let fed = feeding.panels[0].contentView as! OriginalCaptureSelectionView
         expect(fed.magnifierImage === screen && fed.magnifierImageScale == 2, "View carries the provided image and scale")
         defaults.set(true, forKey: G.defaultsKey)
@@ -175,6 +179,42 @@ private enum OriginalCapturePickerTests {
         expect(live.magnifier?.sourceImage === screen && live.magnifier?.imageScale == 2, "Mounted lens samples the provided image")
         feeding.cancel()
     }
+    private static func activeDisplayOnly() {
+        let primary = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let right = NSRect(x: 1000, y: 0, width: 600, height: 400)
+        let left = NSRect(x: -700, y: 100, width: 700, height: 500)
+        for (mouse, active) in [(NSPoint(x: 1200, y: 100), right), (NSPoint(x: -50, y: 300), left),
+                                (NSPoint(x: 500, y: 400), primary), (NSPoint(x: 5000, y: 5000), primary)] {
+            let rig = PickerRig(); rig.displays = [primary, right, left]; rig.mouse = mouse
+            rig.begin()
+            expect(rig.panel.frame == active && rig.created.count == 1, "Overlay frame equals the display under the pointer \(mouse)")
+            rig.picker.cancel()
+        }
+        // Magnifier provider receives only the active display rect.
+        var asked: [NSRect] = []
+        let feeding = OriginalCapturePicker(displayFrames: { [primary, right, left] }, windowRecords: { [] },
+                                            makePanel: { PickerPanel(contentRect: $0, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true) },
+                                            screenImage: { asked.append($0); return nil },
+                                            mouseLocation: { NSPoint(x: 1200, y: 100) })
+        feeding.begin(windowOnly: false) { _ in }
+        expect(asked == [right], "Magnifier provider receives only the active display rect")
+        feeding.cancel()
+        // Window click only offers windows on the active display; records are CG top-left (primary top = 800).
+        let onRight = OriginalCaptureWindowRecord(windowID: 71, rect: NSRect(x: 1100, y: 500, width: 300, height: 200))
+        let onPrimary = OriginalCaptureWindowRecord(windowID: 72, rect: NSRect(x: 100, y: 100, width: 300, height: 200))
+        let rig = PickerRig(); rig.displays = [primary, right]; rig.mouse = NSPoint(x: 1200, y: 100)
+        rig.records = [onPrimary, onRight]
+        rig.begin(windowOnly: true)
+        rig.click(NSPoint(x: 1200, y: 200))
+        expect(rig.selection.windowID == 71, "Window on the active display is offered")
+        let edge = OriginalCaptureWindowRecord(windowID: 73, rect: NSRect(x: 900, y: 500, width: 100, height: 200))
+        let edgeRig = PickerRig(); edgeRig.displays = [primary, right]; edgeRig.mouse = NSPoint(x: 1200, y: 100)
+        edgeRig.records = [edge]
+        edgeRig.begin(windowOnly: true)
+        edgeRig.click(NSPoint(x: 999.5, y: 200))
+        expect(edgeRig.error.code == NSUserCancelledError, "Window on the neighbouring display is not offered even when the probe touches it")
+    }
+
     private static func cleaned(_ rig: PickerRig, _ count: Int = 1) {
         expect(!rig.picker.isPicking && rig.picker.panels.isEmpty && rig.results.count == count,
                "One result, selection no longer busy, overlays removed")
@@ -193,16 +233,17 @@ private enum OriginalCapturePickerTests {
                    "Parent countdown/capture callback sees complete overlay cleanup")
         }
         let panel = rig.panel
-        expect(panel.frame == NSRect(x: -600, y: -400, width: 1600, height: 1600), "Original overlay union covers left/above/below displays")
+        expect(panel.frame == NSRect(x: 0, y: 0, width: 1000, height: 800),
+               "Overlay covers ONLY the display under the pointer (deviation: original spanned the union)")
         expect(panel.fronts == 1 && panel.keys == 1 && panel.canBecomeKey && !panel.canBecomeMain,
                "Local keyboard input uses temporary nonactivating key panel")
         expect(panel.styleMask.contains(.nonactivatingPanel) && !panel.canHide && !panel.hidesOnDeactivate,
                "App hiding and deactivation cannot intentionally hide the overlay")
         expect(panel.level.rawValue == Int(CGWindowLevelForKey(.popUpMenuWindow)) + 100 && !panel.hasShadow && !panel.isOpaque && !panel.isMovable,
                "Recovered popup level+100, transparency, no shadow or window dragging")
-        rig.drag(NSPoint(x: -300.9, y: -150.8), NSPoint(x: 450.7, y: 990.9), downFlags: [.option], upFlags: [.shift, .command])
-        expect(rig.selection.rect == NSRect(x: -300, y: -190, width: 750, height: 1141),
-               "Local truncation/+1 x and PRIMARY top baseline, not union top, across all displays")
+        rig.drag(NSPoint(x: 100.9, y: 100.9), NSPoint(x: 450.7, y: 700.9), downFlags: [.option], upFlags: [.shift, .command])
+        expect(rig.selection.rect == NSRect(x: 101, y: 100, width: 349, height: 600),
+               "Local truncation/+1 x and PRIMARY top baseline")
         expect(rig.selection.windowID == nil && rig.selection.modifiers == [.shift, .command],
                "Dragged region and modifiers at selection, independent of initial Option")
         expect(rig.recordCalls == 0 && rig.displayCalls == 1, "Region selection never needs a window list or another wait")
@@ -265,9 +306,10 @@ private enum OriginalCapturePickerTests {
         }
         let left = PickerRig()
         left.displays += [NSRect(x: -600, y: -100, width: 600, height: 500)]
+        left.mouse = NSPoint(x: -300, y: 200)
         left.begin(); left.click(NSPoint(x: -300, y: 200))
         expect(left.selection.rect == NSRect(x: -600, y: 400, width: 600, height: 500) && left.selection.windowID == nil,
-               "Original empty-background click falls back to clicked display, not main/union")
+               "Empty-background click falls back to the active display (here the secondary), flipped against the PRIMARY top")
         cleaned(left)
         let gap = PickerRig()
         gap.displays += [NSRect(x: 1200, y: 0, width: 800, height: 800)]

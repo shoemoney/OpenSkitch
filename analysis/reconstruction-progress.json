@@ -5242,7 +5242,7 @@
       ],
       "required_original_behavior": "Track main/selected screens, screen origins and cross-display overlay/capture rectangles.",
       "status": "implemented_partial",
-      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks.",
+      "implemented_scope": "Owned native region/window selection, selection-time Shift and recovered six-second Float32 countdown with original PNGs/sound. Manual Fullscreen and sticky Frame Shift timing; explicit global origin policy. Cancellation shares operation identity and acknowledges only after resource cleanup. Controlled tests cover geometry, timer sequence, reentrancy and late callbacks. RECORDED DEVIATION from the original (which spanned all displays): a snap uses the active desktop, the display under the pointer at snap start. Fullscreen (screencapture -R with that display's rect, not -m) and the crosshair overlay/magnifier feed cover only that display; window click offers only windows on it; regions can no longer span two screens; Frame mode and timed variants follow the same rule. Controlled tests inject the pointer and display frames, including displays left of and above the primary and mixed 1x/2x sizes.",
       "source_evidence": [
         {
           "path": "Sources/Capture.swift",
