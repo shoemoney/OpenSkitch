@@ -198,7 +198,7 @@ final class PublishingDestinationStore {
 
     /// The Keychain item the untouched legacy destination.json still points at. An older build would read
     /// it after a downgrade, so it is never deleted here.
-    private func legacyCredentialID() -> String? {
+    func legacyCredentialID() -> String? {
         guard let data = try? Data(contentsOf: legacyFile), data.count <= 65536,
               let legacy = try? JSONDecoder().decode(PublishingSettings.self, from: data) else { return nil }
         return legacy.credentialID

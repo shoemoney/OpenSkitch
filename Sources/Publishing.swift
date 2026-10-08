@@ -908,6 +908,7 @@ public final class PublishingCoordinator: NSObject {
     func buildSettings() throws -> (NSPanel, PublishingDestinationsView) {
         let panel = makePanel(title: "Upload Destinations", width: 820, height: 860)
         let view = PublishingDestinationsView(list: try store.load())
+        view.legacyCredentialID = store.legacyCredentialID()
         view.translatesAutoresizingMaskIntoConstraints = false
         panel.contentView?.addSubview(view)
         if let content = panel.contentView {

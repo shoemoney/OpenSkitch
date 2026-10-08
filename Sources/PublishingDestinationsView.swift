@@ -116,18 +116,24 @@ final class PublishingDestinationsView: NSView, NSTableViewDataSource, NSTableVi
     }
     func showStatus(_ text: String) { status.stringValue = text; formStatus.stringValue = text }
 
+    /// Set by the coordinator: the credential an older build's destination.json still points at.
+    var legacyCredentialID: String?
+
     @objc func addTapped() { showForm(for: nil) }
     @objc func editTapped() { if let selected = selectedDestination { showForm(for: selected) } }
     @objc func removeTapped() {
         guard let selected = selectedDestination else { return }
-        let prompt = Self.removalPrompt(for: selected, in: list)
+        let prompt = Self.removalPrompt(for: selected, in: list, legacyCredentialID: legacyCredentialID)
         guard confirmRemoval(prompt.title, prompt.detail) else { return }
         onRemove?(selected.id)
     }
 
     /// Names the destination, says its saved secret goes with it, and says who becomes the default.
-    static func removalPrompt(for destination: PublishingDestination, in list: PublishingDestinationList) -> (title: String, detail: String) {
-        var detail = destination.settings.storesSecretInKeychain
+    static func removalPrompt(for destination: PublishingDestination, in list: PublishingDestinationList,
+                              legacyCredentialID: String? = nil) -> (title: String, detail: String) {
+        // The Keychain item an older build's destination.json still uses is kept for downgrades.
+        let keepsSecret = legacyCredentialID != nil && legacyCredentialID == destination.settings.credentialID
+        var detail = destination.settings.storesSecretInKeychain && !keepsSecret
             ? "Its saved password or secret key is removed from the Keychain too. This cannot be undone."
             : "Any saved settings for it are removed. This cannot be undone."
         if destination.id == list.defaultDestination?.id {

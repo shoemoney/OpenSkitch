@@ -255,6 +255,15 @@ enum PublishingDestinationsTests {
         try migratedStore.remove(edited.id)
         try expect(secrets2.items[dav.credentialID] == "dav-password" && secrets2.items.count == 1, "removing it deletes only the new item")
         try expect(try Data(contentsOf: directory2.appendingPathComponent("destination.json")) == davBytes, "the legacy file is still untouched")
+        // Removing a freshly migrated, never-edited destination must keep the item the legacy file uses.
+        let directoryLegacy = try temporaryDirectory(), secrets4 = PublishingMemorySecrets()
+        try secrets4.add("dav-password", id: dav.credentialID)
+        try davBytes.write(to: directoryLegacy.appendingPathComponent("destination.json"))
+        let fresh = PublishingDestinationStore(directory: directoryLegacy, secrets: secrets4)
+        let unedited = try fresh.load().destinations[0]
+        try fresh.remove(unedited.id)
+        try expect(secrets4.items[dav.credentialID] == "dav-password", "removing an unedited migrated destination keeps the legacy Keychain item")
+        try expect(try Data(contentsOf: directoryLegacy.appendingPathComponent("destination.json")) == davBytes, "and leaves the legacy file byte-identical")
 
         // Isolation: SKITCH_APP_SUPPORT puts the store inside that folder with in-memory secrets.
         let support = try temporaryDirectory()
@@ -291,6 +300,8 @@ enum PublishingDestinationsTests {
         try expect(!promptOther.detail.contains("becomes the default") && !promptOther.detail.contains("Keychain"), "a non-default, secret-free destination gets no default or Keychain wording")
         let promptLast = PublishingDestinationsView.removalPrompt(for: keyed, in: PublishingDestinationList(defaultID: keyed.id, destinations: [keyed]))
         try expect(promptLast.detail.contains("only destination"), "removing the last destination says so")
+        let promptLegacy = PublishingDestinationsView.removalPrompt(for: keyed, in: two, legacyCredentialID: keyed.settings.credentialID)
+        try expect(!promptLegacy.detail.contains("Keychain"), "a secret the legacy file still uses is not claimed to be removed")
 
         let empty = try PublishingDestinationStore(directory: try temporaryDirectory(), secrets: PublishingMemorySecrets()).load()
         try expect(empty.destinations.isEmpty && empty.defaultDestination == nil, "a fresh install has no destinations")
