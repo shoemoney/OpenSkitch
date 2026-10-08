@@ -21,9 +21,9 @@ Modern draws its icons with Font Awesome Pro when it is available and falls back
 
 ## Releases
 
-Release builds come from `sh tools/release.sh VERSION`, which refuses a VERSION that differs from `Info.plist`, builds without Font Awesome Pro, fails if any font file is inside the bundle, verifies the signature and writes `build/OpenSkitch-VERSION-arm64.zip` plus `build/release-manifest.json` (version, git SHA, binary and zip SHA-256).
+Release builds come from `sh tools/release.sh VERSION` on a clean tree. It refuses a VERSION that differs from `Info.plist`, refuses uncommitted changes, builds without Font Awesome Pro, copies the bundle to a private staging directory, fails if that copy contains any font file (by extension or magic bytes, anywhere in the bundle), verifies the signature and writes `build/OpenSkitch-VERSION-arm64.zip` plus `build/release-manifest.json` (version, git SHA, binary and zip SHA-256).
 
-Release builds are ad-hoc signed and not notarized, so Gatekeeper blocks the first launch of a downloaded copy. Right-click the app and choose Open, or run `xattr -d com.apple.quarantine OpenSkitch.app` once. Font Awesome Pro is never shipped: public builds draw the Modern appearance with SF Symbols.
+Release builds are ad-hoc signed and not notarized, so Gatekeeper blocks the first launch of a downloaded copy. First verify the download: `shasum -a 256 OpenSkitch-VERSION-arm64.zip` must equal `zip_sha256` in the release manifest. Then, on macOS 15 and newer, right-click > Open no longer bypasses Gatekeeper: try to open the app once, then go to System Settings > Privacy & Security and choose Open Anyway. Alternatively remove the quarantine flag with `xattr -dr com.apple.quarantine OpenSkitch.app`. Font Awesome Pro is never shipped: public builds draw the Modern appearance with SF Symbols.
 
 ## Current functionality
 
