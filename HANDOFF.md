@@ -24,6 +24,7 @@ Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in cod
 | Release scaffolding: `sh tools/release.sh VERSION` (clean-tree check, staged copy, `tools/check-no-fonts.py`, codesign verify, zip, `build/release-manifest.json`), `OPENSKITCH_NO_PRO_FONTS=1` in `build.sh`, About panel reads the bundle version | `tools/release.sh`, `tools/build.sh` |
 | Wipe resets crop/pan/render size when no snapshot remains (original `wipeTA`) | `Canvas.resetViewport` |
 | Frame mode: no window shadow, screen-saver level, alpha 0.8, pre-Frame values restored on leave, both appearances | `AppDelegate.enterFrame`/`leaveFrame` |
+| Webpost one-click upload: Webpost…/Publish Image…/Snap & Upload upload immediately (no sheet); right-click menu = destinations, settings, macOS Share | `AppDelegate.publishImage`, `PublishingCoordinator.publish` |
 | Global hotkeys: Upload (default Command+Shift+Control+5) and Show Skitch (no default); a cancelled capture never publishes | `Sources/GlobalHotkeys.swift`, `AppDelegate.snapAndUpload` |
 | Welcome document: first launch with an empty app-support folder opens bundled `firstlaunch.skitch` as unsaved "Welcome", once (`FirstLaunchDone` marker) | `Sources/App.swift` |
 | Line tool Option polygon: holding Option keeps it open, releasing Option ends it | `Sources/Canvas.swift` |

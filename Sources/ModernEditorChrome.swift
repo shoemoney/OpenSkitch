@@ -103,7 +103,12 @@ final class ModernEditorChrome: NSView {
         wipeButton = make("Wipe", .broom, actions.wipe)
         actualButton = make("Actual Size", .maximize, actions.actualSize)
         resizeButton = make("Resize…", .rulerCombined, actions.resize)
-        shareButton = make("Webpost…", .arrowUpFromBracket, actions.share)
+        // Icon-only upload command: a native SF Symbol, no title, so nothing but the explicit label is read aloud.
+        shareButton = GlassChromeButton(title: "", target: actions.target, action: actions.share)
+        GlassChrome.useExtraLarge(shareButton)
+        shareButton.image = NSImage(systemSymbolName: Self.uploadSymbolName, accessibilityDescription: "Upload")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: GlassChrome.Metrics.iconPointSize, weight: .regular))
+        shareButton.imagePosition = .imageOnly
         super.init(frame: .zero)
         build(actions: actions)
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -150,6 +155,8 @@ final class ModernEditorChrome: NSView {
     }
 
     // MARK: construction
+
+    static let uploadSymbolName = "icloud.and.arrow.up"
 
     private func register(_ surface: GlassSurfaceView, for views: NSView...) {
         if !surfaceList.contains(where: { $0 === surface }) { surfaceList.append(surface) }
@@ -336,8 +343,8 @@ final class ModernEditorChrome: NSView {
         let dragSurface = GlassChrome.surface(controls.dragExportView, shape: .rounded(Metrics.dragRadius), accessibility: accessibility,
                                               size: NSSize(width: 112, height: Metrics.commandHeight))
         register(dragSurface, for: controls.dragExportView)
-        let shareSurface = pill(shareButton)
-        shareButton.setAccessibilityLabel("Share drawing")
+        let shareSurface = pill(shareButton, width: Metrics.commandHeight + 12)
+        shareButton.setAccessibilityLabel("Upload to destination")
         let footerGroup = GlassChrome.group([actualSurface, resizeSurface, nameSurface, formatSurface, dragSurface, shareSurface],
                                             orientation: .horizontal, identifier: "GlassFooterRow")
         if let stack = footerGroup.contentView as? NSStackView {

@@ -818,8 +818,7 @@ private enum GlassChromeTests {
         for (button, title, hit) in [(chrome.hideButton, "Hide", "hide"), (chrome.photosButton, "Photos", "photos"), (chrome.saveButton, "Save", "saveHistory"),
                                      (chrome.historyButton, "History", "showHistory"), (chrome.snapButton, "Snap", "snap"),
                                      (chrome.cancelFrameButton, "Cancel", "cancelFrame"), (chrome.fontButton, "Font", "font"), (chrome.undoButton, "Undo", "undo"),
-                                     (chrome.wipeButton, "Wipe", "wipe"), (chrome.actualButton, "Actual Size", "actualSize"), (chrome.resizeButton, "Resize…", "resize"),
-                                     (chrome.shareButton, "Webpost…", "share")] {
+                                     (chrome.wipeButton, "Wipe", "wipe"), (chrome.actualButton, "Actual Size", "actualSize"), (chrome.resizeButton, "Resize…", "resize")] {
             expect(button.title == title, "\(label): \(title) keeps its classic title")
             expect(button.controlSize == .extraLarge, "\(label): \(title) uses Apple's Extra Large control size")
             expect(button.icon != nil && button.image != nil && button.imagePosition == .imageLeading, "\(label): \(title) shows icon and label")
@@ -834,7 +833,10 @@ private enum GlassChromeTests {
             expect(chrome.surface(for: button)?.isSelected == false, "\(label): clicking \(title) never leaves its glass selected")
         }
         chrome.actualButton.state = .off
-        expect(chrome.shareButton.accessibilityLabel() == "Share drawing", "\(label): Webpost keeps its classic label")
+        expect(chrome.shareButton.accessibilityLabel() == "Upload to destination" && chrome.shareButton.title.isEmpty && chrome.shareButton.imagePosition == .imageOnly,
+               "\(label): the upload button is icon-only with an explicit label")
+        rig.target.hits.removeAll(); chrome.shareButton.performClick(nil)
+        expect(rig.target.hits == ["share"], "\(label): the upload button sends its action")
         expect(chrome.snapButton.toolTip == snapToolTip, "\(label): Snap keeps its classic tooltip")
         expect(chrome.surface(for: chrome.snapButton)?.prominence == .primary && chrome.snapButton.isPrimary, "\(label): Snap is the single primary command")
         let primaries = surfaces(rig).filter { $0.prominence == .primary }

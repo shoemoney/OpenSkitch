@@ -164,11 +164,15 @@ final class DragThumbnailView: NSView {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, NSFontChanging, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, NSFontChanging, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate, @preconcurrency NSMenuDelegate {
     var window: NSWindow!
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
     let capture = CaptureCoordinator()
     let publishing = PublishingCoordinator()
+    var webpostButton: NSButton?
+    /// Test seams: replace the real NSSharingServicePicker and the Sharing Settings sheet.
+    var sharePickerPresenter: ((NSImage, NSView?) -> Void)?
+    var sharingSettingsPresenter: (() -> Void)?
     let historyRemoteDeletion = HistoryRemoteDeletionCoordinator()
     let hotkeys = GlobalHotkeyManager()
     var generalPreferences: OriginalGeneralPreferences { OriginalGeneralPreferences(defaults: .standard) }
@@ -802,6 +806,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         configureDragExport(drag)
         let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Share drawing")
+        configureWebpostButton(webpost)
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
         dragFormatControl.setAccessibilityLabel("Drag Me format")
@@ -892,7 +897,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         for (offset, item) in [hideOthers, showAll, NSMenuItem.separator()].enumerated() {
             item.target = nil; appMenu.insertItem(item, at: quitIndex + offset)
         }
-        let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Print…", #selector(printImage), "p")])
+        let file = menu("File", items: [("New Blank", #selector(newFile), "n"), ("Open…", #selector(openFile), "o"), ("Photos…", #selector(showPhotos), ""), ("Save Editable Document", #selector(saveFile), "s"), ("Save As…", #selector(saveAs), "S"), ("Save to History", #selector(saveHistory), ""), ("History", #selector(showHistory), ""), ("Export…", #selector(exportFile), "e"), ("Publish Image…", #selector(publishImage), ""), ("Share…", #selector(shareFromMenu), ""), ("Print…", #selector(printImage), "p")])
         let close = NSMenuItem(title: "Close", action: #selector(closeCurrentWindow), keyEquivalent: "w")
         close.target = self; file.insertItem(close, at: 3)
         let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
@@ -1552,11 +1557,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         writeLayoutEvidence()
     }
     @objc func printImage() { let view = NSImageView(frame: NSRect(origin: .zero,size: canvas.outputSize)); view.image = canvas.renderedImage(); view.imageScaling = .scaleProportionallyUpOrDown; let p = NSPrintInfo.shared.copy() as! NSPrintInfo; p.horizontalPagination = .fit; p.verticalPagination = .fit; NSPrintOperation(view: view, printInfo: p).run() }
-    @objc func share(_ sender: NSButton) {
+    static let webpostHelp = "Upload and copy link · Right-click for destinations"
+    struct UploadDestination: Equatable { let id: String; let title: String }
+    /// Left-click uploads to the default destination; right-click or Control-click shows the destination menu.
+    func configureWebpostButton(_ button: NSButton) {
+        webpostButton = button
+        button.toolTip = Self.webpostHelp
+        let menu = NSMenu(); menu.autoenablesItems = false; menu.delegate = self
+        button.menu = menu
+        (button as? OriginalActionButton)?.showMenuOnLeftClick = false
+        rebuildUploadMenu(menu)
+    }
+    @objc func share(_ sender: NSButton) { publishImage() }
+    func menuNeedsUpdate(_ menu: NSMenu) { if menu === webpostButton?.menu { rebuildUploadMenu(menu) } }
+    func rebuildUploadMenu(_ menu: NSMenu) {
+        menu.removeAllItems()
+        let title = publishing.destinationTitle
+        let destinations = title.map { [UploadDestination(id: "default", title: $0)] } ?? []
+        uploadDestinationMenuItems(destinations: destinations, defaultID: destinations.first?.id).forEach(menu.addItem)
+    }
+    /// Destinations (default checkmarked), then Destination Settings… and Share with macOS…. More entries just add rows.
+    func uploadDestinationMenuItems(destinations: [UploadDestination], defaultID: String?) -> [NSMenuItem] {
+        var items: [NSMenuItem] = []
+        if destinations.isEmpty {
+            let none = NSMenuItem(title: "No destination configured", action: nil, keyEquivalent: ""); none.isEnabled = false
+            items.append(none)
+        }
+        for destination in destinations {
+            let item = NSMenuItem(title: destination.title, action: #selector(chooseUploadDestination(_:)), keyEquivalent: "")
+            item.target = self; item.representedObject = destination.id
+            item.state = destination.id == defaultID ? .on : .off
+            items.append(item)
+        }
+        items.append(.separator())
+        let settings = NSMenuItem(title: "Destination Settings…", action: #selector(openDestinationSettings), keyEquivalent: ""); settings.target = self
+        let share = NSMenuItem(title: "Share with macOS…", action: #selector(shareFromMenu), keyEquivalent: ""); share.target = self
+        items.append(contentsOf: [settings, share])
+        return items
+    }
+    @objc func chooseUploadDestination(_ item: NSMenuItem) { if let id = item.representedObject as? String { setDefaultDestination(id) } }
+    /// Hook for multiple destinations; storage holds exactly one today, so choosing it changes nothing.
+    func setDefaultDestination(_ id: String) {}
+    @objc func openDestinationSettings() {
+        if let sharingSettingsPresenter { sharingSettingsPresenter() } else { publishing.showSettings(relativeTo: window) }
+    }
+    @objc func shareFromMenu() { showSharePicker(relativeTo: webpostButton) }
+    func showSharePicker(relativeTo anchor: NSView?) {
         guard let snapshot = try? historySnapshot() else { return }
         pickerSnapshot = ShareSnapshot(snapshot: snapshot, name: safeName(), generation: documentGeneration)
-        let picker = NSSharingServicePicker(items: [canvas.renderedImage()]); picker.delegate = self; sharePicker = picker
-        picker.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
+        let image = canvas.renderedImage()
+        if let sharePickerPresenter { sharePickerPresenter(image, anchor); return }
+        let picker = NSSharingServicePicker(items: [image]); picker.delegate = self; sharePicker = picker
+        guard let anchor = anchor ?? window.contentView else { return }
+        picker.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
     }
     func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, delegateFor sharingService: NSSharingService) -> NSSharingServiceDelegate? {
         if let snapshot = pickerSnapshot { sharingSnapshots[ObjectIdentifier(sharingService)] = snapshot }
@@ -1635,12 +1688,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func shortcutSettings() { hotkeys.showSettings(attachedTo: window) }
     @objc func sharingSettings() { publishing.showSettings(relativeTo: window) }
     @objc func publishImage() {
+        guard !terminationStarted else { return }
+        if publishing.isBusy { status.stringValue = "An upload is already running…"; return }
+        guard publishing.isConfigured else {
+            openDestinationSettings(); return
+        }
         guard let data = canvas.imageData(format: "png"), let snapshot = try? historySnapshot() else { return }
         let name = safeName(), generation = documentGeneration
         let fileName = name+"-"+UUID().uuidString.lowercased()+".png"
         let binding = try? historyRemoteDeletion.captureBinding(fileName: fileName)
-        status.stringValue = "Publishing image…"
-        publishing.publish(data: data, fileName: fileName, presenting: window) { [weak self] result in
+        status.stringValue = "Uploading \(name)…"
+        publishing.publish(data: data, fileName: fileName) { [weak self] result in
             // Publishing guarantees delivery on main, including nested AppKit
             // termination loops. Archive success before its shutdown barrier can
             // acknowledge completion; an extra Task could run after app exit.
@@ -1659,7 +1717,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard !terminationStarted else { return }
         switch result {
         case .success(let url):
-            status.stringValue = ["http", "https"].contains(url.scheme ?? "") ? "Published image" : "Uploaded image to destination"
+            if publishing.lastTransferCopiedLink { status.stringValue = "Link copied: \(url.absoluteString)" }
+            else { status.stringValue = ["http", "https"].contains(url.scheme ?? "") ? "Published image" : "Uploaded image to destination" }
         case .failure(let error):
             updateStatus()
             if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSUserCancelledError { self.error(error) }
