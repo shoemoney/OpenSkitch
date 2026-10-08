@@ -261,6 +261,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         didSet {
             finishTextEditing(); needsDisplay = true; resetCursorRects()
             if oldValue != tool {
+                endPolygon(commit: true)
                 if !togglingPencil { pencilReturnTool = nil }
                 onToolChange?(tool)
             }
@@ -385,9 +386,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var strokeSamples: [StrokeSample] = []
     private var drawingPencil = false
     private var drawingArrow = false
-    /// Line left open by an Option release (original ToolLine::mouseUp, decompiled.c:312123-312137); the next drag appends to it.
-    private var openPolygon: (id: UUID, points: [CGPoint])?
-    private var extendingPolygon: (index: Int, base: [CGPoint])?
+    /// ToolLine polygon mode (decompiled.c setModifiers 311687): armed while Option is down. Each mouseDown pushes a vertex,
+    /// mouseMoved drags a rubber-band tip, mouseUp does nothing, and releasing Option (or leaving the tool) commits one line.
+    private var polygonArmed = false
+    private var polygonVertices: [CGPoint] = []
+    private var polygonTip: CGPoint?
+    private var polygonBefore: EditorState?
     private var arrowEnd: CGPoint = .zero
     private var tabletEraser = false
     private var textEditor: SketchTextEditor?
@@ -1187,7 +1191,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         document = file.document
         panBackground = file.canvasPanBackground
         selection.removeAll(); cropRect = nil; preview = nil
-        resetGesture()
+        endPolygon(commit: false); resetGesture()
         if clearingUndo { editingUndoManager.removeAllActions() }
         onChange?()
     }
@@ -1351,6 +1355,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         if let id = editingTextID { visible.elements.removeAll { $0.id == id } }
         SketchRenderer.draw(visible, includeBackground: !framePreview, onViewSurface: true)
         if let preview { SketchRenderer.draw(preview, onViewSurface: true) }
+        if let polygon = polygonPreview() { SketchRenderer.draw(polygon, onViewSurface: true) }
         NSGraphicsContext.restoreGraphicsState()
         drawSelectionChrome()
         if framePreview {
@@ -1421,7 +1426,38 @@ final class CanvasView: NSView, NSTextViewDelegate {
             preview = arrowPreview(style: style, modifiers: event.modifierFlags)
             needsDisplay = true
         }
+        if tool == .line {
+            if event.modifierFlags.contains(.option) {
+                if dragMode == .none { polygonArmed = true }
+            } else { endPolygon(commit: true) }
+        }
         window?.invalidateCursorRects(for: self)
+    }
+    private func polygonPoint(_ point: CGPoint, shift: Bool) -> CGPoint {
+        guard shift, let last = polygonVertices.last else { return point }
+        let sx = point.x - last.x, sy = point.y - last.y
+        let angle = (atan2(sy, sx) / (.pi / 4)).rounded() * (.pi / 4)
+        let length = hypot(sx, sy)
+        return CGPoint(x: last.x + cos(angle) * length, y: last.y + sin(angle) * length)
+    }
+    private func polygonPreview() -> SketchElement? {
+        guard polygonArmed, let tip = polygonTip, !polygonVertices.isEmpty else { return nil }
+        var element = styledElement(.line)
+        element.points = polygonVertices + [tip]
+        element.rect = element.points.reduce(CGRect.null) { $0.union(CGRect(origin: $1, size: .zero)) }
+        return element
+    }
+    /// ToolLine::setModifiers/leaveTool: the rubber-band tip is dropped and the vertices become one Path in one Undo step.
+    private func endPolygon(commit: Bool) {
+        let vertices = polygonVertices, before = polygonBefore
+        polygonArmed = false; polygonVertices = []; polygonTip = nil; polygonBefore = nil
+        defer { needsDisplay = true }
+        guard commit, let before, vertices.count >= 2 else { return }
+        var element = styledElement(.line)
+        element.points = vertices
+        element.rect = vertices.reduce(CGRect.null) { $0.union(CGRect(origin: $1, size: .zero)) }
+        document.elements.append(element); selection = [element.id]
+        recordUndo(before, name: "Draw Line")
     }
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
@@ -1435,11 +1471,18 @@ final class CanvasView: NSView, NSTextViewDelegate {
             owner: self, userInfo: nil)
         addTrackingArea(area); pointerTrackingArea = area
     }
-    override func mouseMoved(with event: NSEvent) { lastMousePoint = documentPoint(event) }
+    override func mouseMoved(with event: NSEvent) {
+        let point = documentPoint(event)
+        lastMousePoint = point
+        if polygonArmed, !polygonVertices.isEmpty {
+            polygonTip = polygonPoint(point, shift: event.modifierFlags.contains(.shift)); needsDisplay = true
+        }
+    }
     override func mouseEntered(with event: NSEvent) { onHintHover?(true) }
     override func mouseExited(with event: NSEvent) { onHintHover?(false) }
     override func resignFirstResponder() -> Bool {
         if dragMode != .none { cancelOperation(nil) }
+        endPolygon(commit: true)
         spaceHeld = false; currentModifiers = []
         onHintModifiers?([])
         return super.resignFirstResponder()
@@ -1448,7 +1491,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         preview = nil; marquee = nil; gestureState = nil; gestureDocument = nil
         gestureColor = nil; dragMode = .none; strokePoints = []; strokeSamples = []; drawingPencil = false; resizingHandle = nil
         copyOnDrag = false; copiesCreated = false
-        drawingArrow = false; arrowEnd = .zero; extendingPolygon = nil
+        drawingArrow = false; arrowEnd = .zero
     }
     private func sampleColor(at point: CGPoint) {
         guard document.canvasRect.contains(point) else { return }
@@ -1584,6 +1627,14 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let point = documentPoint(event)
         lastMousePoint = point
         guard document.canvasRect.contains(point) else { return }
+        if effectiveTool == .line, !spaceHeld, polygonArmed || event.modifierFlags.contains(.option) {
+            polygonArmed = true
+            if polygonVertices.isEmpty { polygonBefore = state; selection.removeAll() }
+            let vertex = polygonPoint(point, shift: event.modifierFlags.contains(.shift))
+            polygonVertices.append(vertex); polygonTip = vertex
+            needsDisplay = true
+            return
+        }
         resetGesture()
         gestureStart = point; gestureState = state; gestureDocument = document
         gestureColor = strokeColor; strokePoints = [point]
@@ -1623,15 +1674,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
             beginTextEditing(element.id, before: gestureState)
         default:
             guard let kind = SketchElement.Kind(rawValue: activeTool.rawValue) else { return }
-            if kind == .line, let open = openPolygon,
-               let index = document.elements.firstIndex(where: { $0.id == open.id }),
-               document.elements[index].points == open.points {
-                // ToolLine::mouseDown 311880-311926 continues the sample vector of the open line.
-                extendingPolygon = (index, open.points)
-                selection.removeAll(); dragMode = .create; needsDisplay = true
-                return
-            }
-            openPolygon = nil
             var element = styledElement(kind)
             element.points = [point, point]
             if kind == .brush {
@@ -1652,25 +1694,14 @@ final class CanvasView: NSView, NSTextViewDelegate {
         var point = documentPoint(event)
         lastMousePoint = point
         currentModifiers = event.modifierFlags
+        if polygonArmed, dragMode == .none {
+            if !polygonVertices.isEmpty { polygonTip = polygonPoint(point, shift: event.modifierFlags.contains(.shift)) }
+            needsDisplay = true
+            return
+        }
         let dx = point.x - gestureStart.x, dy = point.y - gestureStart.y
         switch dragMode {
         case .create:
-            if let extending = extendingPolygon, let baseline = gestureDocument, let last = extending.base.last {
-                if event.modifierFlags.contains(.shift) {
-                    let sx = point.x - last.x, sy = point.y - last.y
-                    let angle = (atan2(sy, sx) / (.pi / 4)).rounded() * (.pi / 4)
-                    let length = hypot(sx, sy)
-                    point = CGPoint(x: last.x + cos(angle) * length, y: last.y + sin(angle) * length)
-                }
-                var extended = baseline
-                extended.elements[extending.index].points = extending.base + [point]
-                extended.elements[extending.index].rect = extended.elements[extending.index].points.reduce(CGRect.null) {
-                    $0.union(CGRect(origin: $1, size: .zero))
-                }
-                document = extended
-                needsDisplay = true
-                return
-            }
             guard var element = preview else { return }
             if drawingPencil {
                 if strokeSamples.count < StrokeFitter.maximumSamples { strokeSamples.append(strokeSample(event, at: point)) }
@@ -1724,6 +1755,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         needsDisplay = true
     }
     override func mouseUp(with event: NSEvent) {
+        if polygonArmed, dragMode == .none { return }
         documentMutationDepth += 1
         defer { documentMutationDepth -= 1 }
         // ToolBrush and ToolEraser do not add the zero-pressure release event.
@@ -1734,21 +1766,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         } else if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
         switch dragMode {
         case .create:
-            if let extending = extendingPolygon {
-                let id = document.elements[extending.index].id
-                let points = document.elements[extending.index].points
-                if let tip = points.last, let last = extending.base.last, points.count > extending.base.count,
-                   hypot(tip.x - last.x, tip.y - last.y) > 0.5 {
-                    openPolygon = event.modifierFlags.contains(.option) ? (id, document.elements[extending.index].points) : nil
-                    if let before = gestureState { recordUndo(before, name: "Extend Line") }
-                } else if let baseline = gestureDocument {
-                    document = baseline   // click without movement adds no segment
-                    if !event.modifierFlags.contains(.option) { openPolygon = nil }
-                }
-            } else if let element = preview,
+            if let element = preview,
                !element.pathCommands.isEmpty || element.kind == .brush || element.bounds.width > 0.5 || element.bounds.height > 0.5 {
                 document.elements.append(element); selection = [element.id]
-                openPolygon = element.kind == .line && event.modifierFlags.contains(.option) ? (element.id, element.points) : nil
                 if let before = gestureState { recordUndo(before, name: drawingArrow ? "Draw Arrow" : "Draw \(element.kind.rawValue.capitalized)") }
             }
         case .move, .resize, .pan:
@@ -2040,6 +2060,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         super.keyUp(with: event)
     }
     override func cancelOperation(_ sender: Any?) {
+        if polygonArmed, !polygonVertices.isEmpty { endPolygon(commit: false); return }
         if viewportEdit != nil { endViewportEdit(cancelled: true); return }
         // Programmatic cancellation retains explicit abandonment semantics; the
         // native editor/keyboard Escape handlers above commit the text instead.
@@ -2050,7 +2071,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 strokeColor = previous; onColorChange?(previous)
             }
         } else {
-            selection.removeAll(); cropRect = nil; openPolygon = nil
+            selection.removeAll(); cropRect = nil
         }
         resetGesture(); needsDisplay = true
     }
