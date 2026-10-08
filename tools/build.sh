@@ -47,9 +47,13 @@ if [ "${OPENSKITCH_FETCH_FONTAWESOME:-0}" = 1 ]; then
   sh "$ROOT/tools/fetch-fontawesome.sh" || echo "warning: Font Awesome Pro fetch failed; building without it" >&2
 fi
 rm -f "$APP/Contents/Resources"/FontAwesome7Pro-*-subset.ttf
-for FONT in "$ROOT"/build/fonts/FontAwesome7Pro-*-subset.ttf; do
-  if [ -f "$FONT" ]; then cp "$FONT" "$APP/Contents/Resources/"; fi
-done
+# OPENSKITCH_NO_PRO_FONTS=1 (used by tools/release.sh) skips bundling any
+# subsets already sitting in build/fonts.
+if [ "${OPENSKITCH_NO_PRO_FONTS:-0}" != 1 ]; then
+  for FONT in "$ROOT"/build/fonts/FontAwesome7Pro-*-subset.ttf; do
+    if [ -f "$FONT" ]; then cp "$FONT" "$APP/Contents/Resources/"; fi
+  done
+fi
 cp "$SNAPSHOT/Info.plist" "$APP/Contents/Info.plist"
 codesign --force --sign - "$APP"
 # Let Launch Services notice changed bundle resources on the next launch.
