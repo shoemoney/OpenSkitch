@@ -3,6 +3,7 @@
 //   Sources/OriginalCaptureTiming.swift Sources/OriginalCaptureCountdown.swift \
 //   tests/OriginalCaptureCountdownTests.swift -o build/original-capture-countdown-tests
 // rtk proxy build/original-capture-countdown-tests
+// Numeral checks need the git-ignored original/ archive; without it they print a SKIP line and the rest still run.
 #if ORIGINAL_CAPTURE_COUNTDOWN_TESTS
 import AppKit
 import CoreGraphics
@@ -94,11 +95,16 @@ private final class Harness {
     var factoryHook: (() -> Void)?
     var imageHook: ((Int) -> Void)?
     var screenHook: (() -> Void)?
-    init() {
+    /// The git-ignored original/ archive; absent on a fresh clone.
+    static var artworkDirectory: URL {
+        URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+            .appendingPathComponent("original/Skitch.app/Contents/Resources", isDirectory: true)
+    }
+    /// `artwork: false` is only for checks that never need a numeral; every other test requires the original PNGs.
+    init(artwork: Bool = true) {
+        guard artwork else { return }
         for number in 1...3 {
-            let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("original/Skitch.app/Contents/Resources/SkitchCount\(number).png")
-            resources[number] = NSImage(contentsOf: url)
+            resources[number] = NSImage(contentsOf: Self.artworkDirectory.appendingPathComponent("SkitchCount\(number).png"))
             precondition(resources[number]?.size == NSSize(width: 138, height: 140), "Original PNG fixture missing")
         }
     }
@@ -127,14 +133,19 @@ enum OriginalCaptureCountdownTests {
         // NSApplication initializes AppKit only; no activation, run, or window ordering.
         _ = NSApplication.shared
         let _: any CaptureCountdownPresenting = OriginalCaptureCountdown()
-        sequence(delay: 3, ticks: 31, cues: [1, 11, 21])
-        sequence(delay: 6, ticks: 61, cues: [1, 21, 41])
-        cancellationAndAttachment()
-        reentrantCallbacks()
-        registrationAndProviderReentry()
-        boundaryInputs()
+        let artwork = FileManager.default.fileExists(atPath: Harness.artworkDirectory.path)
+        if artwork {
+            sequence(delay: 3, ticks: 31, cues: [1, 11, 21])
+            sequence(delay: 6, ticks: 61, cues: [1, 21, 41])
+            cancellationAndAttachment()
+            reentrantCallbacks()
+            registrationAndProviderReentry()
+        } else {
+            print("SKIP OriginalCaptureCountdownTests numeral, attachment and reentry checks: SkitchCount1-3.png not present in \(Harness.artworkDirectory.path) (original/ is git-ignored)")
+        }
+        boundaryInputs(artwork: artwork)
         geometry()
-        print("OriginalCaptureCountdownTests: \(checks) checks passed (no window ordering)")
+        print("OriginalCaptureCountdownTests: \(checks) checks passed (no window ordering)" + (artwork ? "" : "; original-artwork checks skipped"))
     }
 
     private static func sequence(delay: Double, ticks: Int, cues: [Int]) {
@@ -261,8 +272,8 @@ enum OriginalCaptureCountdownTests {
                "Late factory result is cleared without scheduling")
     }
 
-    private static func boundaryInputs() {
-        let h = Harness(), countdown = h.make()
+    private static func boundaryInputs(artwork: Bool) {
+        let h = Harness(artwork: artwork), countdown = h.make()
         var complete = 0
         for delay in [-1.0, .nan, .infinity, 3600.1] {
             countdown.start(rect: rect, parent: nil, delay: delay, cue: { preconditionFailure("Invalid cue") }, completion: { complete += 1 })
@@ -274,15 +285,21 @@ enum OriginalCaptureCountdownTests {
             complete += 1; expect(!countdown.isRunning, "Immediate completion has cleared state")
         })
         expect(complete == 1 && h.clock.entries.isEmpty && h.panels.isEmpty, "Zero delay requires no timer or panel")
-        h.screens = []
-        countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
-        h.clock.fire(); h.clock.fire()
-        expect(complete == 2 && h.panels.isEmpty && h.clock.activeCount == 0, "No screens cannot strand expiry")
+        // Without the originals every start already takes the missing-PNG path, so only they can prove the no-screens path.
+        if artwork {
+            h.screens = []
+            countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
+            h.clock.fire(); h.clock.fire()
+            expect(complete == 2 && h.panels.isEmpty && h.clock.activeCount == 0, "No screens cannot strand expiry")
+        } else {
+            print("SKIP OriginalCaptureCountdownTests no-screens expiry: needs the original SkitchCount PNGs, else the missing-PNG path masks it")
+        }
+        let timer = h.clock.entries.count, expected = complete + 1
         h.screens = [NSRect(x: 0, y: 0, width: 1000, height: 1000)]
         h.resources = [:]
         countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
-        h.clock.fire(1); h.clock.fire(1)
-        expect(complete == 3 && h.panels.isEmpty && h.clock.activeCount == 0, "Missing PNG cannot strand expiry or invent artwork")
+        h.clock.fire(timer); h.clock.fire(timer)
+        expect(complete == expected && h.panels.isEmpty && h.clock.activeCount == 0, "Missing PNG cannot strand expiry or invent artwork")
     }
 
     private static func geometry() {
