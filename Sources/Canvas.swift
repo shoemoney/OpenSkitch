@@ -675,6 +675,30 @@ final class CanvasView: NSView, NSTextViewDelegate {
             selection.removeAll(); cropRect = nil
         }
     }
+    /// Image > Add Shadow: addShadowTA (decompiled.c:301554) is a no-op without a snapshot, then grows the
+    /// canvas 27 x 27 (cropResize 14 left / 6 top, 13 right / 21 bottom) around MacImage::addShadow
+    /// (decompiled.c:13245): picture at (14,6), black 0.8 shadow, offset 8 down, blur 27.
+    func addShadow() {
+        endViewportEdit(cancelled: true)
+        finishTextEditing()
+        guard document.backgroundPNG != nil, let image = document.backgroundImage else { return }
+        let margin: CGFloat = 27, origin = CGPoint(x: 14, y: 6)
+        let size = NSSize(width: document.size.width + margin, height: document.size.height + margin)
+        guard SketchDocument.validSize(size), let png = SketchRenderer.bitmap(size: size, draw: {
+            let shadow = NSShadow()
+            shadow.shadowOffset = NSSize(width: 0, height: -8)
+            shadow.shadowBlurRadius = 27
+            shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
+            shadow.set()
+            SketchRenderer.drawImage(image, in: CGRect(origin: origin, size: document.size))
+        })?.representation(using: .png, properties: [:]) else { return }
+        endActualPresentation()
+        edit("Add Shadow") {
+            document.size = size; document.renderSize = nil; document.backgroundPNG = png; panBackground = nil
+            for index in document.elements.indices { document.elements[index].translate(x: origin.x, y: origin.y) }
+            selection.removeAll(); cropRect = nil
+        }
+    }
     func setBackgroundColor(_ color: NSColor) {
         edit("Background Color") { document.backgroundColor = SketchColor(color) }
     }

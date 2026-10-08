@@ -146,6 +146,7 @@ struct CanvasTests {
         let tests: [(String, () throws -> Void)] = [
             ("render orientation, alpha and zoom", render),
             ("crop background pixels and editable coordinates", crop),
+            ("add shadow grows the canvas 27 x 27 with the picture at 14,6 in one undo", addShadow),
             ("border crop retains hidden raster and vectors across save and expansion", reframe),
             ("independent output sizing and coordinate mapping retain source pixels", outputSizing),
             ("viewport crop previews anchor to base and retain full source", viewportCropAnchoring),
@@ -252,6 +253,30 @@ struct CanvasTests {
         c.setBackgroundColor(.clear)
         try expect(try pixel(c, 90, 60).alphaComponent < 0.01, "Transparent background")
         try expect(c.renderedImage().size == c.canvasSize, "Rendered image uses document pixels")
+    }
+    static func addShadow() throws {
+        let c = canvas(NSSize(width: 100, height: 50))
+        let blank = c.document
+        c.addShadow()
+        try expect(c.document == blank, "Add Shadow is a no-op without a snapshot")
+        let bitmap = SketchRenderer.bitmap(size: c.canvasSize) { NSColor.blue.setFill(); CGRect(x: 0, y: 0, width: 100, height: 50).fill() }!
+        let image = NSImage(size: c.canvasSize); image.addRepresentation(bitmap)
+        c.setBackground(image)
+        c.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 8, height: 8))]
+        let before = c.document
+        c.addShadow()
+        let after = c.document
+        try expect(after.size == CGSize(width: 127, height: 77), "Canvas grows by 27 x 27, got \(after.size)")
+        try expect(after.elements[0].bounds.origin == CGPoint(x: 24, y: 16), "Annotations follow the picture to (14,6)")
+        let inside = try pixel(c, 14, 6), outside = try pixel(c, 13, 5)
+        try expect(inside.blueComponent > 0.9 && inside.redComponent < 0.1, "Picture top-left lands at (14,6)")
+        try expect(outside.redComponent > 0.5 || outside.blueComponent < 0.9, "Nothing blue above-left of (14,6)")
+        let below = try pixel(c, 64, 62), above = try pixel(c, 64, 2)
+        try expect(below.brightnessComponent < above.brightnessComponent - 0.15, "Shadow falls below the picture, not above it")
+        let corner = try pixel(c, 120, 72), origin = try pixel(c, 1, 1)
+        try expect(corner.brightnessComponent < origin.brightnessComponent, "Bottom-right is darker than top-left")
+        c.undo(); try expect(c.document == before, "One Undo restores the pre-shadow document")
+        c.redo(); try expect(c.document == after, "Redo reapplies the shadow")
     }
     static func crop() throws {
         let c = canvas()
