@@ -335,7 +335,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
-            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.cameraSnap() }, globalUpload: { [weak self] in self?.snapAndUpload() }, globalShow: { [weak self] in self?.makeVisible() })
+            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.runCameraSnap(flags: []) }, globalUpload: { [weak self] in self?.snapAndUpload() }, globalShow: { [weak self] in self?.makeVisible() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
         writeLayoutEvidence()
         if CommandLine.arguments.contains("--smoke-test") {
@@ -1851,9 +1851,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     @objc func cameraSnap() {
+        runCameraSnap(flags: NSApp.currentEvent?.modifierFlags ?? [])
+    }
+    func runCameraSnap(flags: NSEvent.ModifierFlags) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
         let generation = documentGeneration
-        capture.captureCamera { [weak self] result in
+        let delay = OriginalCaptureTiming.cameraDelay(flags: flags)
+        capture.captureCamera(delay: delay) { [weak self] result in
             guard let self, self.documentGeneration == generation else { return }
             self.receiveCapture(result, expectedGeneration: generation, fitOutput: false)
         }

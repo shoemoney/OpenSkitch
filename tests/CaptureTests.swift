@@ -353,6 +353,7 @@ private enum CaptureTests {
             try await delayedCancellation()
             try await nativeSelectionAndTiming()
             try await nativeSelectionFailures()
+            try await cameraCountdownDelay()
             try await nativePhaseCancellation()
             try await nativeCleanupReentrantStops()
             try await nativeCountdownWithoutSelection()
@@ -695,6 +696,44 @@ private enum CaptureTests {
             try expect(record.results.count == 1 && countdown.requests.count == (expectedDelay > 0 ? 1 : 0),
                        "finished picker/countdown callbacks must not reopen or double-complete a capture")
         }
+    }
+
+    static func cameraCountdownDelay() async throws {
+        // snapSnap: runs the countdown before the camera path; the harness lacks
+        // NSCameraUsageDescription so the camera path fails right after it.
+        let journal = CapturePhaseJournal()
+        let countdown = FakeCaptureCountdown(journal)
+        let rig = try make(countdown: countdown)
+        let record = CaptureRecord()
+        rig.coordinator.captureCamera(delay: 3, completion: record.received)
+        try await wait { countdown.requests.count == 1 }
+        try expect(countdown.requests[0].delay == 3 && !countdown.requests[0].hasParent, "camera countdown must run 3 s first")
+        try await pause(0.05)
+        try expect(record.results.isEmpty, "no camera result while the countdown is running")
+        countdown.requests[0].completion()
+        try await wait { record.results.count == 1 }
+        try expect(errorCode(record.results.first) == 20 && record.allMain,
+                   "after the countdown the camera path must start (and fail on the missing usage description)")
+
+        let bypass = FakeCaptureCountdown(CapturePhaseJournal())
+        let rig2 = try make(countdown: bypass)
+        let immediate = CaptureRecord()
+        rig2.coordinator.captureCamera(delay: 0, completion: immediate.received)
+        try await wait { immediate.results.count == 1 }
+        try expect(bypass.requests.isEmpty && errorCode(immediate.results.first) == 20, "delay 0 must bypass the countdown")
+
+        let cancelling = FakeCaptureCountdown(CapturePhaseJournal())
+        let rig3 = try make(countdown: cancelling)
+        let cancelled = CaptureRecord(), ack = CaptureRecord()
+        rig3.coordinator.captureCamera(delay: 3, completion: cancelled.received)
+        try await wait { cancelling.requests.count == 1 }
+        rig3.coordinator.cancelCapture(completion: ack.acknowledged)
+        try await wait { cancelled.results.count == 1 }
+        try expect(cancellation(cancelled.results.first) && cancelling.cancellations >= 1,
+                   "cancel during the camera countdown must deliver cancellation and cancel the presenter")
+        cancelling.requests[0].completion()
+        try await pause(0.05)
+        try expect(cancelled.results.count == 1, "a late countdown completion cannot restart the camera")
     }
 
     static func nativeSelectionFailures() async throws {
