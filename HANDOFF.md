@@ -44,9 +44,9 @@ Version `0.3.0` (build 3) in `Info.plist`. Issues #1, #2 and #3 are fixed in cod
 
 Source of truth: `/Users/shoemoney/Projects/OpenSkitch/build/completion-plan.md` (git-ignored; Bar B is the 0.3.0 release bar). Still open:
 
-1. **Cursor policy.** Original `showMouse:` route versus the modern helper's native cursor inclusion. Camera mirroring (preview only) is still undecided; `capture.camera-flip` is a planned row.
-2. **Mixed-display and cancellation.** Region spanning scale-1 and scale-2 screens, Escape during countdown, flash and outside the picker.
-3. **Crop-resize leftovers.** The ADR's open points: original snap-mode integers and Shift behaviour, edge-crop rounding. Colour sample precedence (`color.sample`) is also still open; `gestures.control-share` is the other planned row.
+1. **Camera mirroring.** Preview-only mirroring is still undecided; `capture.camera-flip` is a planned row. Cursor policy needs no work: `Capture.swift` passes `-C` only for timed captures, the same rule as the original `showMouse` (decompiled.c 22395, 22455-22490).
+2. **Mixed-display captures.** Region spanning scale-1 and scale-2 screens, and cancel during flash or outside the picker. (The original has no Escape-during-countdown path; its Escape hotkey lives only in the crosshair view, decompiled.c 18650-18690.)
+3. **Crop-resize leftovers.** The ADR's open points: original snap-mode integers and Shift behaviour, edge-crop rounding. `gestures.control-share` is the other planned row.
 4. **WP-06: visual review by eye** of app-owned screenshots (default size, minimum size, Frame, Actual) in both appearances, Modern especially.
 5. **WP-07: evidence reconciliation.** Re-anchor `analysis/*.json` (snapshot, `current_tests` metadata, hashes, test counts) to the release binary; keep parity flags unverified unless evidence supports otherwise.
 6. **Live capture proof** needing Screen Recording and Camera permission (capture, countdown, magnifier pixels, camera path). Ask the user to grant them.
