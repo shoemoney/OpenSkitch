@@ -332,7 +332,10 @@ enum AppSafetyTests {
             app.window.isReleasedWhenClosed = false
             try expect(app.window is AppSafetyWindow, "Window must never be ordered on screen")
             // No test may reach the network or the owner's real destination: a fake SFTP destination and an in-process transfer.
-            app.publishing.settingsLoader = AppSafetyTests.fakeDestination
+            // Destinations live in the isolated support folder with in-memory secrets; ~/.aws is never read.
+            let support = app.support
+            app.publishing.awsCredentialsFile = { support.appendingPathComponent("no-such-aws-credentials") }
+            try AppSafetyTests.configureDestinations(app, [try AppSafetyTests.fakeDestination()])
             app.publishing.uploader = { _, _, plan, _ in plan.publicURL ?? plan.remoteURL }
             app.publishing.clipboardWriter = { _ in }
         }

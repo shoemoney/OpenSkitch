@@ -6,7 +6,7 @@ import CoreFoundation
 // Reconstructs the original WebpostFTP/WebpostSFTP/WebpostWebDAV destinations.
 // No Evernote account API, background publishing, or credential-bearing argv.
 enum PublishingProtocol: String, Codable, CaseIterable {
-    case webDAV, ftp, ftps, sftp
+    case webDAV, ftp, ftps, sftp, s3
 
     var title: String {
         switch self {
@@ -14,6 +14,7 @@ enum PublishingProtocol: String, Codable, CaseIterable {
         case .ftp: return "FTP"
         case .ftps: return "FTPS (TLS required)"
         case .sftp: return "SFTP (SSH config / agent keys)"
+        case .s3: return "S3-compatible (AWS, R2, B2, Spaces, Wasabi, MinIO)"
         }
     }
     var schemes: Set<String> {
@@ -22,6 +23,7 @@ enum PublishingProtocol: String, Codable, CaseIterable {
         case .ftp: return ["ftp"]
         case .ftps: return ["ftp", "ftps"] // Explicit TLS and implicit TLS, respectively.
         case .sftp: return ["sftp"]
+        case .s3: return ["https", "http"]
         }
     }
 }
@@ -37,11 +39,13 @@ struct PublishingSettings: Codable, Equatable {
     var sshAlias = ""
     var sftpRemoteRoot = ""
     var sftpPort: Int?
+    // Nil for every non-S3 destination, so older destinations encode (and fingerprint) exactly as before.
+    var s3: S3Options?
 
     init() {}
     private enum CodingKeys: String, CodingKey {
         case endpoint, transport, username, remoteFolder, publicBaseURL, credentialID
-        case sshAlias, sftpRemoteRoot, sftpPort
+        case sshAlias, sftpRemoteRoot, sftpPort, s3
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -54,6 +58,7 @@ struct PublishingSettings: Codable, Equatable {
         sshAlias = try c.decodeIfPresent(String.self, forKey: .sshAlias) ?? ""
         sftpRemoteRoot = try c.decodeIfPresent(String.self, forKey: .sftpRemoteRoot) ?? ""
         sftpPort = try c.decodeIfPresent(Int.self, forKey: .sftpPort)
+        s3 = try c.decodeIfPresent(S3Options.self, forKey: .s3)
     }
 }
 
@@ -66,6 +71,8 @@ struct PublishingFailure: LocalizedError {
 struct PublishingCapabilities {
     let protocols: Set<String>
     let hasTLS: Bool
+    /// "curl 8.7.1 ..." parsed to (8, 7); nil when unparseable. --aws-sigv4 needs 7.75.
+    let version: (major: Int, minor: Int)?
 
     init(versionOutput: String) throws {
         let lines = versionOutput.components(separatedBy: .newlines)
@@ -73,6 +80,8 @@ struct PublishingCapabilities {
               let line = lines.first(where: { $0.hasPrefix("Protocols: ") }) else {
             throw PublishingFailure("System curl did not report its supported protocols.")
         }
+        let numbers = lines[0].split(separator: " ").dropFirst().first.map { $0.split(separator: ".").compactMap { Int($0) } } ?? []
+        version = numbers.count >= 2 ? (numbers[0], numbers[1]) : nil
         protocols = Set(line.dropFirst("Protocols: ".count).split(separator: " ").map(String.init))
         hasTLS = lines.first(where: { $0.hasPrefix("Features: ") })?
             .split(separator: " ").contains("SSL") == true
@@ -83,6 +92,11 @@ struct PublishingCapabilities {
               transport != .ftps || hasTLS else {
             throw PublishingFailure("System /usr/bin/curl does not support this destination's protocol or required TLS.")
         }
+        if transport == .s3 {
+            guard let version, (version.major, version.minor) >= (7, 75) else {
+                throw PublishingFailure("System /usr/bin/curl is too old for S3 request signing (7.75 or newer is required).")
+            }
+        }
     }
 }
 
@@ -91,17 +105,28 @@ struct PublishingPlan {
     let publicURL: URL?
     let transport: PublishingProtocol
     let keyedSFTP: PublishingSFTPPlan?
+    let s3: PublishingS3Plan?
 
     init(settings: PublishingSettings, fileName: String, capabilities: PublishingCapabilities?, sftpAvailable: Bool = false) throws {
         try Self.validateUsername(settings.username)
         let folders = settings.remoteFolder.split(separator: "/", omittingEmptySubsequences: true).map(String.init)
         for folder in folders { try Self.validateComponent(folder) }
         try Self.validateComponent(fileName)
-        if settings.transport == .sftp {
+        var publicName = fileName
+        if settings.transport == .s3 {
+            // S3 keys and public links use one filesystem-safe name (spaces and symbols become hyphens).
+            publicName = PublishingS3Plan.safeFileName(fileName)
+            guard let capabilities else { throw PublishingFailure("System curl capabilities are unavailable.") }
+            let plan = try PublishingS3Plan(settings: settings, fileName: publicName)
+            try capabilities.validate(.s3, scheme: plan.objectURL.scheme!.lowercased())
+            s3 = plan; keyedSFTP = nil; remoteURL = plan.objectURL
+        } else if settings.transport == .sftp {
+            s3 = nil
             guard sftpAvailable else { throw PublishingFailure("System /usr/bin/sftp and /usr/bin/ssh are required for keyed SFTP publishing.") }
             let sftp = try PublishingSFTPPlan(settings: settings, fileName: fileName)
             keyedSFTP = sftp; remoteURL = sftp.remoteURL
         } else {
+            s3 = nil
             let base = try Self.baseURL(settings.endpoint, schemes: settings.transport.schemes)
             guard let capabilities else { throw PublishingFailure("System curl capabilities are unavailable.") }
             try capabilities.validate(settings.transport, scheme: base.scheme!.lowercased())
@@ -112,7 +137,7 @@ struct PublishingPlan {
             publicURL = nil
         } else {
             let publicBase = try Self.baseURL(settings.publicBaseURL, schemes: ["http", "https"])
-            publicURL = try Self.appending([fileName], to: publicBase)
+            publicURL = try Self.appending([publicName], to: publicBase)
         }
         transport = settings.transport
     }
@@ -195,8 +220,13 @@ struct PublishingPlan {
         return "\"" + escaped + "\""
     }
 
-    func curlConfig(file: URL, username: String, password: String) throws -> Data {
+    func curlConfig(file: URL, username: String, password: String, sessionToken: String = "",
+                    responseFile: URL = URL(fileURLWithPath: "/dev/null")) throws -> Data {
         guard transport != .sftp else { throw PublishingFailure("Keyed SFTP must use /usr/bin/sftp, never curl.") }
+        if let s3 {
+            return try s3.uploadConfig(file: file, credentials: S3Credentials(accessKeyID: username, secretAccessKey: password, sessionToken: sessionToken),
+                                       responseFile: responseFile)
+        }
         try Self.validateUsername(username)
         guard !username.isEmpty || password.isEmpty else {
             throw PublishingFailure("A password requires a username.")
@@ -266,6 +296,8 @@ struct PublishingPlan {
             }
         case .sftp:
             throw PublishingFailure("SFTP success requires a verified download through /usr/bin/sftp.")
+        case .s3:
+            throw PublishingFailure("S3 success is verified by the S3 transport.")
         }
         return publicURL ?? effective
     }
@@ -397,71 +429,6 @@ struct PublishingPublicCheck {
             throw PublishingFailure("The file uploaded, but the public URL did not serve HTTP 200 with the exact image bytes at the configured URL. No link was copied.")
         }
         return url
-    }
-}
-
-private enum PublishingKeychain {
-    private static let service = "SkitchRedux.CustomPublishing"
-    private static func query(_ id: String) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-         kSecAttrAccount as String: id, kSecAttrSynchronizable as String: false]
-    }
-    static func read(_ id: String, allowMissing: Bool = false) throws -> String {
-        var q = query(id)
-        q[kSecReturnData as String] = true
-        q[kSecMatchLimit as String] = kSecMatchLimitOne
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(q as CFDictionary, &result)
-        if status == errSecItemNotFound, allowMissing { return "" }
-        guard status == errSecSuccess, let data = result as? Data, let value = String(data: data, encoding: .utf8) else {
-            throw PublishingFailure("The publishing password could not be read from macOS Keychain (\(status)).")
-        }
-        return value
-    }
-    static func add(_ value: String, id: String) throws {
-        var q = query(id)
-        q[kSecValueData as String] = Data(value.utf8)
-        q[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        let status = SecItemAdd(q as CFDictionary, nil)
-        guard status == errSecSuccess else {
-            throw PublishingFailure("The publishing password could not be saved to macOS Keychain (\(status)).")
-        }
-    }
-    static func remove(_ id: String) { SecItemDelete(query(id) as CFDictionary) }
-}
-
-private enum PublishingStorage {
-    static var directory: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SkitchRedux/Publishing", isDirectory: true)
-    }
-    static var file: URL { directory.appendingPathComponent("destination.json") }
-    static var exists: Bool { FileManager.default.fileExists(atPath: file.path) }
-    static func load() throws -> PublishingSettings {
-        guard exists else { return PublishingSettings() }
-        do {
-            let settings = try JSONDecoder().decode(PublishingSettings.self, from: Data(contentsOf: file))
-            guard UUID(uuidString: settings.credentialID) != nil else { throw PublishingFailure("Invalid credential identifier.") }
-            return settings
-        } catch { throw PublishingFailure("Publishing settings could not be read. The existing destination has been preserved.") }
-    }
-    static func save(_ settings: PublishingSettings, password: String) throws {
-        let hadPrevious = exists
-        let old = try load()
-        var next = settings
-        next.credentialID = UUID().uuidString
-        if next.transport != .sftp { try PublishingKeychain.add(password, id: next.credentialID) }
-        do {
-            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-            try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-            try JSONEncoder().encode(next).write(to: file, options: [.atomic, .completeFileProtection])
-            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
-        } catch {
-            // Only delete the new secret if the destination was not committed.
-            if next.transport != .sftp, (try? load().credentialID) != next.credentialID { PublishingKeychain.remove(next.credentialID) }
-            throw PublishingFailure("Publishing settings could not be saved to Application Support.")
-        }
-        if hadPrevious, old.transport != .sftp { PublishingKeychain.remove(old.credentialID) }
     }
 }
 
@@ -718,13 +685,20 @@ enum PublishingProcess {
     }
 }
 
-private enum PublishingCurl {
+enum PublishingCurl {
     static func capabilities(cancellation: PublishingCancellation = PublishingCancellation()) throws -> PublishingCapabilities {
         let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--version"], timeout: 5, cancellation: cancellation)
         guard output.code == 0 else { throw PublishingFailure("System curl capabilities could not be inspected.") }
         return try PublishingCapabilities(versionOutput: output.stdout)
     }
-    static func upload(data: Data, plan: PublishingPlan, username: String, password: String, cancellation: PublishingCancellation) throws -> URL {
+    static func upload(data: Data, plan: PublishingPlan, username: String, password: String, sessionToken: String = "",
+                       cancellation: PublishingCancellation) throws -> URL {
+        if let s3 = plan.s3 {
+            try PublishingS3Operations.upload(data: data, plan: plan, s3: s3,
+                                              credentials: S3Credentials(accessKeyID: username, secretAccessKey: password, sessionToken: sessionToken),
+                                              cancellation: cancellation)
+            return plan.publicURL ?? plan.remoteURL
+        }
         let directory: URL
         do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchPublish-") }
         catch { throw PublishingFailure("A private temporary upload folder could not be created.") }
@@ -768,21 +742,21 @@ private enum PublishingSFTP {
 // Production calls this only after the coordinator's Publish button is clicked.
 enum PublishingTransfer {
     static var sftpAvailable: Bool { PublishingSFTP.available }
-    static func upload(data: Data, plan: PublishingPlan, username: String = "", password: String = "",
+    static func upload(data: Data, plan: PublishingPlan, username: String = "", password: String = "", sessionToken: String = "",
                        cancellation: PublishingCancellation = PublishingCancellation()) throws -> URL {
         precondition(!Thread.isMainThread)
-        let result = Result { try performUpload(data: data, plan: plan, username: username, password: password, cancellation: cancellation) }
+        let result = Result { try performUpload(data: data, plan: plan, username: username, password: password, sessionToken: sessionToken, cancellation: cancellation) }
         try cancellation.cleanup()
         try cancellation.check()
         return try result.get()
     }
-    private static func performUpload(data: Data, plan: PublishingPlan, username: String, password: String,
+    private static func performUpload(data: Data, plan: PublishingPlan, username: String, password: String, sessionToken: String,
                                       cancellation: PublishingCancellation) throws -> URL {
         try cancellation.check()
         guard !data.isEmpty else { throw PublishingFailure("There is no image data to upload.") }
         let uploaded: URL
         if plan.transport == .sftp { uploaded = try PublishingSFTP.upload(data: data, plan: plan, cancellation: cancellation) }
-        else { uploaded = try PublishingCurl.upload(data: data, plan: plan, username: username, password: password, cancellation: cancellation) }
+        else { uploaded = try PublishingCurl.upload(data: data, plan: plan, username: username, password: password, sessionToken: sessionToken, cancellation: cancellation) }
         try cancellation.check()
         guard let publicURL = plan.publicURL else { return uploaded }
         let directory: URL
@@ -813,23 +787,18 @@ public final class PublishingCoordinator: NSObject {
     private var quiescenceCallbacks: [(Result<Void, Error>) -> Void] = []
     private var successfulQuiescenceCallbacks: [() -> Void] = []
     private var settingsPanel: NSPanel?
-    private var endpointField: NSTextField?
-    private var protocolField: NSPopUpButton?
-    private var usernameField: NSTextField?
-    private var passwordField: NSSecureTextField?
-    private var folderField: NSTextField?
-    private var publicField: NSTextField?
-    private var aliasField: NSTextField?
-    private var remoteRootField: NSTextField?
-    private var portField: NSTextField?
-    private var settingsStatus: NSTextField?
-    private var savedSettings = PublishingSettings()
+    private var destinationsView: PublishingDestinationsView?
     private var pendingCompletion: ((Result<URL, Error>) -> Void)?
     /// True when the last successful transfer wrote its verified public URL to the clipboard.
     private(set) var lastTransferCopiedLink = false
-    // Seams for tests: destination lookup and the network transfer itself.
-    var settingsLoader: () throws -> PublishingSettings = { try PublishingStorage.load() }
-    var uploader: (Data, PublishingSettings, PublishingPlan, PublishingCancellation) throws -> URL = PublishingCoordinator.realUploader
+    // Seams for tests: where destinations live, where AWS profiles are read, and the transfer itself.
+    var store: PublishingDestinationStore = .system
+    var awsCredentialsFile: () -> URL = {
+        AWSSharedCredentials.defaultFile(environment: ProcessInfo.processInfo.environment, home: URL(fileURLWithPath: NSHomeDirectory()))
+    }
+    var uploader: (Data, PublishingSettings, PublishingPlan, PublishingCancellation) throws -> URL = { _, _, _, _ in
+        throw PublishingFailure("The uploader is not ready.")
+    }
 
     public override init() {
         workController = PublishingWorkController()
@@ -838,11 +807,13 @@ public final class PublishingCoordinator: NSObject {
             NSPasteboard.general.setString(url.absoluteString, forType: .string)
         }
         super.init()
+        uploader = { [unowned self] in try self.realUpload(data: $0, settings: $1, plan: $2, context: $3) }
     }
     // Dependency injection exercises the production completion/clipboard gate without UI or uploads.
     init(workController: PublishingWorkController, clipboardWriter: @escaping (URL) -> Void) {
         self.workController = workController; self.clipboardWriter = clipboardWriter
         super.init()
+        uploader = { [unowned self] in try self.realUpload(data: $0, settings: $1, plan: $2, context: $3) }
     }
 
     /// Permanently rejects new publishing. On main, an idle publisher acknowledges synchronously;
@@ -908,7 +879,7 @@ public final class PublishingCoordinator: NSObject {
         } else { panel.orderOut(nil) }
     }
 
-    public static var settingsFileURL: URL { PublishingStorage.file }
+    public static var settingsFileURL: URL { PublishingDestinationStore.system.file }
 
     /// Settings never start a network request. Passwords are saved only in macOS Keychain.
     public func showSettings(relativeTo window: NSWindow) {
@@ -917,82 +888,57 @@ public final class PublishingCoordinator: NSObject {
         if let panel = settingsPanel { panel.makeKeyAndOrderFront(nil); return }
         guard window.attachedSheet == nil else { return }
         do {
-            savedSettings = try settingsLoader()
-            let password = savedSettings.transport == .sftp ? "" : try PublishingKeychain.read(savedSettings.credentialID, allowMissing: !PublishingStorage.exists)
-            let panel = makePanel(title: "Custom Publishing Settings", width: 800, height: 800)
-            let form = verticalStack()
-            form.spacing = 14
-            let endpoint = field(savedSettings.endpoint, placeholder: "https://example.com/uploads")
-            let transport = NSPopUpButton(frame: .zero, pullsDown: false)
-            transport.font = .systemFont(ofSize: 18)
-            transport.menu?.font = .systemFont(ofSize: 18)
-            transport.menu?.autoenablesItems = false
-            transport.addItems(withTitles: PublishingProtocol.allCases.map(\.title))
-            transport.selectItem(at: PublishingProtocol.allCases.firstIndex(of: savedSettings.transport) ?? 0)
-            transport.target = self; transport.action = #selector(protocolChanged)
-            let username = field(savedSettings.username, placeholder: "Username (optional for anonymous destinations)")
-            let secret = NSSecureTextField(string: password); secret.font = .systemFont(ofSize: 20)
-            secret.placeholderString = "Password stored in macOS Keychain"
-            let folder = field(savedSettings.remoteFolder, placeholder: "screenshots (relative to endpoint)")
-            let publicURL = field(savedSettings.publicBaseURL, placeholder: "https://example.com/screenshots (optional)")
-            let alias = field(savedSettings.sshAlias, placeholder: "shoemoney.com (from ~/.ssh/config)")
-            let remoteRoot = field(savedSettings.sftpRemoteRoot, placeholder: "/var/www/shoemoney.com/shared/imgs")
-            let port = field(savedSettings.sftpPort.map(String.init) ?? "", placeholder: "Use SSH configuration (optional)")
-            for (title, control) in [("Endpoint URL", endpoint as NSView), ("Protocol", transport),
-                                     ("Username", username), ("Password", secret),
-                                     ("Remote folder", folder), ("Public base URL", publicURL),
-                                     ("SSH host alias", alias), ("SFTP remote root", remoteRoot), ("SFTP port", port)] {
-                let row = NSStackView(views: [label(title), control]); row.orientation = .horizontal
-                row.alignment = .centerY; row.spacing = 16
-                row.arrangedSubviews[0].widthAnchor.constraint(equalToConstant: 165).isActive = true
-                control.widthAnchor.constraint(greaterThanOrEqualToConstant: 450).isActive = true
-                control.setAccessibilityLabel(title)
-                form.addArrangedSubview(row)
-            }
-            let help = label("SFTP uses keys from SSH configuration or your agent, with strict known-host checks. Leave username and port empty to use the alias settings; no password is used. FTPS: ftp:// is explicit TLS, ftps:// is implicit TLS. Folders must exist. Public base URL maps to the upload folder; only the filename is appended.")
-            help.maximumNumberOfLines = 0; help.preferredMaxLayoutWidth = 720
-            form.addArrangedSubview(help)
-            let status = label("Checking publishing tools…"); status.maximumNumberOfLines = 0; status.preferredMaxLayoutWidth = 720
-            form.addArrangedSubview(status)
-            form.addArrangedSubview(buttonRow([button("Cancel", #selector(cancelSettings)), button("Save", #selector(saveSettings))]))
-            install(form, in: panel)
-            endpointField = endpoint; protocolField = transport; usernameField = username; passwordField = secret
-            folderField = folder; publicField = publicURL; settingsStatus = status; settingsPanel = panel
-            aliasField = alias; remoteRootField = remoteRoot; portField = port; protocolChanged()
+            let (panel, view) = try buildSettings()
             beginSheet(panel, relativeTo: window)
             workController.start(work: { try PublishingCurl.capabilities(cancellation: $0) }) { result in
-                    guard self.settingsPanel === panel else { return }
-                    switch result {
-                    case .success(let capabilities):
-                        let missing = PublishingProtocol.allCases.filter { transport in
-                            if transport == .sftp { return !PublishingSFTP.available }
-                            return !transport.schemes.contains(where: { scheme in (try? capabilities.validate(transport, scheme: scheme)) != nil })
-                        }
-                        status.stringValue = missing.isEmpty ? "SFTP uses /usr/bin/sftp; other protocols use system curl." : "Unavailable: " + missing.map(\.title).joined(separator: ", ") + "."
-                        for (index, transport) in PublishingProtocol.allCases.enumerated() {
-                            self.protocolField?.item(at: index)?.isEnabled = !missing.contains(transport)
-                        }
-                    case .failure: status.stringValue = PublishingSFTP.available ? "Keyed SFTP is available; system curl is unavailable for other protocols." : "Publishing tools are unavailable."
-                    }
+                guard self.settingsPanel === panel else { return }
+                switch result {
+                case .success(let capabilities):
+                    view.setUnavailable(Set(PublishingProtocol.allCases.filter { transport in
+                        if transport == .sftp { return !PublishingSFTP.available }
+                        return !transport.schemes.contains(where: { scheme in (try? capabilities.validate(transport, scheme: scheme)) != nil })
+                    }))
+                case .failure: view.setUnavailable(Set(PublishingProtocol.allCases.filter { $0 != .sftp }))
+                }
             }
         } catch { presentMessage(error.localizedDescription, relativeTo: window) }
     }
 
+    /// Creates the settings panel and wires every list action to storage. Tests drive the returned view directly.
+    func buildSettings() throws -> (NSPanel, PublishingDestinationsView) {
+        let panel = makePanel(title: "Upload Destinations", width: 820, height: 860)
+        let view = PublishingDestinationsView(list: try store.load())
+        view.translatesAutoresizingMaskIntoConstraints = false
+        panel.contentView?.addSubview(view)
+        if let content = panel.contentView {
+            NSLayoutConstraint.activate([view.leadingAnchor.constraint(equalTo: content.leadingAnchor), view.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                                         view.topAnchor.constraint(equalTo: content.topAnchor), view.bottomAnchor.constraint(equalTo: content.bottomAnchor)])
+        }
+        view.passwordFor = { [unowned self] in (try? self.store.secrets.read($0.settings.credentialID, allowMissing: true)) ?? "" }
+        view.onDone = { [unowned self] in self.cancelSettings() }
+        view.onMakeDefault = { [unowned self] id in
+            do { try self.setDefaultDestination(id); view.reload(try self.store.load(), selecting: id) }
+            catch { view.showStatus(error.localizedDescription) }
+        }
+        view.onRemove = { [unowned self] id in
+            do { try self.removeDestination(id); view.reload(try self.store.load()) }
+            catch { view.showStatus(error.localizedDescription) }
+        }
+        view.onSave = { [unowned self] destination, password in self.saveDestination(destination, password: password, panel: panel) }
+        view.onTest = { [unowned self] destination, password in self.testDestination(destination, password: password, panel: panel) }
+        destinationsView = view; settingsPanel = panel
+        return (panel, view)
+    }
+
+    /// Persists the default destination chosen from the Webpost menu or the settings list.
+    func setDefaultDestination(_ id: String) throws { try store.setDefault(id) }
+    func removeDestination(_ id: String) throws { try store.remove(id) }
+    func destinations() -> PublishingDestinationList { (try? store.load()) ?? PublishingDestinationList() }
+
     /// True while a plan is being prepared or a transfer is running; a second upload is not queued.
     var isBusy: Bool { isPreparingPublish || transferActive }
-    /// Menu title of the saved destination, or nil when none is configured.
-    var destinationTitle: String? {
-        guard isConfigured, let settings = try? settingsLoader() else { return nil }
-        let alias = settings.sshAlias.trimmingCharacters(in: .whitespacesAndNewlines)
-        let host = URL(string: settings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines))?.host ?? settings.endpoint
-        return (settings.transport == .sftp ? "SFTP" : settings.transport.title) + " · " + (alias.isEmpty || settings.transport != .sftp ? host : alias)
-    }
-    /// Whether a destination is saved with enough detail to attempt an upload.
-    var isConfigured: Bool {
-        guard let settings = try? settingsLoader() else { return false }
-        func blank(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        return settings.transport == .sftp ? !(blank(settings.sshAlias) && blank(settings.endpoint)) : !blank(settings.endpoint)
-    }
+    /// Whether a default destination is saved with enough detail to attempt an upload.
+    var isConfigured: Bool { destinations().defaultDestination?.settings.isUsable ?? false }
 
     /// Uploads straight away with no confirmation and no sheet; the caller shows progress.
     /// Success returns the configured public URL, or the verified remote URL for status only.
@@ -1013,7 +959,7 @@ public final class PublishingCoordinator: NSObject {
         }
         do {
             guard !data.isEmpty else { throw PublishingFailure("There is no image data to upload.") }
-            let settings = try settingsLoader()
+            guard let settings = try store.defaultDestination()?.settings else { throw PublishingFailure("No upload destination is configured.") }
             isPreparingPublish = true
             workController.start(work: { context in
                 let capabilities = settings.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
@@ -1033,9 +979,14 @@ public final class PublishingCoordinator: NSObject {
         } catch { completion(.failure(error)) }
     }
 
-    static let realUploader: (Data, PublishingSettings, PublishingPlan, PublishingCancellation) throws -> URL = { data, settings, plan, context in
+    private func realUpload(data: Data, settings: PublishingSettings, plan: PublishingPlan, context: PublishingCancellation) throws -> URL {
         if settings.transport == .sftp { return try PublishingTransfer.upload(data: data, plan: plan, cancellation: context) }
-        let password = try PublishingKeychain.read(settings.credentialID)
+        if settings.transport == .s3 {
+            let credentials = try PublishingS3Credentials.resolve(settings: settings, secrets: store.secrets, credentialsFile: awsCredentialsFile())
+            return try PublishingTransfer.upload(data: data, plan: plan, username: credentials.accessKeyID, password: credentials.secretAccessKey,
+                                                 sessionToken: credentials.sessionToken, cancellation: context)
+        }
+        let password = try store.secrets.read(settings.credentialID, allowMissing: false)
         return try PublishingTransfer.upload(data: data, plan: plan, username: settings.username, password: password, cancellation: context)
     }
 
@@ -1055,55 +1006,56 @@ public final class PublishingCoordinator: NSObject {
         }
     }
 
-    @objc private func protocolChanged() {
-        guard let field = protocolField, field.indexOfSelectedItem >= 0 else { return }
-        let sftp = PublishingProtocol.allCases[field.indexOfSelectedItem] == .sftp
-        passwordField?.isEnabled = !sftp
-        aliasField?.isEnabled = sftp; remoteRootField?.isEnabled = sftp; portField?.isEnabled = sftp
-    }
     private func finishPublish(_ result: Result<URL, Error>) {
         let completion = pendingCompletion
         pendingCompletion = nil; completion?(result)
     }
-    @objc private func cancelSettings() {
+    @objc func cancelSettings() {
         if let panel = settingsPanel { dismissSheet(panel) }
-        settingsPanel = nil; passwordField?.stringValue = ""
-        endpointField = nil; protocolField = nil; usernameField = nil; passwordField = nil
-        folderField = nil; publicField = nil; settingsStatus = nil
-        aliasField = nil; remoteRootField = nil; portField = nil
+        settingsPanel = nil; destinationsView = nil
     }
-    @objc private func saveSettings() {
+
+    /// Validates the destination on a worker (tool capabilities and plan), then stores it.
+    func saveDestination(_ destination: PublishingDestination, password: String, panel: NSPanel?) {
         guard !isShuttingDown, !isCancellationPending else { return }
-        guard let transport = protocolField, let secret = passwordField else { return }
-        do {
-            var settings = savedSettings
-            settings.endpoint = endpointField?.stringValue ?? ""
-            settings.transport = PublishingProtocol.allCases[transport.indexOfSelectedItem]
-            settings.username = usernameField?.stringValue ?? ""
-            settings.remoteFolder = folderField?.stringValue ?? ""
-            settings.publicBaseURL = publicField?.stringValue ?? ""
-            settings.sshAlias = aliasField?.stringValue ?? ""
-            settings.sftpRemoteRoot = remoteRootField?.stringValue ?? ""
-            let portText = (portField?.stringValue ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-            if portText.isEmpty { settings.sftpPort = nil }
-            else {
-                guard let port = Int(portText) else { throw PublishingFailure("SFTP port must be a number, or empty to use SSH configuration.") }
-                settings.sftpPort = port
+        let saved = destination.settings
+        workController.start(work: { context in
+            let capabilities = saved.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
+            let plan = try PublishingPlan(settings: saved, fileName: "validation.png", capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
+            if saved.transport != .sftp, saved.transport != .s3 {
+                _ = try plan.curlConfig(file: URL(fileURLWithPath: "/tmp/validation"), username: saved.username, password: password)
             }
-            let saved = settings, password = settings.transport == .sftp ? "" : secret.stringValue, panel = settingsPanel
-            workController.start(work: { context in
-                let capabilities = saved.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
-                let plan = try PublishingPlan(settings: saved, fileName: "validation.png", capabilities: capabilities, sftpAvailable: PublishingSFTP.available)
-                if saved.transport != .sftp { _ = try plan.curlConfig(file: URL(fileURLWithPath: "/tmp/validation"), username: saved.username, password: password) }
-                try context.check(); try PublishingStorage.save(saved, password: password)
-            }) { result in
-                guard self.settingsPanel === panel else { return }
-                switch result {
-                case .success: self.cancelSettings()
-                case .failure(let error): self.settingsStatus?.stringValue = error.localizedDescription
-                }
+            try context.check(); try self.store.save(destination, password: password)
+            return try self.store.load()
+        }) { result in
+            guard self.settingsPanel === panel, let view = self.destinationsView else { return }
+            switch result {
+            case .success(let list): view.reload(list, selecting: destination.id)
+            case .failure(let error): view.showStatus(error.localizedDescription)
             }
-        } catch { settingsStatus?.stringValue = error.localizedDescription }
+        }
+    }
+
+    /// The S3 Test button: a signed bucket listing under the key prefix. It never uploads.
+    func testDestination(_ destination: PublishingDestination, password: String, panel: NSPanel?) {
+        guard !isShuttingDown, !isCancellationPending else { return }
+        let tested = destination.settings, file = awsCredentialsFile()
+        workController.start(work: { context -> PublishingS3Plan.CheckResult in
+            let capabilities = try PublishingCurl.capabilities(cancellation: context)
+            let plan = try PublishingPlan(settings: tested, fileName: "check.png", capabilities: capabilities)
+            guard let s3 = plan.s3 else { throw PublishingFailure("Test is available for S3 destinations only.") }
+            let profile = (tested.s3?.credentialsProfile ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let credentials = profile.isEmpty
+                ? S3Credentials(accessKeyID: tested.username, secretAccessKey: password, sessionToken: "")
+                : try AWSSharedCredentials.load(profile: profile, from: file)
+            return try PublishingS3Operations.check(plan: s3, credentials: credentials, cancellation: context)
+        }) { result in
+            guard self.settingsPanel === panel, let view = self.destinationsView else { return }
+            switch result {
+            case .success(let check): view.showStatus(check.message)
+            case .failure(let error): view.showStatus("Test failed: " + error.localizedDescription)
+            }
+        }
     }
 
     private func makePanel(title: String, width: CGFloat, height: CGFloat) -> NSPanel {

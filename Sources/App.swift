@@ -1577,9 +1577,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func menuNeedsUpdate(_ menu: NSMenu) { if menu === webpostButton?.menu { rebuildUploadMenu(menu) } }
     func rebuildUploadMenu(_ menu: NSMenu) {
         menu.removeAllItems()
-        let title = publishing.destinationTitle
-        let destinations = title.map { [UploadDestination(id: "default", title: $0)] } ?? []
-        uploadDestinationMenuItems(destinations: destinations, defaultID: destinations.first?.id).forEach(menu.addItem)
+        let list = publishing.destinations()
+        let destinations = list.destinations.map { UploadDestination(id: $0.id, title: $0.name) }
+        uploadDestinationMenuItems(destinations: destinations, defaultID: list.defaultDestination?.id).forEach(menu.addItem)
     }
     /// Destinations (default checkmarked), then Destination Settings… and Share with macOS…. More entries just add rows.
     func uploadDestinationMenuItems(destinations: [UploadDestination], defaultID: String?) -> [NSMenuItem] {
@@ -1609,8 +1609,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         publishing.cancelPublishing { (_: Result<Void, Error>) in }
     }
     @objc func chooseUploadDestination(_ item: NSMenuItem) { if let id = item.representedObject as? String { setDefaultDestination(id) } }
-    /// Hook for multiple destinations; storage holds exactly one today, so choosing it changes nothing.
-    func setDefaultDestination(_ id: String) {}
+    /// Persists the chosen destination as the default; the next Webpost click uploads to it.
+    func setDefaultDestination(_ id: String) {
+        do { try publishing.setDefaultDestination(id) } catch { self.error(error) }
+        if let menu = webpostButton?.menu { rebuildUploadMenu(menu) }
+    }
     @objc func openDestinationSettings() {
         if let sharingSettingsPresenter { sharingSettingsPresenter() } else { publishing.showSettings(relativeTo: window) }
     }

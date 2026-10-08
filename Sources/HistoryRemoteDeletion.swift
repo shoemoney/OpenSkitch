@@ -308,15 +308,12 @@ protocol HistoryRemoteDeletionAdapter {
 
 private struct HistorySystemRemoteDeletionAdapter: HistoryRemoteDeletionAdapter {
     func sshSourceFingerprint() throws -> String { try HistoryDeletionSSHConfigSnapshot.fingerprint() }
+    /// Remote deletion is bound to the default destination's settings; a different default refuses deletion.
     func loadSettings() throws -> PublishingSettings {
-        do {
-            let file = PublishingCoordinator.settingsFileURL
-            let data = try Data(contentsOf: file)
-            guard data.count <= 65536 else { throw PublishingFailure("Publishing settings are too large.") }
-            let settings = try JSONDecoder().decode(PublishingSettings.self, from: data)
-            guard UUID(uuidString: settings.credentialID) != nil else { throw PublishingFailure("Invalid publishing identity.") }
-            return settings
-        } catch { throw PublishingFailure("Current publishing settings are unavailable. Remote deletion was refused.") }
+        guard let settings = try? PublishingDestinationStore.system.defaultDestination()?.settings else {
+            throw PublishingFailure("Current publishing settings are unavailable. Remote deletion was refused.")
+        }
+        return settings
     }
     func capabilities(cancellation: PublishingCancellation) throws -> PublishingCapabilities {
         let output = try PublishingProcess.run(executable: "/usr/bin/curl", arguments: ["--disable", "--version"], timeout: 5, cancellation: cancellation)
