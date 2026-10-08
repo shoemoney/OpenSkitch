@@ -459,9 +459,6 @@ final class GlobalHotkeyManager: NSObject {
             settings = candidate; lastError = nil; loadError = nil
         } catch { lastError = error; throw error }
     }
-    func setBinding(_ binding: GlobalHotkeyBinding, for action: GlobalHotkeyAction) throws {
-        var candidate = settings; candidate[action] = binding; try apply(candidate)
-    }
     func disableAll() throws { var candidate = settings; candidate.enabled = false; try apply(candidate) }
     func resetDefaults() throws { try apply(.defaults) }
 
