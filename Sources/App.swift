@@ -322,6 +322,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if CommandLine.arguments.contains("--smoke-test") {
             DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runSmokeTest() }
         }
+        if CommandLine.arguments.contains("--relaunch-smoke") {
+            DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runRelaunchSmoke() }
+        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -329,7 +332,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         widthControl.endTracking(); closeDrawingColors()
         if windowZoom != nil { makeVisible() }
         saveRecovery()
-        guard allowDiscard(discardingForTermination: true) else { return .terminateCancel }
+        guard allowDiscard(discardingForTermination: true) else { pendingRelaunch = nil; return .terminateCancel }
         terminationStarted = true; decidingTermination = true
         shutdownPending = ["capture", "publishing", "photos", "history-deletion"]; shutdownError = nil
         historyRemoteDeletion.shutdown { [weak self] result in self?.acknowledgeShutdown("history-deletion", result: result) }
@@ -1960,12 +1963,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             try canvas.loadDocument(data: reopened.canvasData)
             guard let png = canvas.imageData(format: "png"), !png.isEmpty else { throw NSError(domain: "Smoke", code: 1) }
             try png.write(to: dir.appendingPathComponent("smoke.png"))
+            try JSONSerialization.data(withJSONObject: appearanceEvidence(), options: [.sortedKeys]).write(to: dir.appendingPathComponent("smoke-appearance.json"))
             try Data("native startup, original-format editable save/load, PNG export succeeded\n".utf8).write(to: dir.appendingPathComponent("smoke-result.txt"))
             dirty = false; NSApp.terminate(nil)
         } catch {
             try? Data("FAILED: \(error)\n".utf8).write(to: dir.appendingPathComponent("smoke-result.txt"))
             dirty = false; NSApp.terminate(nil)
         }
+    }
+    /// Clicks the real Preferences Relaunch button; tools/test-native-startup.py checks that a new process replaces this one.
+    func runRelaunchSmoke() {
+        showPreferences()
+        func find(_ identifier: String, in view: NSView) -> NSView? {
+            if view.identifier?.rawValue == identifier { return view }
+            let tabbed = (view as? NSTabView)?.tabViewItems.compactMap(\.view) ?? []
+            for child in view.subviews + tabbed { if let match = find(identifier, in: child) { return match } }
+            return nil
+        }
+        dirty = false
+        guard let form = preferencesForm, let relaunch = find("appearanceRelaunch", in: form) as? NSButton else {
+            let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? NSTemporaryDirectory())
+            try? Data("FAILED: Preferences has no Relaunch button\n".utf8).write(to: dir.appendingPathComponent("relaunch-smoke-result.txt"))
+            NSApp.terminate(nil); return
+        }
+        relaunch.performClick(nil)
     }
     func writeLayoutEvidence() {
         let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? support.path
@@ -2039,6 +2060,42 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 }
 
+/// Starts the fresh instance for Relaunch. The caller is quitting, and a process that exits before LaunchServices
+/// accepts the request can take it along, so this returns only once the request is acknowledged or `timeout` passes.
+enum RelaunchLauncher {
+    typealias Completion = @Sendable (NSRunningApplication?, Error?) -> Void
+    typealias Opener = (URL, NSWorkspace.OpenConfiguration, @escaping Completion) -> Void
+    private final class Acknowledgement: @unchecked Sendable {
+        let signal = DispatchSemaphore(value: 0)
+        var error: Error?
+    }
+    static let launchServices: Opener = { url, configuration, completion in
+        NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: completion)
+    }
+    /// Developer and test overrides (isolated support folder, pinned appearance) must survive a relaunch;
+    /// LaunchServices would otherwise start the new instance with none of them.
+    static func inheritedEnvironment(_ environment: [String: String]) -> [String: String] {
+        environment.filter { $0.key.hasPrefix("SKITCH_") }
+    }
+    @MainActor
+    @discardableResult
+    static func launch(_ url: URL, environment: [String: String] = ProcessInfo.processInfo.environment,
+                       timeout: TimeInterval = 5, open: Opener = launchServices) -> Bool {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        configuration.environment = inheritedEnvironment(environment)
+        let acknowledgement = Acknowledgement()
+        open(url, configuration) { _, error in acknowledgement.error = error; acknowledgement.signal.signal() }
+        let deadline = Date(timeIntervalSinceNow: timeout)
+        // Waiting in short slices while draining the main run loop also covers a completion delivered on the main queue.
+        while acknowledgement.signal.wait(timeout: .now() + .milliseconds(10)) == .timedOut {
+            guard Date() < deadline else { return false }
+            RunLoop.current.run(mode: .default, before: Date())
+        }
+        return acknowledgement.error == nil
+    }
+}
+
 @main
 @MainActor
 enum OpenSkitchMain {
@@ -2047,9 +2104,7 @@ enum OpenSkitchMain {
         app.setActivationPolicy(.regular)
         let delegate = AppDelegate()
         delegate.relaunchRequest = { url in
-            let configuration = NSWorkspace.OpenConfiguration()
-            configuration.createsNewApplicationInstance = true
-            NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: nil)
+            if !RelaunchLauncher.launch(url) { NSLog("OpenSkitch could not start the relaunched instance at %@", url.path) }
         }
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }

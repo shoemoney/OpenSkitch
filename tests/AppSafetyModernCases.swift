@@ -18,6 +18,7 @@ extension AppSafetyTests {
             ("Header and footer buttons reach the real AppDelegate actions", modernActionRouting),
             ("Preferences Appearance row writes the stored choice without switching the running window", modernPreferencesAppearance),
             ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", modernRelaunch),
+            ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", modernRelaunchLauncher),
             ("writeLayoutEvidence reports the Modern style and finds the header and brand one level deeper", modernLayoutEvidence),
             ("Main menu items carry symbols in Modern only and keep validating", modernMenus),
             ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover)
@@ -394,6 +395,12 @@ extension AppSafetyTests {
         AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
         app.relaunch()
         try expect(AppSafetyTermination.requests == 0 && app.pendingRelaunch == nil && launched.isEmpty, "Cancelling the Save prompt neither quits nor schedules a launch")
+
+        // A quit AppKit itself cancels after Relaunch was requested must not leave a launch waiting for the next ordinary Quit.
+        app.pendingRelaunch = Bundle.main.bundleURL
+        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
+        try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "The cancelled quit is reported to AppKit")
+        try expect(app.pendingRelaunch == nil && launched.isEmpty, "A cancelled quit drops the pending relaunch")
         app.dirty = false
 
         app.relaunch()
@@ -411,6 +418,67 @@ extension AppSafetyTests {
         try expect(!app.finishShutdownDecision() && app.pendingRelaunch == nil, "A failed shutdown cancels the pending relaunch")
         try waitForMain("The failure alert is presented") { AppSafetyAlert.answers.isEmpty }
         try expect(launched.count == 1, "Still exactly one launch")
+    }
+
+    /// What a stub LaunchServices saw, shared with the queue that answers it.
+    private final class LaunchLog: @unchecked Sendable {
+        var url: URL?
+        var configuration: NSWorkspace.OpenConfiguration?
+        var answered = false
+    }
+
+    /// The old instance exits right after the launcher returns, so the launcher must not return before LaunchServices has the request.
+    @available(macOS 26, *)
+    private static func modernRelaunchLauncher() throws {
+        let target = URL(fileURLWithPath: "/Applications/OpenSkitch.app")
+        func launch(after delay: TimeInterval, on queue: DispatchQueue?, error: Error? = nil, timeout: TimeInterval = 5,
+                    environment: [String: String] = [:]) -> (accepted: Bool, elapsed: TimeInterval, log: LaunchLog) {
+            let log = LaunchLog(), started = Date()
+            let accepted = RelaunchLauncher.launch(target, environment: environment, timeout: timeout) { url, configuration, completion in
+                log.url = url; log.configuration = configuration
+                queue?.asyncAfter(deadline: .now() + delay) { log.answered = true; completion(nil, error) }
+            }
+            return (accepted, Date().timeIntervalSince(started), log)
+        }
+
+        let background = launch(after: 0.3, on: .global())
+        try expect(background.accepted && background.log.answered, "The launcher returns true only after LaunchServices answered")
+        try expect(background.elapsed >= 0.29 && background.elapsed < 2, "It waited for the answer instead of returning at once (\(background.elapsed) s)")
+        try expect(background.log.url == target && background.log.configuration?.createsNewApplicationInstance == true, "It asks for a new instance of the same bundle")
+
+        let main = launch(after: 0.2, on: .main)
+        try expect(main.accepted && main.log.answered && main.elapsed >= 0.19 && main.elapsed < 2, "An answer delivered on the main queue is not starved by the wait (\(main.elapsed) s)")
+
+        let refused = launch(after: 0.05, on: .global(), error: NSError(domain: "AppSafety", code: 9))
+        try expect(!refused.accepted && refused.log.answered && refused.elapsed < 2, "A refused launch reports failure promptly")
+
+        let silent = launch(after: 0, on: nil, timeout: 0.3)
+        try expect(!silent.accepted && !silent.log.answered, "A launch nobody answers is reported as not accepted")
+        try expect(silent.elapsed >= 0.29 && silent.elapsed < 2, "The wait is bounded by its timeout (\(silent.elapsed) s)")
+
+        let inherited = launch(after: 0, on: .global(), environment: ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_APPEARANCE": "modern", "HOME": "/home", "PATH": "/bin"])
+        try expect(inherited.log.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_APPEARANCE": "modern"],
+                   "Only SKITCH_ overrides reach the new instance: \(String(describing: inherited.log.configuration?.environment))")
+        try expect(launch(after: 0, on: .global()).log.configuration?.environment == [:], "Without overrides the new instance inherits nothing")
+
+        // The wiring OpenSkitchMain installs, driven from the Modern window: the real Preferences button, the quit, then the launcher.
+        let (fixture, _) = try modernFixture()
+        let app = fixture.app, seen = LaunchLog()
+        app.relaunchRequest = { url in
+            _ = RelaunchLauncher.launch(url, environment: ["SKITCH_APPEARANCE": "modern", "SKITCH_APP_SUPPORT": "/isolated", "PATH": "/bin"], timeout: 2) { opened, configuration, completion in
+                seen.url = opened; seen.configuration = configuration
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { seen.answered = true; completion(nil, nil) }
+            }
+        }
+        app.showPreferences()
+        guard let form = app.preferencesForm, let button = descendant(form, identifier: "appearanceRelaunch") as? NSButton else { throw Failure(description: "Preferences has no Relaunch button") }
+        button.performClick(nil)
+        try expect(AppSafetyTermination.requests == 1 && seen.url == nil, "The Relaunch button asks to quit and starts nothing yet")
+        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
+        try expect(seen.answered && seen.url == Bundle.main.bundleURL, "The launcher held the quit until LaunchServices had the request for this bundle")
+        try expect(seen.configuration?.createsNewApplicationInstance == true
+                   && seen.configuration?.environment == ["SKITCH_APPEARANCE": "modern", "SKITCH_APP_SUPPORT": "/isolated"],
+                   "The new instance is a separate process that keeps the pinned appearance and support folder: \(String(describing: seen.configuration?.environment))")
     }
 
     @available(macOS 26, *)

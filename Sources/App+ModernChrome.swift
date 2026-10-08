@@ -10,6 +10,22 @@ extension AppDelegate {
     func feedCanvasBleed() {
         if #available(macOS 26, *) { (modernChrome as? ModernEditorChrome)?.updateCanvasBleed(dragExportView?.overview) }
     }
+
+    /// What this process's window is built from, so tools/test-native-startup.py can tell a pinned appearance
+    /// that really produced its chrome from one that silently fell back.
+    func appearanceEvidence() -> [String: Any] {
+        var glassSurfaces = 0
+        if #available(macOS 26, *) {
+            func count(_ view: NSView) {
+                if view is NSGlassEffectView { glassSurfaces += 1 }
+                view.subviews.forEach(count)
+            }
+            if let content = window.contentView { count(content) }
+        }
+        return ["style": Appearance.current.rawValue, "modernChrome": modernChrome != nil,
+                "toolButtonClass": toolButtons[.brush].map { String(describing: type(of: $0)) } ?? "none",
+                "glassSurfaces": glassSurfaces]
+    }
 }
 
 @available(macOS 26, *)
