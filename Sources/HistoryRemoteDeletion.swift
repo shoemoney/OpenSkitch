@@ -307,10 +307,11 @@ protocol HistoryRemoteDeletionAdapter {
 }
 
 private struct HistorySystemRemoteDeletionAdapter: HistoryRemoteDeletionAdapter {
+    let store: PublishingDestinationStore
     func sshSourceFingerprint() throws -> String { try HistoryDeletionSSHConfigSnapshot.fingerprint() }
     /// Remote deletion is bound to the default destination's settings; a different default refuses deletion.
     func loadSettings() throws -> PublishingSettings {
-        guard let settings = try? PublishingDestinationStore.system.defaultDestination()?.settings else {
+        guard let settings = try? store.defaultDestination()?.settings else {
             throw PublishingFailure("Current publishing settings are unavailable. Remote deletion was refused.")
         }
         return settings
@@ -327,12 +328,7 @@ private struct HistorySystemRemoteDeletionAdapter: HistoryRemoteDeletionAdapter 
         return try HistoryDeletionSSHConfiguration(output: output.stdout)
     }
     func password(credentialID: String) throws -> String {
-        let query: [String: Any] = [kSecClass as String: kSecClassGenericPassword,
-                                    kSecAttrService as String: "SkitchRedux.CustomPublishing", kSecAttrAccount as String: credentialID,
-                                    kSecAttrSynchronizable as String: false, kSecReturnData as String: true, kSecMatchLimit as String: kSecMatchLimitOne]
-        var result: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data, let password = String(data: data, encoding: .utf8) else {
+        guard let password = try? store.secrets.read(credentialID, allowMissing: false) else {
             throw PublishingFailure("The current publishing password is unavailable in Keychain. Remote deletion was refused.")
         }
         return password
@@ -349,8 +345,12 @@ public final class HistoryRemoteDeletionCoordinator: NSObject {
     private let destinationBinding: [String: String]?
     private var busy = false
 
-    public init(destinationBinding: [String: String]? = nil) {
-        adapter = HistorySystemRemoteDeletionAdapter(); work = PublishingWorkController()
+    public convenience init(destinationBinding: [String: String]? = nil) {
+        self.init(destinationBinding: destinationBinding, store: .system)
+    }
+    /// The app passes the coordinator's store so remote deletion reads the same destinations Webpost writes.
+    init(destinationBinding: [String: String]?, store: PublishingDestinationStore) {
+        adapter = HistorySystemRemoteDeletionAdapter(store: store); work = PublishingWorkController()
         self.destinationBinding = destinationBinding; super.init()
     }
     init(adapter: HistoryRemoteDeletionAdapter, work: PublishingWorkController = PublishingWorkController(),

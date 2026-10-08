@@ -133,8 +133,10 @@ if ! xcrun swiftc -swift-version 5 -O -D APP_SAFETY_TESTS -sdk "$SDK" \
     cat "$EVIDENCE/compile.log" >&2
     exit 1
 fi
+# Defence in depth: even a code path that ignores SKITCH_APP_SUPPORT lands in this throwaway home, never the owner's.
+mkdir -p "$EVIDENCE/home"
 set +e
-env -u SKITCH_FIXTURE SKITCH_APPEARANCE="$APPEARANCE" SKITCH_APP_SUPPORT="$EVIDENCE/support" \
+env -u SKITCH_FIXTURE SKITCH_APPEARANCE="$APPEARANCE" SKITCH_APP_SUPPORT="$EVIDENCE/support" CFFIXED_USER_HOME="$EVIDENCE/home" \
     SKITCH_EVIDENCE_DIR="$EVIDENCE/layout" APP_SAFETY_EVIDENCE="$EVIDENCE" APP_SAFETY_ARCH="$ARCH" \
     /usr/bin/arch "-$ARCH" "$EVIDENCE/$BIN" >"$EVIDENCE/run.log" 2>&1
 RESULT=$?
@@ -148,7 +150,9 @@ import json, os, pathlib, subprocess, sys
 evidence, arch, appearance, binary = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[4]
 env = os.environ.copy()
 env.pop('SKITCH_FIXTURE', None)
+(evidence / 'native-home').mkdir(exist_ok=True)
 env.update(SKITCH_APPEARANCE=appearance, SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
+           CFFIXED_USER_HOME=str(evidence / 'native-home'),
            SKITCH_EVIDENCE_DIR=str(evidence / 'native-layout'),
            APP_SAFETY_EVIDENCE=str(evidence), APP_SAFETY_ARCH=arch)
 (evidence / 'native-layout').mkdir()

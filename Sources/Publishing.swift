@@ -71,7 +71,7 @@ struct PublishingFailure: LocalizedError {
 struct PublishingCapabilities {
     let protocols: Set<String>
     let hasTLS: Bool
-    /// "curl 8.7.1 ..." parsed to (8, 7); nil when unparseable. --aws-sigv4 needs 7.75.
+    /// "curl 8.7.1 ..." parsed to (8, 7); nil when unparseable. --aws-sigv4 with an explicit x-amz-content-sha256 header needs 7.86.
     let version: (major: Int, minor: Int)?
 
     init(versionOutput: String) throws {
@@ -93,8 +93,8 @@ struct PublishingCapabilities {
             throw PublishingFailure("System /usr/bin/curl does not support this destination's protocol or required TLS.")
         }
         if transport == .s3 {
-            guard let version, (version.major, version.minor) >= (7, 75) else {
-                throw PublishingFailure("System /usr/bin/curl is too old for S3 request signing (7.75 or newer is required).")
+            guard let version, (version.major, version.minor) >= (7, 86) else {
+                throw PublishingFailure("System /usr/bin/curl is too old for S3 request signing (7.86 or newer is required).")
             }
         }
     }
@@ -246,7 +246,7 @@ struct PublishingPlan {
         return Data((lines.joined(separator: "\n") + "\n").utf8)
     }
 
-    static func sanitized(_ stderr: String, username: String, password: String) -> String {
+    static func sanitized(_ stderr: String, username: String, password: String, sessionToken: String = "") -> String {
         // Redact URL userinfo and query/fragment tokens even if returned by a server.
         var text = stderr
         for pattern in [#"(?i)([a-z][a-z0-9+.-]*://)[^\s/]*@"#,
@@ -257,7 +257,7 @@ struct PublishingPlan {
                 text = expression.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "[redacted]")
             }
         }
-        let secrets = [username, password].filter { !$0.isEmpty }.flatMap { value -> [String] in
+        let secrets = [username, password, sessionToken].filter { !$0.isEmpty }.flatMap { value -> [String] in
             [value, escapePathComponent(value), value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? value,
              (try? configQuote(value))?.dropFirst().dropLast().description ?? value,
              Data(value.utf8).base64EncodedString()]

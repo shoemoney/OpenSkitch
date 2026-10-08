@@ -13,6 +13,28 @@ root = Path(__file__).resolve().parent.parent
 build = root / "build"
 build.mkdir(exist_ok=True)
 
+def real_store_snapshot():
+    """(path, size, mtime, sha256) of every file in the owner's real Publishing folder. Contents are hashed, never printed."""
+    folder = Path(os.path.expanduser("~")) / "Library/Application Support/SkitchRedux/Publishing"
+    entries = {}
+    if folder.exists():
+        for path in sorted(folder.rglob("*")):
+            if path.is_file():
+                info = path.stat()
+                entries[str(path)] = (info.st_size, info.st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    return folder, entries
+
+def check_real_store(before):
+    folder, after = real_store_snapshot()
+    changed = [f"{kind} {name}" for name in sorted(before.keys() | after.keys())
+               for kind in ["changed" if name in before and name in after else "appeared" if name in after else "disappeared"]
+               if before.get(name) != after.get(name)]
+    if changed:
+        raise SystemExit(f"FAIL real-store-guard: the owner's {folder} was touched by this run:\n" + "\n".join(changed))
+    print("PASS real-store-guard (", len(after), "files in", folder, "unchanged )", flush=True)
+
+real_store_folder, real_store_before = real_store_snapshot()
+
 def secrets_guard():
     """Licensed fonts and registry credentials must never become committable."""
     forbidden = re.compile(r"\.(ttf|otf|woff2?)$|(^|/)(\.npmrc|package-lock\.json)$|(^|/)node_modules/|(^|/)fortawesome-fontawesome-pro-[^/]*\.tgz$", re.I)
@@ -126,6 +148,7 @@ with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as execu
             failures.append(str(error))
             print("FAIL", error, flush=True)
 if failures:
+    check_real_store(real_store_before)
     raise SystemExit(1)
 # Classic is the pinned baseline everywhere; Modern needs macOS 26+ and its integration cases.
 safety_runs = ["classic"]
@@ -141,6 +164,7 @@ for style in safety_runs:
 if options.concurrent_app_safety:
     print("== app-safety concurrent", flush=True)
     subprocess.run([str(root / "tools" / "test-app-safety-concurrent.sh"), "--arch", options.arch], cwd=root, check=True)
+check_real_store(real_store_before)
 if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")
 print("All suites passed on", options.arch, "with no source drift. Evidence:", snapshot, flush=True)

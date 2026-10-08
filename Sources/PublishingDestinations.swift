@@ -119,13 +119,26 @@ final class PublishingDestinationStore {
         self.directory = directory; self.secrets = secrets
     }
 
-    static let system = PublishingDestinationStore(
-        directory: FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SkitchRedux/Publishing", isDirectory: true),
-        secrets: PublishingKeychain())
+    /// The folder for a support directory: <support>/Publishing.
+    static func directory(support: URL) -> URL { support.appendingPathComponent("Publishing", isDirectory: true) }
+
+    /// The store the app uses. With SKITCH_APP_SUPPORT set (tests, harnesses, eye-dump) it lives inside
+    /// that isolated folder and secrets stay in memory, so nothing can reach the real folder or Keychain.
+    /// Without it, the real Application Support folder and the login Keychain.
+    static func forEnvironment(_ environment: [String: String]) -> PublishingDestinationStore {
+        if let isolated = environment["SKITCH_APP_SUPPORT"], !isolated.isEmpty {
+            return PublishingDestinationStore(directory: directory(support: URL(fileURLWithPath: isolated, isDirectory: true)),
+                                              secrets: PublishingMemorySecrets())
+        }
+        let real = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("SkitchRedux", isDirectory: true)
+        return PublishingDestinationStore(directory: directory(support: real), secrets: PublishingKeychain())
+    }
+
+    static let system = forEnvironment(ProcessInfo.processInfo.environment)
 
     var file: URL { directory.appendingPathComponent("destinations.json") }
-    /// The pre-multi-destination single file. It is backed up and retired on first load.
+    /// The pre-multi-destination single file. It is copied, never moved or modified: a downgrade must still find it.
     var legacyFile: URL { directory.appendingPathComponent("destination.json") }
     var backupFile: URL { directory.appendingPathComponent("destination.json.pre-destinations.bak") }
 
@@ -166,7 +179,9 @@ final class PublishingDestinationStore {
             if next.settings.storesSecretInKeychain { secrets.remove(next.settings.credentialID) }
             throw error
         }
-        if let previous, previous.storesSecretInKeychain { secrets.remove(previous.credentialID) }
+        if let previous, previous.storesSecretInKeychain, previous.credentialID != legacyCredentialID() {
+            secrets.remove(previous.credentialID)
+        }
     }
 
     func remove(_ id: String) throws {
@@ -176,7 +191,17 @@ final class PublishingDestinationStore {
         let removed = list.destinations.remove(at: index)
         if list.defaultID == id || !list.destinations.contains(where: { $0.id == list.defaultID }) { list.defaultID = list.destinations.first?.id }
         try write(list)
-        if removed.settings.storesSecretInKeychain { secrets.remove(removed.settings.credentialID) }
+        if removed.settings.storesSecretInKeychain, removed.settings.credentialID != legacyCredentialID() {
+            secrets.remove(removed.settings.credentialID)
+        }
+    }
+
+    /// The Keychain item the untouched legacy destination.json still points at. An older build would read
+    /// it after a downgrade, so it is never deleted here.
+    private func legacyCredentialID() -> String? {
+        guard let data = try? Data(contentsOf: legacyFile), data.count <= 65536,
+              let legacy = try? JSONDecoder().decode(PublishingSettings.self, from: data) else { return nil }
+        return legacy.credentialID
     }
 
     private func loadLocked() throws -> PublishingDestinationList {
@@ -192,7 +217,8 @@ final class PublishingDestinationStore {
         }
         guard fm.fileExists(atPath: legacyFile.path) else { return PublishingDestinationList() }
         // Transparent migration: the one old destination becomes the only entry and the default.
-        // Its credentialID is kept, so the Keychain item (and SFTP config) are untouched.
+        // Its credentialID is kept, so the Keychain item (and SFTP config) are untouched; destinations.json
+        // existing marks the store as migrated.
         let legacy: PublishingSettings
         do {
             let data = try Data(contentsOf: legacyFile)
@@ -209,7 +235,6 @@ final class PublishingDestinationStore {
             try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: backup.path)
         } catch { throw PublishingFailure("The existing destination could not be backed up, so it was not migrated.") }
         try write(list)
-        try? fm.removeItem(at: legacyFile)
         return list
     }
 

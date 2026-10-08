@@ -168,14 +168,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var window: NSWindow!
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
     let capture = CaptureCoordinator()
-    let publishing = PublishingCoordinator()
+    /// One store for Webpost and remote deletion, derived from the same SKITCH_APP_SUPPORT the rest of the app honours.
+    /// It exists before buildWindow, which loads it while building the Webpost menu.
+    static let publishingStore = PublishingDestinationStore.forEnvironment(ProcessInfo.processInfo.environment)
+    let publishing: PublishingCoordinator = { let coordinator = PublishingCoordinator(); coordinator.store = AppDelegate.publishingStore; return coordinator }()
     var webpostButton: NSButton?
     /// Progress text for a running upload; updateStatus() keeps showing it while publishing.isBusy.
     var uploadStatus: String?
     /// Test seams: replace the real NSSharingServicePicker and the Sharing Settings sheet.
     var sharePickerPresenter: ((NSImage, NSView?) -> Void)?
     var sharingSettingsPresenter: (() -> Void)?
-    let historyRemoteDeletion = HistoryRemoteDeletionCoordinator()
+    let historyRemoteDeletion = HistoryRemoteDeletionCoordinator(destinationBinding: nil, store: AppDelegate.publishingStore)
     let hotkeys = GlobalHotkeyManager()
     var generalPreferences: OriginalGeneralPreferences { OriginalGeneralPreferences(defaults: .standard) }
     var preferencesWindow: NSWindow?

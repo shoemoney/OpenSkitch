@@ -316,6 +316,13 @@ enum AppSafetyTests {
         init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil, firstLaunchDocument: URL? = nil, firstLaunchDone: Bool = true) throws {
             let expected = ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!
             try expect(app.support.path == expected, "App support must be isolated")
+            // Regression guard: the publishing store (migration included) must never resolve to the owner's real folder.
+            let inside = URL(fileURLWithPath: expected).resolvingSymlinksInPath().path + "/"
+            for (label, store) in [("coordinator", app.publishing.store), ("system", PublishingDestinationStore.system), ("app", AppDelegate.publishingStore)] {
+                try expect(store.directory.resolvingSymlinksInPath().path.hasPrefix(inside),
+                           "The \(label) publishing store must lie inside SKITCH_APP_SUPPORT, not at \(store.directory.path)")
+                try expect(store.secrets is PublishingMemorySecrets, "The \(label) publishing store must use in-memory secrets under test")
+            }
             for name in ["Recovery.skitch", "Recovery.skitchredux"] {
                 let recovery = app.support.appendingPathComponent(name)
                 if FileManager.default.fileExists(atPath: recovery.path) { try FileManager.default.removeItem(at: recovery) }
@@ -353,8 +360,8 @@ enum AppSafetyTests {
                 app.removeDragThumbnail()
                 app.navigatorWindow?.orderOut(nil)
                 app.navigatorWindow?.close()
-                app.window.delegate = nil
-                app.window.close()
+                app.window?.delegate = nil
+                app.window?.close()
                 app.historyWindow?.delegate = nil
                 app.historyWindow?.close()
                 NSApp.mainMenu = nil

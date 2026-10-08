@@ -51,22 +51,30 @@ enum AWSSharedCredentials {
         let wanted = profile.trimmingCharacters(in: .whitespaces)
         var current: String?
         var found = false
+        var sawConfigStyle = false
         var values: [String: String] = [:]
         for raw in text.replacingOccurrences(of: "\u{FEFF}", with: "").components(separatedBy: .newlines) {
             let line = raw.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") || line.hasPrefix(";") { continue }
             if line.hasPrefix("["), let close = line.firstIndex(of: "]") {
-                var name = String(line[line.index(after: line.startIndex)..<close]).trimmingCharacters(in: .whitespaces)
-                if name.hasPrefix("profile ") { name = String(name.dropFirst(8)).trimmingCharacters(in: .whitespaces) }
+                // AWS CLI semantics: the credentials file has bare [name] sections. "[profile name]" belongs
+                // to the config file, so here it is a different (and unselectable) section.
+                let name = String(line[line.index(after: line.startIndex)..<close]).trimmingCharacters(in: .whitespaces)
                 current = name
                 if name == wanted { found = true }
+                if name.hasPrefix("profile "), String(name.dropFirst(8)).trimmingCharacters(in: .whitespaces) == wanted { sawConfigStyle = true }
                 continue
             }
             guard current == wanted, let equals = line.firstIndex(of: "=") else { continue }
             let key = line[..<equals].trimmingCharacters(in: .whitespaces).lowercased()
             values[key] = line[line.index(after: equals)...].trimmingCharacters(in: .whitespaces)
         }
-        guard found else { throw PublishingFailure("Profile “\(wanted)” was not found in \(source).") }
+        guard found else {
+            if sawConfigStyle {
+                throw PublishingFailure("Profile “\(wanted)” is written as [profile \(wanted)] in \(source). The credentials file uses a bare [\(wanted)] header; “[profile …]” is only for the AWS config file.")
+            }
+            throw PublishingFailure("Profile “\(wanted)” was not found in \(source).")
+        }
         guard let key = values["aws_access_key_id"], !key.isEmpty,
               let secret = values["aws_secret_access_key"], !secret.isEmpty else {
             throw PublishingFailure("Profile “\(wanted)” needs aws_access_key_id and aws_secret_access_key.")
@@ -131,12 +139,25 @@ struct PublishingS3Plan {
             base = try PublishingPlan.baseURL("https://s3.\(region).amazonaws.com", schemes: ["https"])
         } else {
             base = try PublishingPlan.baseURL(settings.endpoint, schemes: ["https", "http"])
+            if base.scheme?.lowercased() == "http", !Self.isPrivateHost(base.host ?? "") {
+                throw PublishingFailure("Plain http is only allowed for this computer or your own network (localhost, 127.x, 10.x, 172.16-31.x, 192.168.x, *.local). Use https for “\(base.host ?? "that host")”.")
+            }
         }
         // Path-style only: <endpoint>/<bucket>/<key>.
         bucketURL = try PublishingPlan.appending([bucket], to: base)
         objectURL = try PublishingPlan.appending([bucket] + keyComponents, to: base)
         contentType = Self.contentType(for: fileName)
         publicReadACL = options.publicReadACL
+    }
+
+    /// Hosts where an unencrypted endpoint cannot cross the internet: loopback, RFC1918 and mDNS names.
+    static func isPrivateHost(_ rawHost: String) -> Bool {
+        let host = rawHost.trimmingCharacters(in: CharacterSet(charactersIn: "[]")).lowercased()
+        if host == "localhost" || host == "::1" || host.hasSuffix(".local") || host.hasSuffix(".localhost") { return true }
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4, let octets = Optional(parts.compactMap { Int($0) }), octets.count == 4,
+              parts.allSatisfy({ $0.allSatisfy(\.isNumber) }), octets.allSatisfy({ (0...255).contains($0) }) else { return false }
+        return octets[0] == 127 || octets[0] == 10 || (octets[0] == 172 && (16...31).contains(octets[1])) || (octets[0] == 192 && octets[1] == 168)
     }
 
     /// Keys use only A-Z a-z 0-9 . _ - so SigV4 canonicalization can never disagree with the URL.
@@ -233,9 +254,9 @@ struct PublishingS3Plan {
     }
 
     func verifiedUpload(stdout: String, exitCode: Int32, stderr: String, body: String, byteCount: Int,
-                        username: String, password: String) throws {
+                        username: String, password: String, sessionToken: String = "") throws {
         guard exitCode == 0 else {
-            let detail = PublishingPlan.sanitized(stderr, username: username, password: password)
+            let detail = PublishingPlan.sanitized(stderr, username: username, password: password, sessionToken: sessionToken)
             throw PublishingFailure("Upload failed (curl \(exitCode))." + (detail.isEmpty ? "" : "\n" + detail))
         }
         let lines = stdout.components(separatedBy: "\n")
@@ -243,7 +264,7 @@ struct PublishingS3Plan {
             throw PublishingFailure("Curl did not return a complete S3 response. Upload success could not be verified.")
         }
         guard code == 200 else {
-            let detail = Self.errorSummary(body).map { PublishingPlan.sanitized($0, username: username, password: password) }
+            let detail = Self.errorSummary(body).map { PublishingPlan.sanitized($0, username: username, password: password, sessionToken: sessionToken) }
             throw PublishingFailure("S3 returned status \(code); the upload was not confirmed." + (detail.map { "\n" + $0 } ?? ""))
         }
         guard let uploaded = Double(lines[2]), uploaded == Double(byteCount), URL(string: lines[1]) == objectURL else {
@@ -292,7 +313,8 @@ enum PublishingS3Operations {
         let config = try s3.uploadConfig(file: file, credentials: credentials, responseFile: response)
         let output = try runCurl(config: config, timeout: 125, cancellation: cancellation)
         try s3.verifiedUpload(stdout: output.stdout, exitCode: output.code, stderr: output.stderr, body: body(response),
-                              byteCount: data.count, username: credentials.accessKeyID, password: credentials.secretAccessKey)
+                              byteCount: data.count, username: credentials.accessKeyID, password: credentials.secretAccessKey,
+                              sessionToken: credentials.sessionToken)
     }
 
     /// The Test button: a signed read-only listing. No object is written.
@@ -303,7 +325,7 @@ enum PublishingS3Operations {
         let response = directory.appendingPathComponent("response")
         let output = try runCurl(config: try plan.checkConfig(credentials: credentials, responseFile: response), timeout: 40, cancellation: cancellation)
         guard output.code == 0, let code = statusCode(output) else {
-            let detail = PublishingPlan.sanitized(output.stderr, username: credentials.accessKeyID, password: credentials.secretAccessKey)
+            let detail = PublishingPlan.sanitized(output.stderr, username: credentials.accessKeyID, password: credentials.secretAccessKey, sessionToken: credentials.sessionToken)
             throw PublishingFailure("The bucket could not be reached (curl \(output.code))." + (detail.isEmpty ? "" : "\n" + detail))
         }
         return PublishingS3Plan.interpretCheck(code: code, body: body(response))

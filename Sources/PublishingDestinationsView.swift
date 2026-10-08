@@ -10,6 +10,8 @@ final class PublishingDestinationsView: NSView, NSTableViewDataSource, NSTableVi
     var onTest: ((PublishingDestination, String) -> Void)?
     var onDone: (() -> Void)?
     var passwordFor: (PublishingDestination) -> String = { _ in "" }
+    /// Asks before a destination is removed. Tests replace it; the default is a modal alert.
+    var confirmRemoval: (_ title: String, _ detail: String) -> Bool = PublishingDestinationsView.askToRemove
 
     private(set) var list: PublishingDestinationList
     private(set) var editing: PublishingDestination?
@@ -116,7 +118,38 @@ final class PublishingDestinationsView: NSView, NSTableViewDataSource, NSTableVi
 
     @objc func addTapped() { showForm(for: nil) }
     @objc func editTapped() { if let selected = selectedDestination { showForm(for: selected) } }
-    @objc func removeTapped() { if let selected = selectedDestination { onRemove?(selected.id) } }
+    @objc func removeTapped() {
+        guard let selected = selectedDestination else { return }
+        let prompt = Self.removalPrompt(for: selected, in: list)
+        guard confirmRemoval(prompt.title, prompt.detail) else { return }
+        onRemove?(selected.id)
+    }
+
+    /// Names the destination, says its saved secret goes with it, and says who becomes the default.
+    static func removalPrompt(for destination: PublishingDestination, in list: PublishingDestinationList) -> (title: String, detail: String) {
+        var detail = destination.settings.storesSecretInKeychain
+            ? "Its saved password or secret key is removed from the Keychain too. This cannot be undone."
+            : "Any saved settings for it are removed. This cannot be undone."
+        if destination.id == list.defaultDestination?.id {
+            if let next = list.destinations.first(where: { $0.id != destination.id }) {
+                detail += " It is the default, so “\(next.name)” becomes the default."
+            } else {
+                detail += " It is the only destination, so Webpost will need a new one before it can upload."
+            }
+        }
+        return ("Remove “\(destination.name)”?", detail)
+    }
+
+    private static func askToRemove(_ title: String, _ detail: String) -> Bool {
+        let alert = NSAlert()
+        alert.messageText = title; alert.informativeText = detail; alert.alertStyle = .warning
+        let remove = alert.addButton(withTitle: "Remove"), cancel = alert.addButton(withTitle: "Cancel")
+        remove.font = font(18); cancel.font = font(18)
+        for case let field as NSTextField in alert.window.contentView?.subviews ?? [] where field.font != nil {
+            field.font = font(max(field.font!.pointSize, 18))
+        }
+        return alert.runModal() == .alertFirstButtonReturn
+    }
     @objc func makeDefaultTapped() { if let selected = selectedDestination { onMakeDefault?(selected.id) } }
     @objc func doneTapped() { onDone?() }
 

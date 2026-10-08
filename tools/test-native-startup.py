@@ -65,7 +65,8 @@ def relaunch_cycle(arch, style, folder, attempt):
     # The old instance opens the fixture; Relaunch must not forward it, or the new one would reopen it over the recovered drawing.
     env = dict(os.environ)
     env["SKITCH_FIXTURE"] = str(fixture)
-    env.update(SKITCH_APP_SUPPORT=support, SKITCH_APPEARANCE=style, SKITCH_EVIDENCE_DIR=str(folder))
+    env.update(SKITCH_APP_SUPPORT=support, SKITCH_APPEARANCE=style, SKITCH_EVIDENCE_DIR=str(folder),
+               CFFIXED_USER_HOME=tempfile.mkdtemp(prefix="relaunch-home-", dir=folder))
     failure = folder / "relaunch-smoke-result.txt"
     failure.unlink(missing_ok=True)
     try:
@@ -129,6 +130,7 @@ for label, (arch, style) in runs.items():
     folder.mkdir(parents=True, exist_ok=True)
     support = tempfile.mkdtemp(prefix="support-", dir=folder)
     env = os.environ | {"SKITCH_APP_SUPPORT": support, "SKITCH_APPEARANCE": style,
+                        "CFFIXED_USER_HOME": tempfile.mkdtemp(prefix="home-", dir=folder),
                         "SKITCH_EVIDENCE_DIR": str(folder), "SKITCH_FIXTURE": str(fixture)}
     # Do not allow evidence left by an earlier invocation to count as a pass.
     for name in ["smoke-result.txt", "smoke.png", "smoke.skitch", "smoke.skitchredux", "smoke-appearance.json"]:

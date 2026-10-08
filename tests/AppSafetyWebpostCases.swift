@@ -184,7 +184,13 @@ extension AppSafetyTests {
         try expect(try app.publishing.store.load().destinations.first { $0.id == saved.id }?.settings.s3?.bucket == "cdn.example.com", "An invalid bucket is not saved")
         view.cancelFormTapped()
         // Remove the default; the other becomes default.
+        var asked: [(String, String)] = []
+        view.confirmRemoval = { title, detail in asked.append((title, detail)); return false }
         view.select(id: saved.id); view.removeTapped()
+        try expect(asked.count == 1 && asked[0].0 == "Remove “AWS cdn”?" && asked[0].1.contains("Home SFTP") && asked[0].1.contains("default") && view.list.destinations.count == 2,
+                   "Declining the confirmation removes nothing, and the prompt names the destination and the next default (\(asked))")
+        view.confirmRemoval = { _, _ in true }
+        view.removeTapped()
         try expect(view.list.destinations.map(\.name) == ["Home SFTP"] && (try app.publishing.store.defaultDestination()?.name) == "Home SFTP", "Removing the default promotes the remaining destination")
         try expect(app.publishing.isConfigured, "The remaining destination keeps Webpost configured")
     }

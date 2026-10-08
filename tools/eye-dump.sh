@@ -13,7 +13,8 @@ for STYLE in modern classic; do
     OUT="$ROOT/build/eye-dump/$STYLE"
     rm -rf "$OUT"; mkdir -p "$OUT"
     SUPPORT=$(mktemp -d "${TMPDIR:-/tmp}/eye-dump-support.XXXXXX")
-    SKITCH_APPEARANCE=$STYLE SKITCH_APP_SUPPORT="$SUPPORT" SKITCH_FIXTURE="$FIXTURE" SKITCH_EVIDENCE_DIR="$SUPPORT/evidence" \
+    mkdir -p "$SUPPORT/home"
+    CFFIXED_USER_HOME="$SUPPORT/home" SKITCH_APPEARANCE=$STYLE SKITCH_APP_SUPPORT="$SUPPORT" SKITCH_FIXTURE="$FIXTURE" SKITCH_EVIDENCE_DIR="$SUPPORT/evidence" \
         "$APP/Contents/MacOS/OpenSkitch" --eye-dump "$OUT" || echo "eye-dump $STYLE exited $?" >&2
     rm -rf "$SUPPORT"
     echo "$STYLE: $(ls "$OUT" | tr '\n' ' ')"

@@ -61,6 +61,7 @@ enum PublishingDestinationsTests {
         try expect(text.components(separatedBy: "\n").filter { $0.hasPrefix("user = ") } == ["user = \"AKIAIOSFODNN7EXAMPLE:\(secret)\""], "key pair appears once, in the stdin config")
         try expect(text.contains("header = \"x-amz-security-token: FwoGZXIvYXdzEXAMPLE\"\n"), "session token is a header")
         try expect(text.contains("header = \"Content-Type: image/png\"\n") && text.contains("upload-file = \"/tmp/image\"\n"), "PUT of the file with its content type")
+        try expect(text.contains("header = \"x-amz-content-sha256: UNSIGNED-PAYLOAD\"\n"), "the PUT sends the explicit unsigned-payload hash header (curl 7.86+ honours it)")
         try expect(!text.lowercased().contains("x-amz-acl"), "no ACL header by default")
         try expect(text.contains("url = \"https://s3.us-east-1.amazonaws.com/cdn.shoemoney.com/pics/My-Shot-1-caf-0a1b.png\"\n"), "config url is the path-style object URL")
         try expect(!text.contains("insecure") && !text.contains("location") && !text.contains("\nfail\n"), "no insecure TLS, redirects or --fail (the body is needed for diagnostics)")
@@ -77,6 +78,17 @@ enum PublishingDestinationsTests {
         try expect(r2Plan.s3?.contentType == "image/jpeg" && r2Plan.s3?.signingProvider == "aws:amz:auto:s3", "content type by extension, region in the provider")
         var minio = r2; minio.endpoint = "http://192.168.1.10:9000/base"
         try expect(try PublishingPlan(settings: minio, fileName: "x.png", capabilities: capabilities).remoteURL.absoluteString == "http://192.168.1.10:9000/base/shots/a/b/x.png", "http MinIO endpoint with a base path")
+
+        for host in ["localhost", "127.0.0.1", "127.8.9.1", "[::1]", "10.0.0.5", "172.16.0.1", "172.31.255.1", "192.168.1.10", "nas.local"] {
+            var local = r2; local.endpoint = "http://\(host):9000"
+            _ = try PublishingPlan(settings: local, fileName: "x.png", capabilities: capabilities)
+        }
+        for host in ["s3.example.com", "8.8.8.8", "172.32.0.1", "172.15.0.1", "192.169.1.1", "11.0.0.1", "10.0.0", "evil.local.example.com", "1.2.3.4.5"] {
+            var open = r2; open.endpoint = "http://\(host)"
+            try rejects("plain http to \(host)") { _ = try PublishingPlan(settings: open, fileName: "x.png", capabilities: capabilities) }
+        }
+        var httpsPublic = r2; httpsPublic.endpoint = "https://8.8.8.8"
+        _ = try PublishingPlan(settings: httpsPublic, fileName: "x.png", capabilities: capabilities)
 
         var keyed = awsCDN(); keyed.s3?.credentialsProfile = ""; keyed.username = "AKIAIOSFODNN7EXAMPLE"
         _ = try PublishingPlan(settings: keyed, fileName: "x.png", capabilities: capabilities)
@@ -99,6 +111,10 @@ enum PublishingDestinationsTests {
         try rejects("missing curl capabilities") { _ = try PublishingPlan(settings: awsCDN(), fileName: "x.png", capabilities: nil) }
         let old = try PublishingCapabilities(versionOutput: "curl 7.74.0 test\nProtocols: http https\nFeatures: SSL\n")
         try rejects("curl older than 7.75") { _ = try PublishingPlan(settings: awsCDN(), fileName: "x.png", capabilities: old) }
+        let oldish = try PublishingCapabilities(versionOutput: "curl 7.85.0 test\nProtocols: http https\nFeatures: SSL\n")
+        try rejects("curl older than 7.86") { _ = try PublishingPlan(settings: awsCDN(), fileName: "x.png", capabilities: oldish) }
+        let floor = try PublishingCapabilities(versionOutput: "curl 7.86.0 test\nProtocols: http https\nFeatures: SSL\n")
+        _ = try PublishingPlan(settings: awsCDN(), fileName: "x.png", capabilities: floor)
         let noHTTPS = try PublishingCapabilities(versionOutput: "curl 8.7.1 test\nProtocols: http\nFeatures: SSL\n")
         try rejects("curl without https") { _ = try PublishingPlan(settings: awsCDN(), fileName: "x.png", capabilities: noHTTPS) }
 
@@ -130,6 +146,11 @@ enum PublishingDestinationsTests {
         try rejects("other effective URL") { try plan.verifiedUpload(stdout: "200\nhttps://evil.example/x\n5\n", exitCode: 0, stderr: "", body: "", byteCount: 5, username: "AK", password: "SK") }
         do { try plan.verifiedUpload(stdout: "", exitCode: 6, stderr: "could not resolve host SKSECRETVALUE for AKIDVALUE", body: "", byteCount: 5, username: "AKIDVALUE", password: "SKSECRETVALUE"); throw PublishingFailure("SELF-CHECK FAILED: curl failure accepted") }
         catch let error as PublishingFailure { try expect(!error.message.contains("SKSECRETVALUE") && !error.message.contains("AKIDVALUE") && error.message.contains("curl 6"), "curl failures redact the key pair") }
+
+        do { try plan.verifiedUpload(stdout: "", exitCode: 35, stderr: "tls failure while sending FwoGZXIvYXdzTOKEN123", body: "", byteCount: 5, username: "AKIDVALUE", password: "SKSECRETVALUE", sessionToken: "FwoGZXIvYXdzTOKEN123"); throw PublishingFailure("SELF-CHECK FAILED: curl failure accepted") }
+        catch let error as PublishingFailure { try expect(!error.message.contains("TOKEN123") && error.message.contains("curl 35"), "curl failures redact the session token") }
+        do { try plan.verifiedUpload(stdout: "403\n\(url)\n5\n", exitCode: 0, stderr: "", body: "<Error><Code>X</Code><Message>bad FwoGZXIvYXdzTOKEN123 here</Message></Error>", byteCount: 5, username: "AK", password: "SK", sessionToken: "FwoGZXIvYXdzTOKEN123"); throw PublishingFailure("SELF-CHECK FAILED: 403 accepted") }
+        catch let error as PublishingFailure { try expect(!error.message.contains("TOKEN123"), "S3 error bodies redact the session token") }
 
         try expect(PublishingS3Plan.interpretCheck(code: 200, body: "<ListBucketResult/>").ok, "200 passes the check")
         let limited = PublishingS3Plan.interpretCheck(code: 403, body: denied)
@@ -169,7 +190,9 @@ enum PublishingDestinationsTests {
         catch let error as PublishingFailure { try expect(error.message.contains("“missing”") && error.message.contains("not found"), "missing profile error names it") }
         do { _ = try AWSSharedCredentials.parse(text, profile: "nosecret"); throw PublishingFailure("SELF-CHECK FAILED: partial profile accepted") }
         catch let error as PublishingFailure { try expect(error.message.contains("aws_secret_access_key") && !error.message.contains("AKIAONLY"), "a profile without a secret is rejected without echoing keys") }
-        try expect(try AWSSharedCredentials.parse("[profile cli]\naws_access_key_id=A\naws_secret_access_key=B\n", profile: "cli").secretAccessKey == "B", "[profile name] headers are tolerated")
+        do { _ = try AWSSharedCredentials.parse("[profile cli]\naws_access_key_id=AKIACLIKEY\naws_secret_access_key=B\n", profile: "cli"); throw PublishingFailure("SELF-CHECK FAILED: [profile x] accepted in the credentials file") }
+        catch let error as PublishingFailure { try expect(error.message.contains("[profile cli]") && error.message.contains("config file") && !error.message.contains("AKIACLIKEY"), "[profile name] is rejected in the credentials file with an explanation") }
+        try expect(try AWSSharedCredentials.parse("[profile cli]\naws_access_key_id=X\naws_secret_access_key=Y\n[cli]\naws_access_key_id=A\naws_secret_access_key=B\n", profile: "cli").secretAccessKey == "B", "the bare [name] section is used, the [profile name] one ignored")
 
         let home = URL(fileURLWithPath: "/fake-home")
         try expect(AWSSharedCredentials.defaultFile(environment: [:], home: home).path == "/fake-home/.aws/credentials", "default location under the injected home")
@@ -209,7 +232,7 @@ enum PublishingDestinationsTests {
         try expect(list.destinations[0].settings == sftp && list.destinations[0].settings.credentialID == sftp.credentialID, "SFTP settings and credentialID survive unchanged")
         try expect(list.destinations[0].name == "SFTP · shoemoney.com", "migrated name is readable")
         try expect(try Data(contentsOf: store.backupFile) == original, "the old file is kept byte for byte as a backup")
-        try expect(!FileManager.default.fileExists(atPath: store.legacyFile.path) && FileManager.default.fileExists(atPath: store.file.path), "the single file is retired once the list is written")
+        try expect(try Data(contentsOf: store.legacyFile) == original && FileManager.default.fileExists(atPath: store.file.path), "the legacy file is copied, never moved: its bytes are unchanged once the list is written")
         try expect(try store.load() == list, "a second load is stable")
         let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
         try expect(!String(decoding: try encoder.encode(list.destinations[0].settings), as: UTF8.self).contains("s3"), "non-S3 settings encode exactly as before, so history fingerprints still match")
@@ -219,9 +242,27 @@ enum PublishingDestinationsTests {
         var dav = PublishingSettings(); dav.endpoint = "https://dav.example.com/up"; dav.username = "me"
         dav.credentialID = "00000000-0000-0000-0000-0000000000BB"
         try secrets2.add("dav-password", id: dav.credentialID)
-        try legacyJSON(dav).write(to: directory2.appendingPathComponent("destination.json"))
+        let davBytes = try legacyJSON(dav)
+        try davBytes.write(to: directory2.appendingPathComponent("destination.json"))
         let migrated = try PublishingDestinationStore(directory: directory2, secrets: secrets2).load()
         try expect(secrets2.items == [dav.credentialID: "dav-password"] && migrated.destinations[0].settings.credentialID == dav.credentialID, "the Keychain item is neither moved nor deleted")
+
+        // Downgrade safety: the legacy file still points at this Keychain item, so edit and remove keep it.
+        let migratedStore = PublishingDestinationStore(directory: directory2, secrets: secrets2)
+        var edited = migrated.destinations[0]; edited.name = "Renamed DAV"
+        try migratedStore.save(edited, password: "new-password")
+        try expect(secrets2.items[dav.credentialID] == "dav-password" && secrets2.items.count == 2, "editing a migrated destination never deletes the item the legacy file references")
+        try migratedStore.remove(edited.id)
+        try expect(secrets2.items[dav.credentialID] == "dav-password" && secrets2.items.count == 1, "removing it deletes only the new item")
+        try expect(try Data(contentsOf: directory2.appendingPathComponent("destination.json")) == davBytes, "the legacy file is still untouched")
+
+        // Isolation: SKITCH_APP_SUPPORT puts the store inside that folder with in-memory secrets.
+        let support = try temporaryDirectory()
+        let isolated = PublishingDestinationStore.forEnvironment(["SKITCH_APP_SUPPORT": support.path])
+        try expect(isolated.directory.standardizedFileURL.path == support.appendingPathComponent("Publishing").standardizedFileURL.path && isolated.secrets is PublishingMemorySecrets,
+                   "an isolated support folder holds the store and its secrets stay in memory")
+        let production = PublishingDestinationStore.forEnvironment([:])
+        try expect(production.directory.path.hasSuffix("/Application Support/SkitchRedux/Publishing") && production.secrets is PublishingKeychain, "no environment means the real folder and Keychain")
 
         // An unreadable old file blocks migration and is left alone.
         let directory3 = try temporaryDirectory()
@@ -238,6 +279,18 @@ enum PublishingDestinationsTests {
         _ = try PublishingDestinationStore(directory: directory4, secrets: PublishingMemorySecrets()).load()
         try expect(try Data(contentsOf: directory4.appendingPathComponent("destination.json.pre-destinations.bak")) == Data("older backup".utf8)
                    && (try FileManager.default.contentsOfDirectory(atPath: directory4.path)).filter { $0.hasSuffix(".bak") }.count == 2, "a second backup gets its own name")
+
+        // Removal prompt wording (the view builds it; the alert only displays it).
+        var keyed = PublishingDestination(name: "Work DAV", settings: dav)
+        let other = PublishingDestination(name: "Backup", settings: awsCDN())
+        keyed.settings.credentialID = "00000000-0000-0000-0000-0000000000CC"
+        let two = PublishingDestinationList(defaultID: keyed.id, destinations: [keyed, other])
+        let promptDefault = PublishingDestinationsView.removalPrompt(for: keyed, in: two)
+        try expect(promptDefault.title == "Remove “Work DAV”?" && promptDefault.detail.contains("Keychain") && promptDefault.detail.contains("“Backup” becomes the default"), "removing the default names the new default and the secret")
+        let promptOther = PublishingDestinationsView.removalPrompt(for: other, in: two)
+        try expect(!promptOther.detail.contains("becomes the default") && !promptOther.detail.contains("Keychain"), "a non-default, secret-free destination gets no default or Keychain wording")
+        let promptLast = PublishingDestinationsView.removalPrompt(for: keyed, in: PublishingDestinationList(defaultID: keyed.id, destinations: [keyed]))
+        try expect(promptLast.detail.contains("only destination"), "removing the last destination says so")
 
         let empty = try PublishingDestinationStore(directory: try temporaryDirectory(), secrets: PublishingMemorySecrets()).load()
         try expect(empty.destinations.isEmpty && empty.defaultDestination == nil, "a fresh install has no destinations")
