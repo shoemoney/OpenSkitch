@@ -44,8 +44,11 @@ struct OriginalCaptureScreenImage {
 /// DEVIATION from the original, whose crosshair overlay and fullscreen snap spanned all displays.
 enum OriginalCaptureActiveDisplay {
     /// Frames must share one coordinate space with the pointer. Falls back to the first (primary) frame.
+    /// Edge rule (NSMouseInRect, unflipped): a frame owns its min-X and max-Y edges but not its max-X or
+    /// min-Y edges, so a pointer on the boundary between two screens always resolves to exactly one of them
+    /// (the right neighbour for a vertical seam, the lower one for a horizontal seam), and the top edge of a screen is inside it.
     static func resolve(mouse: NSPoint?, in frames: [NSRect]) -> NSRect? {
-        if let mouse, let hit = frames.first(where: { $0.contains(mouse) }) { return hit }
+        if let mouse, let hit = frames.first(where: { NSMouseInRect(mouse, $0, false) }) { return hit }
         return frames.first
     }
 }
@@ -183,12 +186,14 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
         // CrosshairScreenshot.didSnap (0x1d0e3), kMinCrosshairSize at
         // 0x2606d4 = Float(3); DAT_0026045c = Float(3), read from Mach-O.
         if !request.windowOnly && (global.width > 3 || global.height > 3) {
-            guard global.width > 0, global.height > 0,
-                  request.displays.contains(where: { $0.intersects(global) }) else {
+            // A region never leaves the active display, even if drag events outran the overlay.
+            let clipped = request.displays.first.map { global.intersection($0) } ?? .null
+            guard global.width > 0, global.height > 0, !clipped.isNull,
+                  clipped.width > 0, clipped.height > 0 else {
                 finish(.failure(pickerCancellation()), id: id)
                 return
             }
-            finish(.success(OriginalCaptureSelection(rect: Self.flip(global, primaryTop: primaryTop),
+            finish(.success(OriginalCaptureSelection(rect: Self.flip(clipped, primaryTop: primaryTop),
                                                     windowID: nil, modifiers: modifiers)), id: id)
             return
         }
@@ -361,6 +366,10 @@ final class OriginalCaptureSelectionView: NSView {
         // Original converts local coordinates to int (truncation toward zero).
         return NSPoint(x: p.x.rounded(.towardZero), y: p.y.rounded(.towardZero))
     }
+    /// AppKit keeps delivering drag events after the pointer leaves the overlay; a region must stay on this display.
+    private func clamped(_ p: NSPoint) -> NSPoint {
+        NSPoint(x: min(max(p.x, bounds.minX), bounds.maxX), y: min(max(p.y, bounds.minY), bounds.maxY))
+    }
     override func mouseMoved(with event: NSEvent) {
         guard live else { return }
         cursorPoint = point(event); needsDisplay = true
@@ -378,7 +387,7 @@ final class OriginalCaptureSelectionView: NSView {
     }
     override func mouseDragged(with event: NSEvent) {
         guard live, let a = anchor, !windowOnly else { return }
-        let p = point(event)
+        let p = clamped(point(event))
         selectionRect = NSRect(x: min(a.x, p.x), y: min(a.y, p.y),
                                width: abs(a.x - p.x), height: abs(a.y - p.y))
         needsDisplay = true
@@ -386,7 +395,7 @@ final class OriginalCaptureSelectionView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard live, anchor != nil, var rect = selectionRect else { return }
         if windowOnly {
-            let p = point(event)
+            let p = clamped(point(event))
             rect = NSRect(x: p.x + 1, y: p.y, width: 0, height: 0)
         }
         live = false // Reject duplicate up before callback reentry/cleanup.

@@ -113,6 +113,8 @@ private enum OriginalCapturePickerTests {
         reachability()
         magnifier()
         activeDisplayOnly()
+        dragCannotLeaveActiveDisplay()
+        pointerOnScreenEdges()
         print("PASS OriginalCapturePickerTests (\(checks) checks; nonordering panels, local events, no desktop/permissions)")
     }
     private static func magnifier() {
@@ -213,6 +215,51 @@ private enum OriginalCapturePickerTests {
         edgeRig.begin(windowOnly: true)
         edgeRig.click(NSPoint(x: 999.5, y: 200))
         expect(edgeRig.error.code == NSUserCancelledError, "Window on the neighbouring display is not offered even when the probe touches it")
+    }
+
+    /// Reviewer repro: AppKit keeps delivering drag events past the overlay edge onto the neighbour screen.
+    private static func dragCannotLeaveActiveDisplay() {
+        let primary = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let right = NSRect(x: 1000, y: 0, width: 600, height: 400)
+        let rig = PickerRig(); rig.displays = [primary, right]; rig.mouse = NSPoint(x: 500, y: 400)
+        rig.begin()
+        rig.drag(NSPoint(x: 900, y: 100), NSPoint(x: 1300, y: 300))
+        let region = rig.selection.rect // CG top-left, primary top = 800
+        let topLeftPrimary = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        expect(topLeftPrimary.contains(region) && region.maxX <= 1000 && region.width > 0,
+               "A drag that continues onto the neighbour screen stays entirely within the active display (got \(region))")
+        expect(region == NSRect(x: 901, y: 500, width: 99, height: 200), "Clamped region is exactly the on-display part (got \(region))")
+        // Same on the secondary: dragging back left onto the primary and out the bottom is clipped too.
+        let rig2 = PickerRig(); rig2.displays = [primary, right]; rig2.mouse = NSPoint(x: 1200, y: 100)
+        rig2.begin()
+        rig2.drag(NSPoint(x: 1100, y: 100), NSPoint(x: 800, y: -300))
+        let r2 = rig2.selection.rect // secondary top-left is (1000, 400)-(1600, 800)
+        expect(NSRect(x: 1000, y: 400, width: 600, height: 400).contains(r2) && r2.width > 0,
+               "A drag leaving the secondary toward the primary stays within the secondary (got \(r2))")
+        // A drag that starts and ends wholly off the active display yields no region.
+        let rig3 = PickerRig(); rig3.displays = [primary, right]
+        rig3.begin()
+        rig3.drag(NSPoint(x: 1100, y: 100), NSPoint(x: 1300, y: 300))
+        expect(rig3.results.last.map { if case .success(let s) = $0 { return primary.contains(NSRect(x: s.rect.minX, y: 800 - s.rect.maxY, width: s.rect.width, height: s.rect.height)) } else { return true } } ?? false,
+               "A drag begun off the overlay never yields a region outside the active display")
+    }
+
+    /// Edge rule: NSMouseInRect unflipped. A frame owns min-X and max-Y; max-X and min-Y belong to the neighbour.
+    private static func pointerOnScreenEdges() {
+        let primary = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let right = NSRect(x: 1000, y: 0, width: 600, height: 400)
+        let above = NSRect(x: 0, y: 800, width: 1000, height: 500)
+        let frames = [primary, right, above]
+        expect(OriginalCaptureActiveDisplay.resolve(mouse: NSPoint(x: 500, y: 800), in: [primary]) == primary,
+               "Pointer exactly on a screen's top edge is on that screen (NSRect.contains would drop it)")
+        expect(OriginalCaptureActiveDisplay.resolve(mouse: NSPoint(x: 1000, y: 200), in: frames) == right,
+               "Vertical shared seam resolves to the right-hand screen")
+        expect(OriginalCaptureActiveDisplay.resolve(mouse: NSPoint(x: 500, y: 800), in: frames) == primary,
+               "Horizontal shared seam resolves to the lower screen (it owns its top edge)")
+        expect(OriginalCaptureActiveDisplay.resolve(mouse: NSPoint(x: 500, y: 1300), in: frames) == above,
+               "Top edge of the upper screen belongs to it")
+        expect(OriginalCaptureActiveDisplay.resolve(mouse: NSPoint(x: 1600, y: 200), in: frames) == primary,
+               "Right outer edge is outside every screen and falls back to primary")
     }
 
     private static func cleaned(_ rig: PickerRig, _ count: Int = 1) {

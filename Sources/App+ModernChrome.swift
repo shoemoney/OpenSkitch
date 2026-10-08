@@ -1,7 +1,7 @@
 import AppKit
 
 extension AppDelegate {
-    /// Frame mode already hides and shows Cam and Cancel in AppDelegate; the chrome mirrors it into the glass layer.
+    /// Frame mode already shows and hides Cancel in AppDelegate; the chrome mirrors it into the glass layer.
     func setModernFrameMode(_ on: Bool) {
         if #available(macOS 26, *) { (modernChrome as? ModernEditorChrome)?.frameMode = on }
     }
