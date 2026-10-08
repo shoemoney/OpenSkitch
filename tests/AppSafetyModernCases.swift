@@ -23,7 +23,8 @@ extension AppSafetyTests {
             ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", modernRelaunchLauncher),
             ("writeLayoutEvidence reports the Modern style and finds the header and brand one level deeper", modernLayoutEvidence),
             ("Main menu items carry symbols in Modern only and keep validating", modernMenus),
-            ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover)
+            ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover),
+            ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures)
         ]
     }
 
@@ -336,6 +337,120 @@ extension AppSafetyTests {
         try expect(!chrome.bleedIsVisible, "A fresh thumbnail stays hidden under Reduce Transparency")
         chrome.accessibility = .none
         try expect(chrome.bleedIsVisible && image()?.image === app.dragExportView?.overview, "Clearing the option restores the current thumbnail")
+    }
+
+    /// Real mouse and key events into the CanvasBorderView that ModernEditorChrome hosts, compared with the same
+    /// gesture driven through beginWindowGesture/previewBorderGesture/endWindowGesture (what Classic's tests call).
+    @available(macOS 26, *)
+    private static func modernBorderGestures() throws {
+        enum Handle { case corner(CanvasCorner), edge(CanvasEdge) }
+        struct Outcome { var data: Data; var geometry: [CGRect]; var background: Data?; var output: CGSize; var canvas: CGSize; var frame: CGRect; var undoName: String? }
+        let corners: [CanvasCorner] = [.topLeft, .topRight, .bottomLeft, .bottomRight]
+        let edges: [CanvasEdge] = [.left, .right, .top, .bottom]
+        let handles: [Handle] = corners.map { .corner($0) } + edges.map { .edge($0) }
+
+        func run(_ handle: Handle, viaMouse: Bool, cancel: Bool) throws -> (Outcome, before: Data, undoneClean: Bool, borderOK: Bool, begun: Bool) {
+            let (fixture, chrome) = try modernFixture()
+            let app = fixture.app
+            try viewportFixture(app)
+            let border = app.canvasBorder
+            try expect(border.superview === chrome, "canvasBorder lives inside ModernEditorChrome")
+            app.window.contentView?.layoutSubtreeIfNeeded(); app.updateViewportChrome()
+            let before = try app.canvas.snapshotDocumentData()
+            let flags: NSEvent.ModifierFlags = { if case .edge = handle { return [.option] } else { return [] } }()
+            let delta = CGPoint(x: 20, y: 12)
+            var begun = true
+            if viaMouse {
+                let inset = CanvasBorderView.border / 2
+                let local: CGPoint
+                switch handle {
+                case .corner(.topLeft): local = CGPoint(x: inset, y: inset)
+                case .corner(.topRight): local = CGPoint(x: border.bounds.width - inset, y: inset)
+                case .corner(.bottomLeft): local = CGPoint(x: inset, y: border.bounds.height - inset)
+                case .corner(.bottomRight): local = CGPoint(x: border.bounds.width - inset, y: border.bounds.height - inset)
+                case .edge(.left): local = CGPoint(x: inset, y: border.bounds.midY)
+                case .edge(.right): local = CGPoint(x: border.bounds.width - inset, y: border.bounds.midY)
+                case .edge(.top): local = CGPoint(x: border.bounds.midX, y: inset)
+                case .edge(.bottom): local = CGPoint(x: border.bounds.midX, y: border.bounds.height - inset)
+                }
+                // The window moves and resizes mid-drag, so each event is built from a fixed screen point like a real mouse.
+                let start = app.window.convertPoint(toScreen: border.convert(local, to: nil))
+                func mouse(_ type: NSEvent.EventType, _ point: CGPoint) throws -> NSEvent {
+                    guard let event = NSEvent.mouseEvent(with: type, location: app.window.convertPoint(fromScreen: point), modifierFlags: flags, timestamp: 0,
+                        windowNumber: app.window.windowNumber, context: nil, eventNumber: 1, clickCount: 1, pressure: 1) else {
+                        throw Failure(description: "Internal border mouse event allocation")
+                    }
+                    return event
+                }
+                // Screen space is y-up; the gesture delta is right/down.
+                let step1 = CGPoint(x: start.x + delta.x / 2, y: start.y - delta.y / 2)
+                let end = CGPoint(x: start.x + delta.x, y: start.y - delta.y)
+                border.mouseDown(with: try mouse(.leftMouseDown, start))
+                begun = app.windowGesture != nil
+                border.mouseDragged(with: try mouse(.leftMouseDragged, step1))
+                border.mouseDragged(with: try mouse(.leftMouseDragged, end))
+                if cancel {
+                    try expect(app.canvas.editingUndoManager.canUndo == false, "Preview registers no Undo before the gesture ends")
+                    guard let esc = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                        windowNumber: app.window.windowNumber, context: nil, characters: "\u{1b}",
+                        charactersIgnoringModifiers: "\u{1b}", isARepeat: false, keyCode: 53) else {
+                        throw Failure(description: "Internal Escape event allocation")
+                    }
+                    border.keyDown(with: esc)
+                } else {
+                    border.mouseUp(with: try mouse(.leftMouseUp, end))
+                }
+            } else {
+                let h: CanvasBorderHandle = { switch handle { case .corner(let c): return .corner(c); case .edge(let e): return .edge(e) } }()
+                begun = app.beginWindowGesture(h, flags: flags)
+                app.previewBorderGesture(delta: CGPoint(x: delta.x / 2, y: delta.y / 2), flags: flags)
+                app.previewBorderGesture(delta: delta, flags: flags)
+                app.endWindowGesture(cancelled: cancel)
+            }
+            let content = try app.window.contentView.unwrap("content view")
+            let expectedFrame = app.canvas.convert(app.canvas.bounds, to: content).insetBy(dx: -8, dy: -8)
+            let borderOK = border.frame == expectedFrame && !expectedFrame.isEmpty
+            let outcome = Outcome(data: try app.canvas.snapshotDocumentData(), geometry: app.canvas.document.elements.flatMap { [$0.rect, $0.bounds] },
+                                  background: app.canvas.document.backgroundPNG, output: app.canvas.outputSize,
+                                  canvas: app.canvas.canvasSize, frame: app.window.frame,
+                                  undoName: app.canvas.editingUndoManager.undoActionName)
+            var clean = true
+            if !cancel {
+                let after = outcome.data
+                try expect(app.canvas.editingUndoManager.canUndo, "A committed border gesture registers an Undo")
+                app.undo()
+                clean = try app.canvas.snapshotDocumentData() == before && !app.canvas.editingUndoManager.canUndo
+                app.redo()
+                let redone = try app.canvas.snapshotDocumentData() == after; clean = clean && redone
+            } else {
+                clean = !app.canvas.editingUndoManager.canUndo && outcome.data == before
+            }
+            return (outcome, before, clean, borderOK, begun)
+        }
+
+        for handle in handles {
+            let reference = try run(handle, viaMouse: false, cancel: false)
+            let mouse = try run(handle, viaMouse: true, cancel: false)
+            try expect(mouse.begun, "Mouse down on \(handle) begins a border gesture")
+            try expect(reference.0.output != CGSize(width: 150, height: 90) || reference.0.canvas != CGSize(width: 300, height: 180),
+                       "\(handle) reference gesture changes the canvas")
+            try expect(mouse.0.output == reference.0.output && mouse.0.canvas == reference.0.canvas &&
+                       mouse.0.geometry == reference.0.geometry && mouse.0.background == reference.0.background &&
+                       mouse.0.undoName == reference.0.undoName,
+                       "Mouse drag on \(handle) yields the Classic outputSize/crop result (\(mouse.0.output) vs \(reference.0.output))")
+            try expect(mouse.undoneClean, "\(handle) mouse gesture is exactly one Undo and Redo restores it")
+            try expect(mouse.borderOK, "canvasBorder.frame tracks the canvas after the \(handle) gesture")
+            let escaped = try run(handle, viaMouse: true, cancel: true)
+            try expect(escaped.begun && escaped.undoneClean && escaped.0.output == CGSize(width: 150, height: 90) &&
+                       escaped.0.canvas == CGSize(width: 300, height: 180) && escaped.borderOK,
+                       "Escape during a \(handle) drag restores the document, leaves no Undo and keeps the border on the canvas")
+        }
+        for corner in corners {
+            let width: CGFloat = (corner == .topLeft || corner == .bottomLeft) ? 130 : 170
+            let result = try run(.corner(corner), viaMouse: true, cancel: false)
+            try expect(result.0.output == CGSize(width: width, height: (width * 0.6).rounded()),
+                       "Mouse-dragged \(corner) corner matches the Classic width-driven numbers")
+        }
     }
 
     @available(macOS 26, *)
