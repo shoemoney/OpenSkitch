@@ -169,6 +169,23 @@ final class TextStyleForm: NSView {
         }
     }
 
+    /// AppKit raises an NSException when `rowHeight` is set on a matrix-delegate browser,
+    /// so only browsers whose delegate implements the item-based API get a row height.
+    static func browserSupportsRowHeight(_ browser: NSBrowser) -> Bool {
+        guard let delegate = browser.delegate else { return false }
+        return delegate.responds(to: #selector(NSBrowserDelegate.rootItem(for:)))
+            && delegate.responds(to: #selector(NSBrowserDelegate.browser(_:numberOfChildrenOfItem:)))
+    }
+
+    static func styleBrowser(_ browser: NSBrowser) {
+        if browserSupportsRowHeight(browser) {
+            browser.rowHeight = max(32, browser.rowHeight)
+        }
+        if let prototype = browser.cellPrototype as? NSCell, prototype.font != .systemFont(ofSize: 20) {
+            prototype.font = .systemFont(ofSize: 20)
+        }
+    }
+
     static func prepareFontPanel(_ panel: NSFontPanel) {
         func visit(_ view: NSView) {
             if let control = view as? NSControl, let font = control.font, font.pointSize < 20 {
@@ -185,12 +202,7 @@ final class TextStyleForm: NSView {
                 for (range, font) in updates { value.addAttribute(.font, value: font, range: range) }
                 if !updates.isEmpty { field.attributedStringValue = value }
             }
-            if let browser = view as? NSBrowser {
-                browser.rowHeight = max(32, browser.rowHeight)
-                if let prototype = browser.cellPrototype as? NSCell, prototype.font != .systemFont(ofSize: 20) {
-                    prototype.font = .systemFont(ofSize: 20)
-                }
-            }
+            if let browser = view as? NSBrowser { styleBrowser(browser) }
             if let table = view as? NSTableView {
                 table.rowHeight = max(32, table.rowHeight)
                 for column in table.tableColumns {

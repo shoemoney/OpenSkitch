@@ -14,6 +14,19 @@ final class ToolbarFixture: NSObject, NSToolbarDelegate {
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? { items.first { $0.itemIdentifier == identifier } }
 }
 
+final class MatrixBrowserDelegate: NSObject, NSBrowserDelegate {
+    func browser(_ sender: NSBrowser, numberOfRowsInColumn column: Int) -> Int { 0 }
+    func browser(_ sender: NSBrowser, willDisplayCell cell: Any, atRow row: Int, column: Int) {}
+}
+
+final class ItemBrowserDelegate: NSObject, NSBrowserDelegate {
+    func rootItem(for browser: NSBrowser) -> Any? { "root" }
+    func browser(_ browser: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int { 0 }
+    func browser(_ browser: NSBrowser, child index: Int, ofItem item: Any?) -> Any { "child" }
+    func browser(_ browser: NSBrowser, isLeafItem item: Any?) -> Bool { true }
+    func browser(_ browser: NSBrowser, objectValueForItem item: Any?) -> Any? { "value" }
+}
+
 @main
 struct TextStyleFormTests {
     static func main() {
@@ -240,6 +253,23 @@ struct TextStyleFormTests {
         expect(inside(geometryPanel.frame, tight) && content.width <= wantedContent.width && content.height > 0
                && abs(content.height - (placed.height - (wantedFrame.height - wantedContent.height))) < 0.5,
                "Bounded frame converts back to a smaller content area on a short display")
+        // A matrix-delegate browser would abort the process if rowHeight were assigned.
+        let matrixDelegate = MatrixBrowserDelegate()
+        let matrixBrowser = NSBrowser(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        matrixBrowser.delegate = matrixDelegate
+        matrixBrowser.cellPrototype = NSBrowserCell()
+        TextStyleForm.styleBrowser(matrixBrowser)
+        expect(!TextStyleForm.browserSupportsRowHeight(matrixBrowser), "Matrix-delegate browser is not row-height capable")
+        expect((matrixBrowser.cellPrototype as? NSCell)?.font == .systemFont(ofSize: 20), "Matrix-delegate browser still gets cell prototype styling")
+        let detached = NSBrowser(frame: .zero)
+        TextStyleForm.styleBrowser(detached)
+        expect(!TextStyleForm.browserSupportsRowHeight(detached), "Delegate-less browser is not row-height capable")
+        let itemDelegate = ItemBrowserDelegate()
+        let itemBrowser = NSBrowser(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        itemBrowser.delegate = itemDelegate
+        TextStyleForm.styleBrowser(itemBrowser)
+        expect(TextStyleForm.browserSupportsRowHeight(itemBrowser), "Item-based browser is row-height capable")
+        expect(itemBrowser.rowHeight >= 32, "Item-based browser reaches the 32 pt row height")
         precondition(failures.isEmpty, failures.joined(separator: "; "))
         print("TextStyleFormTests: \(checks) checks passed (native accessory controls; no desktop input)")
     }
