@@ -255,6 +255,7 @@ final class OriginalCaptureSelectionView: NSView {
     var onSelection: ((NSRect, NSEvent.ModifierFlags) -> Void)?
     var onCancel: (() -> Void)?
     private let windowOnly: Bool
+    private let defaults: UserDefaults
     private var live = true
     private var anchor: NSPoint?
     private var cursorPoint: NSPoint?
@@ -263,13 +264,48 @@ final class OriginalCaptureSelectionView: NSView {
     override var isOpaque: Bool { false }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-    init(frame: NSRect, windowOnly: Bool) {
+    /// Pixels behind the overlay for the crosshair magnifier; `magnifierImageScale` is pixels per point.
+    var magnifierImage: CGImage? { didSet { magnifier?.sourceImage = magnifierImage } }
+    var magnifierImageScale: CGFloat = 1 { didSet { magnifier?.imageScale = magnifierImageScale } }
+    private(set) var magnifier: OriginalCaptureMagnifierView?
+
+    init(frame: NSRect, windowOnly: Bool, defaults: UserDefaults = .standard) {
         self.windowOnly = windowOnly
+        self.defaults = defaults
         super.init(frame: frame)
     }
     required init?(coder: NSCoder) { nil }
 
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil else { return }
+        // pqCHSView.viewDidMoveToWindow (decompiled.c:18880-18929) mounts it from the pointer.
+        let pointer = window.map { convert($0.mouseLocationOutsideOfEventStream, from: nil) } ?? .zero
+        mountMagnifierIfEnabled(pointer: NSPoint(x: pointer.x.rounded(.towardZero), y: pointer.y.rounded(.towardZero)))
+    }
+
+    /// SKAuthorizationController.plusEnabled gating is not reconstructed (ASSUMPTION: always on).
+    func mountMagnifierIfEnabled(pointer: NSPoint) {
+        guard live, magnifier == nil,
+              defaults.bool(forKey: OriginalCaptureMagnifierGeometry.defaultsKey) else { return }
+        let view = OriginalCaptureMagnifierView(frame: NSRect(origin: .zero, size: OriginalCaptureMagnifierGeometry.initialSize))
+        view.sourceImage = magnifierImage
+        view.imageScale = magnifierImageScale
+        magnifier = view
+        addSubview(view)
+        updateMagnifier(pointer: pointer)
+    }
+
+    private func updateMagnifier(pointer: NSPoint) {
+        guard let magnifier else { return }
+        magnifier.mousePoint = pointer
+        magnifier.labelString = "\(Int(pointer.x))x\(Int(pointer.y))"
+        magnifier.frame = OriginalCaptureMagnifierGeometry.placementFrame(
+            mousePoint: pointer, requiredSize: magnifier.requiredDisplaySize, in: bounds)
+    }
+
     func invalidate() {
+        magnifier?.removeFromSuperview(); magnifier = nil
         live = false; anchor = nil; cursorPoint = nil; selectionRect = nil
         onSelection = nil; onCancel = nil
     }
@@ -281,6 +317,7 @@ final class OriginalCaptureSelectionView: NSView {
     override func mouseMoved(with event: NSEvent) {
         guard live else { return }
         cursorPoint = point(event); needsDisplay = true
+        updateMagnifier(pointer: cursorPoint!)
     }
     override func mouseDown(with event: NSEvent) {
         guard live, anchor == nil else { return }

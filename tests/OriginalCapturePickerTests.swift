@@ -110,7 +110,49 @@ private enum OriginalCapturePickerTests {
         reentrancyAndStaleEvents()
         rendering()
         reachability()
+        magnifier()
         print("PASS OriginalCapturePickerTests (\(checks) checks; nonordering panels, local events, no desktop/permissions)")
+    }
+    private static func magnifier() {
+        typealias G = OriginalCaptureMagnifierGeometry
+        expect(G.zoom == 10 && G.sourcePixels == NSSize(width: 10, height: 10), "Zoom 10 over 10x10 source (decompiled.c:68880)")
+        expect(G.magnifierRect == NSRect(x: 6, y: 6, width: 100, height: 100), "magnifierRect (69416)")
+        expect(G.magnifierBorderRect == NSRect(x: 3, y: 3, width: 106, height: 106), "border inset -3 (69437)")
+        expect(G.requiredDisplaySize(labelRect: NSRect(x: 6, y: 112, width: 80, height: 14)) == NSSize(width: 112, height: 129),
+               "requiredDisplaySize is inset(-3) of border union label (69338)")
+        // DAT_00260520 = -2.0f (disassembly 0x1e417: movss 0x242463(%ebx), ebx=0x1e0bd).
+        expect(G.placementOffset == -2, "Placement offset DAT_00260520")
+        expect(G.sourceRect(mousePoint: NSPoint(x: 40, y: 50)) == NSRect(x: 35, y: 45, width: 11, height: 11),
+               "Source square (mouse+0.5 inset by 5) made integral spans 11 points")
+        let bounds = NSRect(x: 0, y: 0, width: 1000, height: 800)
+        let size = NSSize(width: 112, height: 129)
+        expect(G.placementFrame(mousePoint: NSPoint(x: 500, y: 400), requiredSize: size, in: bounds)
+               == NSRect(x: 386, y: 269, width: 112, height: 129), "Frame = mouse - required size - 2")
+        expect(G.placementFrame(mousePoint: NSPoint(x: 5, y: 5), requiredSize: size, in: bounds).origin == .zero,
+               "Clamped to the overlay origin side")
+        expect(G.placementFrame(mousePoint: NSPoint(x: 5000, y: 5000), requiredSize: size, in: bounds)
+               == NSRect(x: 888, y: 671, width: 112, height: 129), "Clamped to the far overlay side")
+
+        let suite = "OpenSkitch.magnifier.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let off = OriginalCaptureSelectionView(frame: bounds, windowOnly: false, defaults: defaults)
+        off.mountMagnifierIfEnabled(pointer: NSPoint(x: 500, y: 400))
+        expect(off.magnifier == nil && off.subviews.isEmpty, "Preference off mounts nothing")
+        defaults.set(true, forKey: G.defaultsKey)
+        let view = OriginalCaptureSelectionView(frame: bounds, windowOnly: false, defaults: defaults)
+        view.mountMagnifierIfEnabled(pointer: NSPoint(x: 500, y: 400))
+        guard let mag = view.magnifier else { preconditionFailure("Preference on mounts the magnifier") }
+        expect(mag.superview === view && mag.isFlipped && mag.mousePoint == NSPoint(x: 500, y: 400) && mag.labelString == "500x400",
+               "Mounted, flipped, fed the pointer and the %dx%d label")
+        expect(mag.frame.size == mag.requiredDisplaySize && mag.frame.origin.x == 500 - mag.frame.width - 2
+               && mag.frame.origin.y == 400 - mag.frame.height - 2, "Placed up-left of the pointer by required size + offset")
+        view.mouseMoved(with: NSEvent.mouseEvent(with: .mouseMoved, location: NSPoint(x: 3, y: 4), modifierFlags: [], timestamp: 1,
+                                                 windowNumber: 0, context: nil, eventNumber: 1, clickCount: 0, pressure: 0)!)
+        expect(mag.mousePoint == NSPoint(x: 3, y: 4) && bounds.contains(mag.frame) && mag.frame.origin == .zero,
+               "Follows the pointer and stays clamped inside the overlay")
+        view.invalidate()
+        expect(mag.superview == nil && view.magnifier == nil, "Invalidate unmounts the magnifier")
     }
     private static func cleaned(_ rig: PickerRig, _ count: Int = 1) {
         expect(!rig.picker.isPicking && rig.picker.panels.isEmpty && rig.results.count == count,
