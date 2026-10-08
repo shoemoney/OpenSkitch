@@ -199,7 +199,7 @@ extension AppSafetyTests {
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool" && modern["share.label"] == "Share drawing"
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
         let hinted: [(String, NSView?)] = SketchTool.allCases.map { ("tool " + $0.rawValue, app.toolButtons[$0]) }
-            + [("Wipe", collect(NSButton.self, in: app.window.contentView!).first { $0.title == "Wipe" }), ("size slider", app.widthControl), ("Drag Me", app.dragExportView)]
+            + [("Wipe", collect(NSButton.self, in: app.window.contentView!).first { $0.action == #selector(AppDelegate.wipe) }), ("size slider", app.widthControl), ("Drag Me", app.dragExportView)]
         for (name, view) in hinted {
             try expect(view?.subviews.contains { $0 is HintTrackingView } == true, "\(name) registers contextual hint tracking")
         }
