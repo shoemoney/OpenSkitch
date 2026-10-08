@@ -19,8 +19,15 @@ extension AppSafetyTests {
             ("Webpost with no destination opens Sharing Settings instead of uploading", webpostUnconfiguredOpensSettings),
             ("A failed upload surfaces the error and Webpost works again", webpostFailureRecovers),
             ("The upload button's right-click menu lists the default destination, settings and Share with macOS", webpostMenu),
-            ("File menu keeps Share… and Publish Image… goes straight to upload", webpostFileMenu)
-        ] + (Appearance.isModern ? [("Modern upload button is icon-only with the iCloud upload symbol and an explicit label", webpostModernIconOnly)] : [])
+            ("File menu keeps Share… and Publish Image… goes straight to upload", webpostFileMenu),
+            ("Upload progress survives tool changes and edits, then the result replaces it", webpostProgressSurvivesStatusUpdates),
+            ("Cancel Upload appears only while busy, cancels quietly with no clipboard write or alert", webpostCancel),
+            ("Without a public base URL nothing is copied and the status says Uploaded image to destination", webpostNoPublicURLNoClipboard),
+            ("The upload right-click menu uses the 20 pt menu font", webpostMenuFont),
+            ("--eye-dump is ignored unless SKITCH_APP_SUPPORT names an existing directory", webpostEyeDumpGate)
+        ] + (Appearance.isModern
+             ? [("Modern upload button is icon-only with the iCloud upload symbol and an explicit label", webpostModernIconOnly)]
+             : [("Classic upload button reads exactly Webpost… and speaks as Upload to destination", webpostClassicButton)])
     }
 
     private static func webpostButton(_ app: AppDelegate) throws -> NSButton {
@@ -137,6 +144,73 @@ extension AppSafetyTests {
         _ = NSApp.sendAction(try publish.action.unwrap("action"), to: app, from: publish)
         try expect(app.window.attachedSheet == nil && app.status.stringValue.hasPrefix("Uploading"), "Publish Image… uploads without a confirmation sheet")
         try waitForMain("it finishes") { !app.publishing.isBusy && probe.count == 1 }
+    }
+
+    static func webpostProgressSurvivesStatusUpdates() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let probe = UploadProbe(); probe.blocks = true; install(probe, on: app)
+        app.nameField.stringValue = "Held"
+        try webpostButton(app).performClick(nil)
+        try waitForMain("The transfer starts") { probe.count == 1 }
+        app.canvas.tool = .rectangle
+        app.updateStatus()
+        var box = SketchElement(kind: .rectangle); box.rect = CGRect(x: 10, y: 10, width: 40, height: 30)
+        app.canvas.document.elements.append(box)
+        app.dirty = true
+        app.updateStatus()
+        try expect(app.status.stringValue == "Uploading Held…", "A tool change and an edit keep the upload text (\(app.status.stringValue))")
+        probe.gate.signal()
+        try waitForMain("The upload finishes") { !app.publishing.isBusy && app.status.stringValue.hasPrefix("Link copied") }
+        app.updateStatus()
+        try expect(app.status.stringValue.contains("Unsaved changes") || app.status.stringValue.contains("Saved"), "After completion the normal status returns (\(app.status.stringValue))")
+    }
+
+    static func webpostCancel() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let probe = UploadProbe(); probe.blocks = true; install(probe, on: app)
+        try expect(try menuLayout(app).first != "Cancel Upload", "No Cancel Upload while idle")
+        try webpostButton(app).performClick(nil)
+        try waitForMain("The transfer starts") { probe.count == 1 }
+        let menu = try webpostButton(app).menu.unwrap("menu"); app.menuNeedsUpdate(menu)
+        let cancel = try menu.items.first.unwrap("first item")
+        try expect(cancel.title == "Cancel Upload" && cancel.isEnabled && menu.items[1].isSeparatorItem, "Cancel Upload leads the busy menu and is enabled")
+        _ = NSApp.sendAction(try cancel.action.unwrap("action"), to: cancel.target, from: cancel)
+        probe.gate.signal()
+        try waitForMain("The upload is cancelled") { !app.publishing.isBusy && app.status.stringValue == "Upload cancelled" }
+        try expect(probe.copied.isEmpty && AppSafetyAlert.seen.isEmpty && app.window.attachedSheet == nil, "Cancelling copies nothing and raises no alert")
+        app.menuNeedsUpdate(menu)
+        try expect(menu.items.first?.title != "Cancel Upload", "Cancel Upload leaves the menu once idle")
+    }
+
+    static func webpostNoPublicURLNoClipboard() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let probe = UploadProbe(); install(probe, on: app)
+        app.publishing.settingsLoader = { var settings = try fakeDestination(); settings.publicBaseURL = ""; return settings }
+        try webpostButton(app).performClick(nil)
+        try waitForMain("The upload finishes") { !app.publishing.isBusy && probe.count == 1 && app.status.stringValue != "" && !app.status.stringValue.hasPrefix("Uploading") }
+        try expect(probe.copied.isEmpty, "No public URL means nothing reaches the clipboard (\(probe.copied))")
+        try expect(app.status.stringValue == "Uploaded image to destination", "Status reads Uploaded image to destination (\(app.status.stringValue))")
+    }
+
+    static func webpostMenuFont() throws {
+        let fixture = try Fixture(), app = fixture.app
+        try expect(try webpostButton(app).menu.unwrap("menu").font.pointSize >= 20, "The right-click menu is 20 pt like the other menus")
+    }
+
+    static func webpostEyeDumpGate() throws {
+        let args = ["OpenSkitch", "--eye-dump", "/tmp/out"]
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: [:]) == nil, "No SKITCH_APP_SUPPORT: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": ""]) == nil, "Empty: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": "/nonexistent/skitch-support"]) == nil, "Missing directory: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": NSTemporaryDirectory()])?.path == "/tmp/out", "Isolated support directory: honoured")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: ["OpenSkitch"], environment: ["SKITCH_APP_SUPPORT": NSTemporaryDirectory()]) == nil, "No flag: nil")
+    }
+
+    static func webpostClassicButton() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let button = try webpostButton(app)
+        try expect(button.title == "Webpost…", "Classic title is exactly Webpost… (\(button.title))")
+        try expect(button.accessibilityLabel() == "Upload to destination", "Classic VoiceOver label matches what it does (\(button.accessibilityLabel() ?? "nil"))")
     }
 
     static func webpostModernIconOnly() throws {

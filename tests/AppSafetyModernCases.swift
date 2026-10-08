@@ -82,7 +82,7 @@ extension AppSafetyTests {
         var popoverAppearance: NSAppearance.Name?
     }
 
-    /// The 12 command buttons, each found by the Classic action it sends so both windows are read the same way.
+    /// The 11 command buttons, each found by the Classic action it sends so both windows are read the same way.
     private static let commandActions: [(name: String, action: Selector)] = [
         ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
         ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)),

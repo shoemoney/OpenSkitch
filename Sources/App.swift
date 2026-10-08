@@ -170,6 +170,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     let capture = CaptureCoordinator()
     let publishing = PublishingCoordinator()
     var webpostButton: NSButton?
+    /// Progress text for a running upload; updateStatus() keeps showing it while publishing.isBusy.
+    var uploadStatus: String?
     /// Test seams: replace the real NSSharingServicePicker and the Sharing Settings sheet.
     var sharePickerPresenter: ((NSImage, NSView?) -> Void)?
     var sharingSettingsPresenter: (() -> Void)?
@@ -805,7 +807,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         zoomControl.widthAnchor.constraint(equalToConstant: 160).isActive = true
         let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
         configureDragExport(drag)
-        let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Share drawing")
+        let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Upload to destination")
         configureWebpostButton(webpost)
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
@@ -1173,7 +1175,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         for sub in view.subviews { if let found = findWipeButton(in: sub) { return found } }
         return nil
     }
-    func updateStatus() { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")"; updateViewportChrome(); scheduleDragPreview() }
+    func updateStatus() {
+        if let uploadStatus, publishing.isBusy { status.stringValue = uploadStatus }
+        else { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
+        updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
         let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
         return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
@@ -1563,7 +1568,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func configureWebpostButton(_ button: NSButton) {
         webpostButton = button
         button.toolTip = Self.webpostHelp
-        let menu = NSMenu(); menu.autoenablesItems = false; menu.delegate = self
+        let menu = NSMenu(); menu.autoenablesItems = false; menu.delegate = self; menu.font = .systemFont(ofSize: 20)
         button.menu = menu
         (button as? OriginalActionButton)?.showMenuOnLeftClick = false
         rebuildUploadMenu(menu)
@@ -1579,6 +1584,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     /// Destinations (default checkmarked), then Destination Settings… and Share with macOS…. More entries just add rows.
     func uploadDestinationMenuItems(destinations: [UploadDestination], defaultID: String?) -> [NSMenuItem] {
         var items: [NSMenuItem] = []
+        if publishing.isBusy {
+            let cancel = NSMenuItem(title: "Cancel Upload", action: #selector(cancelUpload), keyEquivalent: ""); cancel.target = self
+            items.append(contentsOf: [cancel, .separator()])
+        }
         if destinations.isEmpty {
             let none = NSMenuItem(title: "No destination configured", action: nil, keyEquivalent: ""); none.isEnabled = false
             items.append(none)
@@ -1594,6 +1603,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let share = NSMenuItem(title: "Share with macOS…", action: #selector(shareFromMenu), keyEquivalent: ""); share.target = self
         items.append(contentsOf: [settings, share])
         return items
+    }
+    @objc func cancelUpload() {
+        guard publishing.isBusy else { return }
+        publishing.cancelPublishing { (_: Result<Void, Error>) in }
     }
     @objc func chooseUploadDestination(_ item: NSMenuItem) { if let id = item.representedObject as? String { setDefaultDestination(id) } }
     /// Hook for multiple destinations; storage holds exactly one today, so choosing it changes nothing.
@@ -1697,7 +1710,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let name = safeName(), generation = documentGeneration
         let fileName = name+"-"+UUID().uuidString.lowercased()+".png"
         let binding = try? historyRemoteDeletion.captureBinding(fileName: fileName)
-        status.stringValue = "Uploading \(name)…"
+        uploadStatus = "Uploading \(name)…"; status.stringValue = uploadStatus!
         publishing.publish(data: data, fileName: fileName) { [weak self] result in
             // Publishing guarantees delivery on main, including nested AppKit
             // termination loops. Archive success before its shutdown barrier can
@@ -1714,14 +1727,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     func receivePublishing(_ result: Result<URL, Error>) {
+        uploadStatus = nil
         guard !terminationStarted else { return }
         switch result {
         case .success(let url):
             if publishing.lastTransferCopiedLink { status.stringValue = "Link copied: \(url.absoluteString)" }
             else { status.stringValue = ["http", "https"].contains(url.scheme ?? "") ? "Published image" : "Uploaded image to destination" }
         case .failure(let error):
-            updateStatus()
-            if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSUserCancelledError { self.error(error) }
+            if (error as NSError).domain == NSCocoaErrorDomain && (error as NSError).code == NSUserCancelledError { status.stringValue = "Upload cancelled" }
+            else { updateStatus(); self.error(error) }
         }
     }
     /// Snap & Upload hotkey: a crosshair capture whose installed result is published.
