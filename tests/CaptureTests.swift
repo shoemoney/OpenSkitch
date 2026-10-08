@@ -347,6 +347,7 @@ private enum CaptureTests {
             try writeFixture()
             try await queuedCancellation()
             try await captureFlashOnlyAfterSuccess()
+            try captureFlashTimingRamp()
             try await captureFlashControllerTimeline()
             try await queuedShutdown()
             try await delayedCancellation()
@@ -550,6 +551,25 @@ private enum CaptureTests {
         try expect(flash.plays.count == playsBefore, "a cancelled capture must not flash")
     }
 
+    static func captureFlashTimingRamp() throws {
+        typealias T = OriginalCaptureFlashTiming
+        let quick = T.captureDuration, slow = T.cameraDeflashDuration
+        func check(_ elapsed: TimeInterval, _ duration: Float32, _ phase: T.Phase, _ want: Float32) throws {
+            let got = T.alpha(elapsed: elapsed, duration: duration, phase: phase)
+            try expect(abs(got - want) < 1e-3, "\(phase) alpha at \(elapsed)/\(duration) = \(got), want \(want)")
+        }
+        for (elapsed, want) in [(0.0, Float32(0)), (0.025, 0.25), (0.05, 0.5), (0.075, 0.75), (0.1, 1), (0.5, 1)] {
+            try check(elapsed, quick, .flash, want)
+            try check(elapsed, quick, .deflash, 1 - want)
+        }
+        for (elapsed, want) in [(0.0, Float32(0)), (0.05, 0.25), (0.1, 0.5), (0.15, 0.75), (0.2, 1), (0.5, 1)] {
+            try check(elapsed, slow, .flash, want)
+            try check(elapsed, slow, .deflash, 1 - want)
+        }
+        try check(0.05, slow, .deflash, 0.75)
+        try check(-1, quick, .flash, 0)
+    }
+
     static func captureFlashControllerTimeline() async throws {
         var now: TimeInterval = 100
         var ticks: [@MainActor () -> Void] = []
@@ -566,14 +586,29 @@ private enum CaptureTests {
         controller.play(frame: NSRect(x: 0, y: 0, width: 50, height: 50),
                         deflashDuration: OriginalCaptureFlashTiming.cameraDeflashDuration)
         try expect(window.fronted == 1 && controller.isRunning, "play must order the flash window front")
-        now += 0.05; ticks.last?()
-        try expect(abs((window.alphas.last ?? -1) - 0.5) < 1e-4, "flash ramps toward 1")
-        now += 0.06; ticks.last?()
-        try expect(window.alphas.last == 1 && ticks.count == 2, "flash reaching duration begins deflash")
-        now += 0.1; ticks.last?()
-        try expect(abs((window.alphas.last ?? -1) - 0.5) < 1e-3, "deflash ramps from 1 toward 0 over 0.2s")
-        now += 0.11; ticks.last?()
-        try expect(window.alphas.last == 0 && window.ordered == 1 && !controller.isRunning, "deflash end hides the window")
+        func tick(to elapsed: TimeInterval, expecting expected: Float32, _ what: String) throws {
+            now = 100 + elapsed
+            ticks.last?()
+            try expect(abs((window.alphas.last ?? -1) - expected) < 1e-3, "\(what): got \(window.alphas.last ?? -1), want \(expected)")
+        }
+        try tick(to: 0.025, expecting: 0.25, "flash at 0.025 of 0.1s")
+        try tick(to: 0.075, expecting: 0.75, "flash at 0.075 of 0.1s")
+        try tick(to: 0.11, expecting: 1, "flash reaching duration pins 1")
+        try expect(ticks.count == 2 && controller.isRunning, "flash reaching duration begins deflash")
+        let deflashStart = now
+        func deflashTick(_ elapsed: TimeInterval, _ expected: Float32, _ what: String) throws {
+            now = deflashStart + elapsed
+            ticks.last?()
+            try expect(abs((window.alphas.last ?? -1) - expected) < 1e-3, "\(what): got \(window.alphas.last ?? -1), want \(expected)")
+        }
+        try deflashTick(0.05, 0.75, "deflash at 0.05 of 0.2s")
+        try deflashTick(0.15, 0.25, "deflash at 0.15 of 0.2s")
+        try expect(controller.isRunning && window.ordered == 0, "deflash mid-ramp keeps the window up")
+        let before = window.alphas.count
+        try deflashTick(0.21, 0, "deflash ramp final tick")
+        try expect(window.alphas.count == before + 2 && Array(window.alphas.suffix(2)) == [0, 0],
+                   "deflash ramp itself reaches 0 before tearDown writes its own 0, got \(window.alphas.suffix(2))")
+        try expect(window.ordered == 1 && !controller.isRunning, "deflash end hides the window")
         try expect(invalidated >= 2, "timers are invalidated")
     }
 
