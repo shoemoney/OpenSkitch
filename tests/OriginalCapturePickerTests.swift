@@ -51,7 +51,7 @@ private final class PickerRig {
                                 backing: .buffered, defer: true)
         self.created.append(panel); self.onFactory?(panel)
         return panel
-    })
+    }, screenImage: { _ in nil })
     var panel: PickerPanel { picker.panels.first as! PickerPanel }
     var view: OriginalCaptureSelectionView { panel.contentView as! OriginalCaptureSelectionView }
     func begin(windowOnly: Bool = false, onResult: ((Result<OriginalCaptureSelection, Error>) -> Void)? = nil) {
@@ -153,6 +153,27 @@ private enum OriginalCapturePickerTests {
                "Follows the pointer and stays clamped inside the overlay")
         view.invalidate()
         expect(mag.superview == nil && view.magnifier == nil, "Invalidate unmounts the magnifier")
+
+        // Live feed: the picker asks the provider once for the total frame and hands the pixels to the view.
+        let pixel = CGContext(data: nil, width: 4, height: 4, bitsPerComponent: 8, bytesPerRow: 16,
+                              space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        pixel.setFillColor(CGColor(red: 1, green: 0, blue: 0, alpha: 1)); pixel.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        let screen = pixel.makeImage()!
+        var asked: [NSRect] = []
+        let feeding = OriginalCapturePicker(displayFrames: { [NSRect(x: 0, y: 0, width: 600, height: 400), NSRect(x: 600, y: 0, width: 400, height: 800)] },
+                                            windowRecords: { [] },
+                                            makePanel: { PickerPanel(contentRect: $0, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true) },
+                                            screenImage: { asked.append($0); return OriginalCaptureScreenImage(image: screen, scale: 2) })
+        feeding.begin(windowOnly: false) { _ in }
+        expect(asked == [bounds], "Provider called once with the total overlay frame at begin")
+        let fed = feeding.panels[0].contentView as! OriginalCaptureSelectionView
+        expect(fed.magnifierImage === screen && fed.magnifierImageScale == 2, "View carries the provided image and scale")
+        defaults.set(true, forKey: G.defaultsKey)
+        let live = OriginalCaptureSelectionView(frame: bounds, windowOnly: false, defaults: defaults)
+        live.magnifierImage = screen; live.magnifierImageScale = 2
+        live.mountMagnifierIfEnabled(pointer: NSPoint(x: 500, y: 400))
+        expect(live.magnifier?.sourceImage === screen && live.magnifier?.imageScale == 2, "Mounted lens samples the provided image")
+        feeding.cancel()
     }
     private static func cleaned(_ rig: PickerRig, _ count: Int = 1) {
         expect(!rig.picker.isPicking && rig.picker.panels.isEmpty && rig.results.count == count,
@@ -395,7 +416,7 @@ private enum OriginalCapturePickerTests {
                 [NSRect(x: 0, y: 0, width: 1000, height: 800)]
             }, windowRecords: { [] }, makePanel: {
                 PickerPanel(contentRect: $0, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true)
-            })
+            }, screenImage: { _ in nil })
             picker!.begin(windowOnly: false) { _ in completions += 1 }
             observedPicker = picker
             observedPanel = picker!.panels[0] as? PickerPanel
