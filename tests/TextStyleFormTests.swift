@@ -20,11 +20,23 @@ final class MatrixBrowserDelegate: NSObject, NSBrowserDelegate {
 }
 
 final class ItemBrowserDelegate: NSObject, NSBrowserDelegate {
-    func rootItem(for browser: NSBrowser) -> Any? { "root" }
     func browser(_ browser: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int { 0 }
     func browser(_ browser: NSBrowser, child index: Int, ofItem item: Any?) -> Any { "child" }
     func browser(_ browser: NSBrowser, isLeafItem item: Any?) -> Bool { true }
     func browser(_ browser: NSBrowser, objectValueForItem item: Any?) -> Any? { "value" }
+}
+
+final class PartialItemBrowserDelegate: NSObject, NSBrowserDelegate {
+    func rootItem(for browser: NSBrowser) -> Any? { "root" }
+    func browser(_ browser: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int { 0 }
+}
+
+/// Accepted by AppKit as a matrix delegate, but also carries the item-style entry points the old rule trusted.
+final class HybridBrowserDelegate: NSObject, NSBrowserDelegate {
+    func rootItem(for browser: NSBrowser) -> Any? { "root" }
+    func browser(_ browser: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int { 0 }
+    func browser(_ sender: NSBrowser, numberOfRowsInColumn column: Int) -> Int { 0 }
+    func browser(_ sender: NSBrowser, willDisplayCell cell: Any, atRow row: Int, column: Int) {}
 }
 
 @main
@@ -270,6 +282,20 @@ struct TextStyleFormTests {
         TextStyleForm.styleBrowser(itemBrowser)
         expect(TextStyleForm.browserSupportsRowHeight(itemBrowser), "Item-based browser is row-height capable")
         expect(itemBrowser.rowHeight >= 32, "Item-based browser reaches the 32 pt row height")
+        let partialDelegate = PartialItemBrowserDelegate()
+        let partialBrowser = NSBrowser(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        partialBrowser.delegate = partialDelegate
+        partialBrowser.cellPrototype = NSBrowserCell()
+        TextStyleForm.styleBrowser(partialBrowser)
+        expect(!TextStyleForm.browserSupportsRowHeight(partialBrowser), "Partial item delegate (rootItem + numberOfChildren only) is not row-height capable")
+        expect((partialBrowser.cellPrototype as? NSCell)?.font == .systemFont(ofSize: 20), "Partial item delegate browser is still styled without crashing")
+        let hybridDelegate = HybridBrowserDelegate()
+        let hybridBrowser = NSBrowser(frame: NSRect(x: 0, y: 0, width: 300, height: 200))
+        hybridBrowser.delegate = hybridDelegate
+        hybridBrowser.cellPrototype = NSBrowserCell()
+        TextStyleForm.styleBrowser(hybridBrowser)
+        expect(hybridBrowser.delegate != nil && !TextStyleForm.browserSupportsRowHeight(hybridBrowser), "Matrix delegate with rootItem and numberOfChildren is not row-height capable")
+        expect((hybridBrowser.cellPrototype as? NSCell)?.font == .systemFont(ofSize: 20), "Hybrid delegate browser is still styled without crashing")
         precondition(failures.isEmpty, failures.joined(separator: "; "))
         print("TextStyleFormTests: \(checks) checks passed (native accessory controls; no desktop input)")
     }
