@@ -695,15 +695,22 @@ final class CanvasView: NSView, NSTextViewDelegate {
         finishTextEditing()
         switch wipeStage {
         case .wipe:
-            clearAnnotations()
+            // wipeTA (decompiled.c:305279-305293) resets the rect to (0,0,1,1) unless an image remains.
+            edit("Clear Annotations") {
+                document.elements.removeAll(); selection.removeAll()
+                if document.backgroundPNG == nil { resetViewport() }
+            }
             onSound?("wipe_brushlayer")
         case .clear:
-            edit("Wipe Snap") { document.backgroundPNG = nil; document.backgroundColor = .white; panBackground = nil }
+            edit("Wipe Snap") {
+                document.backgroundPNG = nil; document.backgroundColor = .white; resetViewport()
+            }
             onSound?("wipe_snap")
         case .blank:
             onSound?("wipe_already_blank")
         }
     }
+    private func resetViewport() { cropRect = nil; panBackground = nil; document.renderSize = nil }
     /// Recovered keepPenEraseSnap:/setBackgroundTA removes the snap and sets white.
     func wipeSnap() {
         finishTextEditing()

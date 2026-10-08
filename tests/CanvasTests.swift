@@ -216,6 +216,7 @@ struct CanvasTests {
             ("Option drag copies groups as one undoable edit", optionDragCopy),
             ("Escape restores gestures, selection, crop and existing undo/redo", gestureCancellation),
             ("two-stage Wipe and Wipe Snap preserve undo and white backdrop", wipeLifecycle),
+            ("Wipe resets viewport rect when no snap remains", wipeResetsViewport),
             ("Re-Snap validates before mutation and fits retina background", resnap),
             ("frame preview retains annotation pixels and capture boundary only", framePreview),
             ("Justype focus, native typing/recovery/undo, Escape commit and pointer clamp", justype),
@@ -2328,6 +2329,28 @@ struct CanvasTests {
                    "Wipe Snap Only preserves editable annotations/IDs/groups/crop/selection and sets white")
         c.undo(); try expect(c.document == original && !c.editingUndoManager.canUndo, "Wipe Snap Only is one exact undo")
         c.redo(); try expect(c.document == withoutSnap, "Wipe Snap redo")
+    }
+    static func wipeResetsViewport() throws {
+        let crop = CGRect(x: 3, y: 4, width: 60, height: 50), render = CGSize(width: 200, height: 160)
+        let c = canvas()
+        c.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 30, height: 30))]
+        c.cropRect = crop; c.document.renderSize = render; c.editingUndoManager.removeAllActions()
+        let before = c.document
+        c.wipe()
+        try expect(c.document.elements.isEmpty && c.cropRect == nil && c.document.renderSize == nil,
+                   "Wipe resets crop/render rect when no snap remains")
+        c.undo(); try expect(c.document == before && c.cropRect == crop, "One Undo restores drawing, renderSize and crop")
+        let d = canvas(); d.setBackground(backdrop())
+        d.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 30, height: 30))]
+        d.cropRect = crop; d.document.renderSize = render; d.editingUndoManager.removeAllActions()
+        d.wipe()
+        try expect(d.document.elements.isEmpty && d.cropRect == crop && d.document.renderSize == render,
+                   "Wipe keeps crop/render rect while a snap remains")
+        let withSnap = d.document
+        d.wipe()
+        try expect(d.document.backgroundPNG == nil && d.cropRect == nil && d.document.renderSize == nil,
+                   "Clear stage resets crop/render rect")
+        d.undo(); try expect(d.document == withSnap && d.cropRect == crop, "Undo of Clear restores rect")
     }
     static func resnap() throws {
         let c = canvas(); let window = host(c); defer { window.close() }
