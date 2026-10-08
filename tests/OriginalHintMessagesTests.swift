@@ -3,8 +3,10 @@ import AppKit
 import CryptoKit
 
 /// Independent expected copy transcribed from the original i386 VM strings and
-/// vtables, NOT from OriginalHintMessages. The original binary is a required
-/// read-only fixture; no app, preferences, event delivery or desktop is opened.
+/// vtables, NOT from OriginalHintMessages. The original binary is a read-only
+/// fixture; when the git-ignored archive is absent (fresh clone) its Mach-O
+/// evidence is skipped and only the reconstruction-side checks run. No app,
+/// preferences, event delivery or desktop is opened.
 @main
 @MainActor
 enum OriginalHintMessagesTests {
@@ -102,15 +104,19 @@ enum OriginalHintMessagesTests {
     static func main() throws {
         let args = Array(CommandLine.arguments.dropFirst())
         let path = args.isEmpty ? "original/Skitch.app/Contents/MacOS/Skitch" : args[0]
-        let original = try OriginalBinary(URL(fileURLWithPath: path))
+        // An explicit path is a request for that fixture, so only the default may be absent.
+        let original = args.isEmpty && !FileManager.default.fileExists(atPath: path) ? nil : try OriginalBinary(URL(fileURLWithPath: path))
+        if original == nil { print("SKIP original binary evidence: \(path) not found; running reconstruction-side checks only") }
         let prefix = "command(\u{F8FF}) = Grab. control = Eraser. tab = Pen\n"
-        try expect(try original.string(0x21d3b2) == prefix, "Native action-hover prefix")
+        if let original { try expect(try original.string(0x21d3b2) == prefix, "Native action-hover prefix") }
         try expect(OriginalHintMessages.toolHoverPrefix == prefix, "Exact hover prefix, including Apple glyph/newline")
 
         for fixture in tools {
-            try expect(try original.string(fixture.stringVM) == fixture.copy, "Native tool \(fixture.tag) expected copy")
-            try expect(try original.word(fixture.vtable + 8 + 0x40) == fixture.getHelp, "Native tool \(fixture.tag) virtual getHelp target")
-            try expect(try original.word(fixture.vtable + 8 + 0x44) == 0x1b4fb0, "Native tool \(fixture.tag) uses base getHelpForModifiers")
+            if let original {
+                try expect(try original.string(fixture.stringVM) == fixture.copy, "Native tool \(fixture.tag) expected copy")
+                try expect(try original.word(fixture.vtable + 8 + 0x40) == fixture.getHelp, "Native tool \(fixture.tag) virtual getHelp target")
+                try expect(try original.word(fixture.vtable + 8 + 0x44) == 0x1b4fb0, "Native tool \(fixture.tag) uses base getHelpForModifiers")
+            }
             try expect(OriginalHintMessages.mappedSketchTool(forActionTag: fixture.tag) == fixture.tool, "Original tool-array mapping \(fixture.tag)")
             guard let tool = fixture.tool else {
                 try expect(OriginalHintMessages.actionHelp(tag: fixture.tag).isEmpty, "Hand is empty and has no modern tool mapping")
@@ -162,10 +168,10 @@ enum OriginalHintMessagesTests {
             (110,0x25d3e4,"User color",[0,0x3f800000,0x3f800000,0x3f800000])
         ]
         let suffix = "\nshift-click to set canvas background color"
-        try expect(try original.string(0x25d3ef) == suffix, "Native palette suffix")
+        if let original { try expect(try original.string(0x25d3ef) == suffix, "Native palette suffix") }
         try expect(OriginalHintMessages.palette.count == 11, "Exactly eleven original colors, including initial user color")
         for (tag, vm, name, bits) in paletteFixture {
-            try expect(try original.string(vm) == name, "Native palette name \(tag)")
+            if let original { try expect(try original.string(vm) == name, "Native palette name \(tag)") }
             let entry = OriginalHintMessages.palette.first { $0.tag == tag }
             try expect(entry?.name == name && entry?.rgba.map(\.bitPattern) == bits, "Original RGBA Float32 bits and name \(tag)")
             try expect(OriginalHintMessages.actionHoverHint(tag: tag) == name + suffix, "Native color-hover copy \(tag)")
@@ -182,7 +188,7 @@ enum OriginalHintMessagesTests {
             (203,0x25d326,"click for timed snap\nshift-click for instant snap")
         ]
         for (tag, vm, copy) in actionFixture {
-            try expect(try original.string(vm) == copy, "Native action string \(tag)")
+            if let original { try expect(try original.string(vm) == copy, "Native action string \(tag)") }
             try expect(OriginalHintMessages.actionHelp(tag: tag) == copy && OriginalHintMessages.actionHoverHint(tag: tag) == copy,
                        "Exact unprefixed action copy \(tag)")
         }
@@ -193,7 +199,7 @@ enum OriginalHintMessagesTests {
                        "Parent may opt into the recovered copy only after implementing the advertised behavior")
         }
         let normal = "hold shift and click to set size to 100%", frame = "hold shift to resize proportionally"
-        try expect(try original.string(0x25d296) == normal && original.string(0x25d2bf) == frame, "Native resize handle strings")
+        if let original { try expect(try original.string(0x25d296) == normal && original.string(0x25d2bf) == frame, "Native resize handle strings") }
         for tag in [1000,1002,1004,1006] {
             try expect(OriginalHintMessages.actionHelp(tag: tag) == normal &&
                        OriginalHintMessages.actionHelp(tag: tag, frameMode: true) == frame, "Frame-mode handle help \(tag)")
@@ -205,7 +211,8 @@ enum OriginalHintMessagesTests {
                        "Unsupported/original-empty tag \(tag) cannot invent a hint")
         }
         try expect(NSApp == nil, "Pure fixture/matrix tests must not construct NSApplication")
-        print("PASS OriginalHintMessagesTests: \(checks) checks; 144 routed modifier cases; 10 original vtables; 11 RGBA entries; no desktop")
+        let evidence = original == nil ? "original binary evidence skipped" : "10 original vtables"
+        print("PASS OriginalHintMessagesTests: \(checks) checks; 144 routed modifier cases; \(evidence); 11 RGBA entries; no desktop")
     }
 }
 #endif
