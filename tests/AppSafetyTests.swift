@@ -109,6 +109,8 @@ final class AppSafetyHotkeyManager {
     var screen: (@MainActor () -> Void)?
     var fullscreen: (@MainActor () -> Void)?
     var frame: (@MainActor () -> Void)?
+    var upload: (@MainActor () -> Void)?
+    var show: (@MainActor () -> Void)?
     var settingsParents: [NSWindow?] = []
     func install(globalScreen: @escaping @MainActor () -> Void,
                  globalWindow: @escaping @MainActor () -> Void,
@@ -118,7 +120,7 @@ final class AppSafetyHotkeyManager {
                  globalUpload: @escaping @MainActor () -> Void,
                  globalShow: @escaping @MainActor () -> Void) throws {
         Self.installations += 1
-        screen = globalScreen; fullscreen = globalFullscreen; frame = globalFrame
+        screen = globalScreen; fullscreen = globalFullscreen; frame = globalFrame; upload = globalUpload; show = globalShow
     }
     func unregister() throws { Self.unregistrations += 1 }
     func showSettings(attachedTo parent: NSWindow? = nil) {
@@ -693,6 +695,36 @@ enum AppSafetyTests {
                    "Cancel at the prompt leaves Frame active, so the Frame window values return after the modal")
         app.cancelFrame()
         try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "Cancel Frame restores after a prompt")
+    }
+    static func showAndUploadHotkeys() throws {
+        let fixture = try Fixture(), app = fixture.app
+        let window = app.window as! AppSafetyWindow
+        guard let show = app.hotkeys.show, let upload = app.hotkeys.upload else { throw Failure(description: "Show and Upload handlers must be installed") }
+        window.simulatesVisibility = true; window.shown = true
+        let windows = NSApp.windows.count
+        app.vanish()
+        try expect(!window.shown, "Fixture must start with the editor hidden")
+        show()
+        try expect(window.shown && NSApp.windows.count == windows && AppSafetyAlert.seen.isEmpty, "Show Skitch must restore the hidden editor without a second window or prompt")
+        show()
+        try expect(window.shown && NSApp.windows.count == windows, "Show Skitch on a visible editor must stay a no-op reopen")
+        // Snap & Upload: cancellation never publishes.
+        AppSafetyCaptureCoordinator.holdCapture = true; AppSafetyCaptureCoordinator.captureCallbacks = []
+        AppSafetyCaptureCoordinator.requests = []
+        defer { AppSafetyCaptureCoordinator.holdCapture = false; AppSafetyCaptureCoordinator.captureCallbacks = [] }
+        app.status.stringValue = "Ready"
+        upload()
+        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair"] && AppSafetyCaptureCoordinator.captureCallbacks.count == 1 && app.status.stringValue == "Ready",
+                   "Snap & Upload must start a crosshair capture and publish nothing before it completes")
+        AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()(.failure(AppSafetyCaptureCoordinator.cancellation))
+        try waitForMain("A cancelled capture settles") { true }
+        try expect(app.status.stringValue != "Publishing image…" && window.attachedSheet == nil && AppSafetyAlert.seen.isEmpty && !app.dirty,
+                   "A cancelled Snap & Upload capture must not publish, alert or replace the document")
+        // Success publishes exactly the installed capture.
+        upload()
+        AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()(.success(try image()))
+        try expect(app.dirty && app.nameField.stringValue == "Screenshot" && app.status.stringValue == "Publishing image…",
+                   "A successful Snap & Upload capture must be installed and handed to publishImage")
     }
     static func resnapPreservesAnnotations() throws {
         let fixture = try Fixture(), app = fixture.app
@@ -3216,6 +3248,7 @@ enum AppSafetyTests {
             ("capture completion Save persists pending text first", captureSave),
             ("Frame preview enter, switch and Cancel preserve document, recovery and history", framePreviewCancellation),
             ("Frame mode drops the window shadow, raises the level and sets alpha 0.8 from the recovered setSnapMode:, and leaving restores the pre-Frame values", frameWindowShadowLevelAlpha),
+            ("Show Skitch and Snap & Upload global shortcuts restore the hidden editor without a second window and never publish a cancelled capture", showAndUploadHotkeys),
             ("Resnap preserves annotations, destination and usable Undo/Redo", resnapPreservesAnnotations),
             ("normal Frame picker and completion cancellation; Discard prompts exactly once", normalFrameDiscard),
             ("filename focus retains command-menu behavior", filenameCommands),

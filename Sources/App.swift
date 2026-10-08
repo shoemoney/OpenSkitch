@@ -321,7 +321,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
         do {
-            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.cameraSnap() }, globalUpload: { /* filled by the upload-action item */ }, globalShow: { /* filled by the show-action item */ })
+            try hotkeys.install(globalScreen: { [weak self] in self?.captureCrosshair(manualOption: false) }, globalWindow: { [weak self] in self?.windowSnap() }, globalFullscreen: { [weak self] in self?.captureFullscreen(manualOption: false) }, globalFrame: { [weak self] in self?.enterFrame(keepingAnnotations: false, manualFlags: []) }, globalCamera: { [weak self] in self?.cameraSnap() }, globalUpload: { [weak self] in self?.snapAndUpload() }, globalShow: { [weak self] in self?.makeVisible() })
         } catch { status.stringValue = "Global shortcuts unavailable: " + error.localizedDescription }
         writeLayoutEvidence()
         if CommandLine.arguments.contains("--smoke-test") {
@@ -1638,7 +1638,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             if (error as NSError).domain != NSCocoaErrorDomain || (error as NSError).code != NSUserCancelledError { self.error(error) }
         }
     }
-    func startCapture(_ mode: String, delay: Double = 0, manualOption: Bool = false) {
+    /// Snap & Upload hotkey: a crosshair capture whose installed result is published.
+    /// A cancelled, failed or declined capture never reaches publishImage().
+    func snapAndUpload() {
+        startCapture("crosshair", afterInstalling: { [weak self] in self?.publishImage() })
+    }
+    func startCapture(_ mode: String, delay: Double = 0, manualOption: Bool = false, afterInstalling: (() -> Void)? = nil) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
         helpBevel?.clear()
         leaveFrame()
@@ -1646,10 +1651,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let includeApp = generalPreferences.includeApp(mode: mode, manualOption: manualOption)
         capture.capture(mode: mode, delay: delay, includeApp: includeApp) { [weak self] result in
             guard let self, self.documentGeneration == generation else { return }
-            self.receiveCapture(result, expectedGeneration: generation)
+            self.receiveCapture(result, expectedGeneration: generation, afterInstalling: afterInstalling)
         }
     }
-    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil, fitOutput: Bool = true) {
+    func receiveCapture(_ result: Result<NSImage,Error>, discardAlreadyApproved: Bool = false, expectedGeneration: UUID? = nil, fitOutput: Bool = true, afterInstalling: (() -> Void)? = nil) {
         guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
         switch result { case .success(let image):
             var proposed = CGRect(origin: .zero, size: image.size)
@@ -1664,6 +1669,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             preferencesWindow?.orderOut(nil)
             followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; if fitOutput { adoptRasterViewport() } else { fitCanvasToWindow() }; nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
             playOriginalSound("snap")
+            afterInstalling?()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
     @objc func screenSnap() {
