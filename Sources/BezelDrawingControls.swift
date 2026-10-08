@@ -101,6 +101,9 @@ final class BezelColorButton: NSButton {
 /// The recovered vertical Size control: native artwork and point mapping,
 /// five ordinary steps, and Shift-continuous updates throughout a drag.
 final class BezelSizeSlider: NSControl {
+    /// `.classic` paints the recovered PNG artwork; `.modern` paints the same geometry as vectors for the glass chrome.
+    enum Style { case classic, modern }
+    var style: Style = .classic { didSet { needsDisplay = true } }
     var onBegin: (() -> Bool)?
     var onEnd: (() -> Void)?
     private var tracking = false
@@ -133,10 +136,25 @@ final class BezelSizeSlider: NSControl {
     func pointForValue(_ size: Double) -> NSPoint {
         NSPoint(x: (bounds.width-14)/2, y: 64*(12-size)/10.5)
     }
+    private func drawModern() {
+        NSColor.quaternaryLabelColor.setFill()
+        NSBezierPath(roundedRect: NSRect(x: (bounds.width-10)/2, y: 7, width: 10, height: 63), xRadius: 5, yRadius: 5).fill()
+        NSColor.secondaryLabelColor.setFill()
+        for step in OriginalDrawingControls.sizeSteps {
+            let dot = pointForValue(step)
+            NSBezierPath(ovalIn: NSRect(x: dot.x+5.5, y: dot.y+5.5, width: 3, height: 3)).fill()
+        }
+        NSColor.controlAccentColor.setFill()
+        NSBezierPath(ovalIn: NSRect(origin: pointForValue(value), size: NSSize(width: 14, height: 14))).fill()
+    }
     override func draw(_ dirtyRect: NSRect) {
-        trackImage?.draw(in: NSRect(x: (bounds.width-10)/2, y: 7, width: 10, height: 63))
-        let point = pointForValue(value)
-        indicatorImage?.draw(in: NSRect(origin: point, size: NSSize(width: 14, height: 14)))
+        if style == .modern {
+            drawModern()
+        } else {
+            trackImage?.draw(in: NSRect(x: (bounds.width-10)/2, y: 7, width: 10, height: 63))
+            let point = pointForValue(value)
+            indicatorImage?.draw(in: NSRect(origin: point, size: NSSize(width: 14, height: 14)))
+        }
         if window?.firstResponder === self {
             NSColor.keyboardFocusIndicatorColor.setStroke()
             let focus = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4)

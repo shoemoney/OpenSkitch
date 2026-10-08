@@ -103,7 +103,7 @@ optional_suites = [
     ("appearance-tests", ["Appearance.swift"], "AppearanceTests.swift", "APPEARANCE_TESTS", ()),
     ("fontawesome-icons-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift"], "FontAwesomeIconsTests.swift", "FONTAWESOME_ICONS_TESTS", (), font_environment),
     ("menu-symbols-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift", "MenuSymbols.swift"], "MenuSymbolsTests.swift", "MENU_SYMBOLS_TESTS", ()),
-    ("glass-chrome-tests", ["Appearance.swift", "OriginalActionButton.swift", "ToolButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
+    ("glass-chrome-tests", ["Appearance.swift", "OriginalActionButton.swift", "ToolButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "DocumentModel.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
 ]
 with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as executor:
     futures = [executor.submit(suite, *args) for args in suites]
