@@ -220,6 +220,7 @@ struct CanvasTests {
             ("Re-Snap validates before mutation and fits retina background", resnap),
             ("frame preview retains annotation pixels and capture boundary only", framePreview),
             ("Justype focus, native typing/recovery/undo, Escape commit and pointer clamp", justype),
+            ("Option key arms the Line polygon, release commits one element and one Undo step", linePolygon),
             ("shadows fall down-right on screen and in export", shadowDirection),
             ("text editor group shadow and grip chrome shadow fall downward", editorShadowDirection),
             ("native canvas visual proof", visualProof)
@@ -2301,6 +2302,52 @@ struct CanvasTests {
                        "Cancelled gesture preserves existing undo and redo branches")
             c.redo(); try expect(c.document.backgroundColor == .clear, "Pre-existing redo still operates after cancelled gesture")
         }
+    }
+    static func linePolygon() throws {
+        let c = canvas(NSSize(width: 200, height: 160)); let window = host(c); defer { window.close() }
+        c.editingUndoManager.removeAllActions(); c.tool = .line
+        func flags(_ f: NSEvent.ModifierFlags) throws { c.flagsChanged(with: try key(c, 58, type: .flagsChanged, flags: f)) }
+        func click(_ p: CGPoint, _ f: NSEvent.ModifierFlags = [.option]) throws {
+            c.mouseDown(with: try mouse(c, .leftMouseDown, p, flags: f))
+            c.mouseUp(with: try mouse(c, .leftMouseUp, p, flags: f))
+        }
+        func move(_ p: CGPoint, _ f: NSEvent.ModifierFlags = [.option]) throws { c.mouseMoved(with: try mouse(c, .mouseMoved, p, flags: f)) }
+        let a = CGPoint(x: 20, y: 20), b = CGPoint(x: 80, y: 20), d = CGPoint(x: 120, y: 90), e = CGPoint(x: 160, y: 40)
+        // Plain drag without Option is still a two-point line.
+        c.mouseDown(with: try mouse(c, .leftMouseDown, a)); c.mouseDragged(with: try mouse(c, .leftMouseDragged, b))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, b))
+        try expect(c.document.elements.count == 1 && c.document.elements[0].points == [a, b], "plain drag makes a two-point line")
+        c.editingUndoManager.removeAllActions(); c.document.elements = []
+        // Option down arms polygon mode; clicks push vertices, releases and moves never commit.
+        try flags([.option])
+        try click(a); try move(CGPoint(x: 50, y: 60)); try click(b)
+        c.mouseDown(with: try mouse(c, .leftMouseDown, d))
+        c.mouseDragged(with: try mouse(c, .leftMouseDragged, CGPoint(x: 130, y: 100)))
+        c.mouseUp(with: try mouse(c, .leftMouseUp, CGPoint(x: 130, y: 100)))
+        try move(e)
+        try expect(c.document.elements.isEmpty && !c.editingUndoManager.canUndo, "nothing is in the document before Option is released")
+        // Shift snaps the rubber-band tip to 45 degrees from the previous vertex.
+        try move(CGPoint(x: 190, y: 95), [.option, .shift])
+        // Escape discards the pending polygon.
+        c.keyDown(with: try key(c, 53))
+        try expect(c.document.elements.isEmpty, "Escape drops the pending polygon")
+        try click(a); try click(b); try click(d)
+        try move(CGPoint(x: 150, y: 100))
+        try flags([])
+        try expect(c.document.elements.count == 1 && c.document.elements[0].kind == .line, "Option release commits one line")
+        try expect(c.document.elements[0].points == [a, b, d], "vertices are the mouse-down points: \(c.document.elements[0].points)")
+        try expect(c.editingUndoManager.undoActionName == "Draw Line", "one named Undo step")
+        c.undo(); try expect(c.document.elements.isEmpty, "one Undo removes the whole polygon")
+        c.redo(); try expect(c.document.elements.count == 1, "Redo restores it")
+        // Shift constrains a vertex to 45 degrees from the previous vertex.
+        c.document.elements = []; c.editingUndoManager.removeAllActions()
+        try flags([.option]); try click(a); try click(CGPoint(x: 100, y: 25), [.option, .shift]); try flags([])
+        let tip = c.document.elements[0].points.last!
+        try expect(abs(tip.y - a.y) < 0.01 && tip.x > a.x, "Shift keeps the 45 degree constraint: \(tip)")
+        // Leaving the tool commits the pending polygon the same way.
+        c.document.elements = []; c.editingUndoManager.removeAllActions()
+        try flags([.option]); try click(a); try click(b); c.tool = .rectangle
+        try expect(c.document.elements.count == 1 && c.document.elements[0].points == [a, b], "tool change commits the polygon")
     }
     static func wipeLifecycle() throws {
         let c = canvas(); c.setBackground(backdrop()); c.setBackgroundColor(.clear)
