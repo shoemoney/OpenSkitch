@@ -300,11 +300,12 @@ extension NSShadow {
     /// drawImage passes (dx, -dy)) on every surface. CoreGraphics reads the offset in the context's
     /// base space and `NSShadow.set()` does not compensate. A flipped offscreen export keeps an
     /// unflipped base (y runs against page y), but AppKit hands a view's draw(_:) a base that is
-    /// already flipped, so the same offset cast the shadow upward on screen. `onViewSurface`
-    /// is true only for drawing done inside an NSView.
-    func cast(in context: CGContext, onViewSurface: Bool) {
+    /// already flipped, so the same offset cast the shadow upward on screen. `inFlippedView`
+    /// is true only while drawing inside a flipped NSView's draw(_:); an unflipped view keeps the
+    /// ordinary base, where `set()` already falls down and this flag would cast it up.
+    func cast(in context: CGContext, inFlippedView: Bool) {
         context.setShadow(offset: CGSize(width: shadowOffset.width,
-                                         height: onViewSurface ? -shadowOffset.height : shadowOffset.height),
+                                         height: inFlippedView ? -shadowOffset.height : shadowOffset.height),
                           blur: shadowBlurRadius, color: (shadowColor as? NSColor)?.cgColor)
     }
 }
@@ -367,7 +368,7 @@ enum SketchRenderer {
         image.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1, respectFlipped: true,
                    hints: [.interpolation: NSImageInterpolation.high])
     }
-    static func draw(_ document: SketchDocument, includeBackground: Bool = true, onViewSurface: Bool = false) {
+    static func draw(_ document: SketchDocument, includeBackground: Bool = true, inFlippedView: Bool = false) {
         NSGraphicsContext.saveGraphicsState()
         NSBezierPath(rect: document.canvasRect).addClip()
         if includeBackground {
@@ -376,8 +377,8 @@ enum SketchRenderer {
             if let image = document.backgroundImage { drawImage(image, in: document.canvasRect) }
         }
         // Original Skitch text always floats above the drawing shapes.
-        for element in document.elements where element.kind != .text { draw(element, onViewSurface: onViewSurface) }
-        for element in document.elements where element.kind == .text { draw(element, onViewSurface: onViewSurface) }
+        for element in document.elements where element.kind != .text { draw(element, inFlippedView: inFlippedView) }
+        for element in document.elements where element.kind == .text { draw(element, inFlippedView: inFlippedView) }
         NSGraphicsContext.restoreGraphicsState()
     }
     static func path(for element: SketchElement) -> NSBezierPath {
@@ -397,7 +398,7 @@ enum SketchRenderer {
         }
         return path
     }
-    static func draw(_ element: SketchElement, onViewSurface: Bool = false) {
+    static func draw(_ element: SketchElement, inFlippedView: Bool = false) {
         guard let cg = NSGraphicsContext.current?.cgContext else { return }
         NSGraphicsContext.saveGraphicsState()
         cg.concatenate(element.transform.cg)
@@ -406,7 +407,7 @@ enum SketchRenderer {
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.38)
             shadow.shadowBlurRadius = 4
             shadow.shadowOffset = NSSize(width: 2, height: -3)
-            shadow.cast(in: cg, onViewSurface: onViewSurface)
+            shadow.cast(in: cg, inFlippedView: inFlippedView)
         }
         element.color.nsColor.set()
         switch element.kind {
@@ -432,7 +433,7 @@ enum SketchRenderer {
             // The recovered layout manager paints a positive-width outline,
             // then the colored fill. A combined negative-width stroke obscures
             // glyph interiors at the original thick outline sizes.
-            if element.shadowed { OriginalTextEffects.shadow().cast(in: cg, onViewSurface: onViewSurface) }
+            if element.shadowed { OriginalTextEffects.shadow().cast(in: cg, inFlippedView: inFlippedView) }
             cg.beginTransparencyLayer(auxiliaryInfo: nil)
             if element.outlined {
                 attributes[.strokeColor] = OriginalTextEffects.outlineColor(element.color)
