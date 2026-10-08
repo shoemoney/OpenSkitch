@@ -76,6 +76,8 @@ private final class CanvasTestDrag: NSObject, NSDraggingInfo {
 @main
 struct CanvasTests {
     struct Failure: Error, CustomStringConvertible { let description: String }
+    /// A case that cannot run here (git-ignored original/ archive absent); reported as SKIP, never as a failure.
+    struct Skip: Error, CustomStringConvertible { let description: String }
     static func expect(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
         if try !condition() { throw Failure(description: message) }
     }
@@ -223,12 +225,13 @@ struct CanvasTests {
             if CommandLine.arguments.contains("--fixture-only") { return name == "original firstlaunch import stays editable" }
             return !CommandLine.arguments.contains("--skip-visual-proof") || name != "native canvas visual proof"
         }
-        var failures = 0
+        var failures = 0, skipped = 0
         for (name, test) in selectedTests {
             do { try autoreleasepool { try test() }; print("PASS \(name)") }
+            catch let skip as Skip { skipped += 1; print("SKIP \(name): \(skip)") }
             catch { failures += 1; print("FAIL \(name): \(error)") }
         }
-        print("\(selectedTests.count - failures)/\(selectedTests.count) canvas tests passed")
+        print("\(selectedTests.count - failures - skipped)/\(selectedTests.count) canvas tests passed" + (skipped > 0 ? ", \(skipped) skipped" : ""))
         if failures > 0 { exit(1) }
     }
     static func render() throws {
@@ -1286,6 +1289,7 @@ struct CanvasTests {
     }
     static func originalImport() throws {
         let url = URL(fileURLWithPath: "original/Skitch.app/Contents/Resources/firstlaunch.skitch")
+        guard FileManager.default.fileExists(atPath: url.path) else { throw Skip(description: "original fixture \(url.path) not present (original/ is git-ignored)") }
         let original = try LegacySkitch.read(url)
         try expect(original.paths.count == 3 && original.texts.count == 1, "Original fixture must contain exactly three paths and one text")
         try expect(original.texts[0].lines.count == 3 && original.texts[0].content == "Snap\nyour\nscreen",

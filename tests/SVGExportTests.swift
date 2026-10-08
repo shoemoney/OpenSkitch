@@ -59,6 +59,11 @@ fileprivate enum SVGExportTests {
         let description: String
         init(_ description: String) { self.description = description }
     }
+    /// A case that cannot run here (git-ignored original/ archive absent); reported as SKIP, never as a failure.
+    struct Skip: Error, CustomStringConvertible {
+        let description: String
+        init(_ description: String) { self.description = description }
+    }
     static func expect(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
         if try !condition() { throw Failure(message) }
     }
@@ -242,6 +247,7 @@ fileprivate enum SVGExportTests {
             .appendingPathComponent("original/Skitch.app/Contents/Resources/firstlaunch.skitch")
     }
     static func originalFixture() throws -> (LegacySkitchDocument, SketchDocument, Data, SVGTestNode) {
+        guard FileManager.default.fileExists(atPath: fixtureURL.path) else { throw Skip("original fixture \(fixtureURL.path) not present (original/ is git-ignored)") }
         let original = try LegacySkitch.read(fixtureURL)
         let modern = try LegacyBridge.convert(original)
         let bytes = try SVGExport.encode(modern)
@@ -249,7 +255,7 @@ fileprivate enum SVGExportTests {
     }
 
     static func main() {
-        var passed = 0, failures: [String] = []
+        var passed = 0, skipped = 0, failures: [String] = []
         let cases: [(String, () throws -> Void)] = [
             ("Explicit SVG output retains exact fractional crop viewBox and source geometry", {
                 var document = SketchDocument(size: CGSize(width: 399.5, height: 299.5))
@@ -509,9 +515,10 @@ fileprivate enum SVGExportTests {
         ]
         for (name, test) in cases {
             do { try test(); passed += 1; print("PASS \(name)") }
+            catch let skip as Skip { skipped += 1; print("SKIP \(name): \(skip)") }
             catch { let message = "\(name): \(error)"; failures.append(message); print("FAIL \(message)") }
         }
-        print("SVGExportTests: \(passed)/\(cases.count) passed; \(failures.count) failed")
+        print("SVGExportTests: \(passed)/\(cases.count) passed; \(failures.count) failed" + (skipped > 0 ? "; \(skipped) skipped" : ""))
         if !failures.isEmpty { exit(1) }
     }
 }

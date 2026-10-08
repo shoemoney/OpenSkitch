@@ -6,6 +6,8 @@ import Foundation
 @main
 enum SkitchFileTests {
     struct Failure: Error, CustomStringConvertible { let description: String }
+    /// A case that cannot run here (git-ignored original/ archive absent); reported as SKIP, never as a failure.
+    struct Skip: Error, CustomStringConvertible { let description: String }
     static func expect(_ condition: @autoclosure () throws -> Bool, _ message: String) throws {
         if try !condition() { throw Failure(description: message) }
     }
@@ -74,6 +76,7 @@ enum SkitchFileTests {
         _ = NSApplication.shared
         let cases: [(String, () throws -> Void)] = [
             ("Original fixture remains editable after save and reopen", {
+                guard FileManager.default.fileExists(atPath: fixtureURL().path) else { throw Skip(description: "original fixture \(fixtureURL().path) not present (original/ is git-ignored)") }
                 let original = try LegacySkitch.read(fixtureURL()), imported = try SkitchFile.read(fixtureURL())
                 try expect(imported.document.elements.filter { $0.kind == .path }.count == 3 && imported.document.elements.last?.text == "Snap\nyour\nscreen", "Fixture editability")
                 let saved = try imported.encoded(), reopened = try SkitchFile.decode(saved)
@@ -315,12 +318,13 @@ enum SkitchFileTests {
                 try expect(file.encoded() == file.encoded() && file.document.encoded() == before, "Save mutates or changes group ordering")
             })
         ]
-        var failures = 0
+        var failures = 0, skipped = 0
         for (name, test) in cases {
             do { try test(); print("PASS \(name)") }
+            catch let skip as Skip { skipped += 1; print("SKIP \(name): \(skip)") }
             catch { failures += 1; print("FAIL \(name): \(error)") }
         }
-        print("SkitchFileTests: \(cases.count - failures)/\(cases.count) passed; \(failures) failed")
+        print("SkitchFileTests: \(cases.count - failures - skipped)/\(cases.count) passed; \(failures) failed" + (skipped > 0 ? "; \(skipped) skipped" : ""))
         if failures != 0 { exit(1) }
     }
 }
