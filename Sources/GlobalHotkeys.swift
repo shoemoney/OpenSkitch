@@ -201,9 +201,9 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
         for key in ["3", "4", "5", "6"] {
             let code = GlobalHotkeyKeys.code(forMenuKey: key)
             result.insert(.init(keyCode: code, modifiers: [.command, .shift]))
-            // Control adds copy-to-clipboard only for 3 and 4; Command+Shift+Control+5 is
-            // the original Upload chord and no macOS screenshot shortcut.
-            if key == "3" || key == "4" { result.insert(.init(keyCode: code, modifiers: [.command, .shift, .control])) }
+            // Control variants copy to the clipboard (3, 4) or capture the Touch Bar (6);
+            // Command+Shift+Control+5 is the original Upload chord and no macOS screenshot shortcut.
+            if key != "5" { result.insert(.init(keyCode: code, modifiers: [.command, .shift, .control])) }
         }
         return result
     }()

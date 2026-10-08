@@ -162,6 +162,10 @@ private enum GlobalHotkeysTests {
             candidate = GlobalHotkeySettings(); candidate.screen = reserved
             try rejects("reserved app or screenshot binding") { try candidate.validate() }
         }
+        candidate = GlobalHotkeySettings(); candidate.screen = .init(keyCode: 22, modifiers: [.command, .shift, .control])
+        try rejects("Control+6 stays reserved for the macOS Touch Bar screenshot") { try candidate.validate() }
+        candidate = GlobalHotkeySettings(); candidate.upload = GlobalHotkeySettings.originalBindings[.upload]!
+        try candidate.validate()
         candidate = custom()
         try rejects("parent-provided extra internal conflict") { try candidate.validate(additionalReserved: [candidate.screen]) }
 
