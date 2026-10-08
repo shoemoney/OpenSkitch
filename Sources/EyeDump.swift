@@ -1,0 +1,59 @@
+import AppKit
+
+/// `--eye-dump <outdir>`: saves PNGs of the app's own windows for repeatable visual review, then quits.
+extension AppDelegate {
+    static func eyeDumpDirectory() -> URL? {
+        let args = CommandLine.arguments
+        guard let flag = args.firstIndex(of: "--eye-dump"), args.indices.contains(flag + 1) else { return nil }
+        return URL(fileURLWithPath: args[flag + 1], isDirectory: true)
+    }
+
+    func runEyeDump(to dir: URL) {
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        func pump(_ seconds: TimeInterval = 0.5) { RunLoop.current.run(until: Date(timeIntervalSinceNow: seconds)) }
+        func shoot(_ name: String, _ target: NSWindow?) {
+            guard let target else { return }
+            pump()
+            target.contentView?.layoutSubtreeIfNeeded()
+            let options: CGWindowImageOption = [.boundsIgnoreFraming, .bestResolution]
+            if let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(target.windowNumber), options),
+               image.width > 1, image.height > 1,
+               let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
+                try? data.write(to: dir.appendingPathComponent(name + ".png")); return
+            }
+            guard let view = target.contentView?.superview ?? target.contentView,
+                  let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
+            view.cacheDisplay(in: view.bounds, to: rep)
+            try? rep.representation(using: .png, properties: [:])?.write(to: dir.appendingPathComponent(name + "-cachedisplay.png"))
+        }
+
+        shoot("1-default", window)
+
+        let defaultFrame = window.frame
+        window.setContentSize(window.contentMinSize)
+        shoot("2-minsize", window)
+        window.setFrame(defaultFrame, display: true)
+
+        enterFrame(keepingAnnotations: false, manualFlags: [])
+        shoot("3-frame", window)
+        leaveFrame()
+        window.setFrame(defaultFrame, display: true)
+
+        showPreferences()
+        shoot("4-preferences", preferencesWindow)
+        closePreferences()
+
+        let red = SketchColor(.systemRed)
+        var arrow = SketchElement(kind: .arrow); arrow.points = [CGPoint(x: 40, y: 60), CGPoint(x: 220, y: 140)]; arrow.color = red
+        var box = SketchElement(kind: .rectangle); box.rect = CGRect(x: 120, y: 200, width: 200, height: 110); box.color = red
+        var note = SketchElement(kind: .text); note.text = "Eye dump"; note.rect = CGRect(x: 60, y: 340, width: 220, height: 40); note.color = red
+        canvas.document.elements.append(contentsOf: [arrow, box, note])
+        canvas.selection = [box.id]
+        canvas.needsDisplay = true
+        window.makeKeyAndOrderFront(nil)
+        shoot("5-annotations-selected", window)
+
+        dirty = false
+        NSApp.terminate(nil)
+    }
+}
