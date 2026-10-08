@@ -3,7 +3,7 @@
 // swiftc -D CANVAS_TESTS -target arm64-apple-macosx13.0 Sources/LegacySkitch.swift Sources/LegacyBridge.swift Sources/DocumentModel.swift Sources/Canvas.swift tests/CanvasTests.swift -o /tmp/skitch-redux-canvas-tests
 // /tmp/skitch-redux-canvas-tests
 // Fixture-only check without windows/captures: /tmp/skitch-redux-canvas-tests --fixture-only
-// Full suite without the optional capture: /tmp/skitch-redux-canvas-tests --skip-visual-proof
+// tools/test.py runs the live-view visual proof. Manual escape hatch without it: /tmp/skitch-redux-canvas-tests --skip-visual-proof
 //
 // Fidelity checklist: vectors/text/zoom/crop/background transforms, independent erased
 // line and freehand fragments, raster pixel erasing, text above shapes/protected from
@@ -2451,11 +2451,82 @@ struct CanvasTests {
         let window = host(c); defer { window.close() }
         window.setContentSize(c.canvasSize)
         c.displayIfNeeded()
-        guard let screenshot = c.bitmapImageRepForCachingDisplay(in: c.bounds) else { throw Failure(description: "Native view capture") }
-        c.cacheDisplay(in: c.bounds, to: screenshot)
+        let w = Int(c.canvasSize.width), h = Int(c.canvasSize.height)
+        // Capture into an explicit 1x device-RGB bitmap so the result never depends on the host display's backing scale or profile.
+        func capture() throws -> NSBitmapImageRep {
+            guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4,
+                    hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { throw Failure(description: "Native view capture") }
+            rep.size = c.bounds.size
+            c.cacheDisplay(in: c.bounds, to: rep)
+            return rep
+        }
+        func rgba(_ rep: NSBitmapImageRep?) throws -> [UInt8] {
+            guard let rep, rep.pixelsWide == w, rep.pixelsHigh == h, let bytes = rgbaBytes(rep, width: w, height: h) else {
+                throw Failure(description: "Visual proof needs a 1x \(w)x\(h) bitmap, got \(rep.map { "\($0.pixelsWide)x\($0.pixelsHigh)" } ?? "none")")
+            }
+            return bytes
+        }
+        let screenshot = try capture()
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("skitch-redux-canvas-proof.png")
         try screenshot.representation(using: .png, properties: [:])!.write(to: url)
         print("Visual proof: \(url.path)")
+        let live = try rgba(screenshot), offscreen = try rgba(SketchRenderer.bitmap(document: c.document))
+        func channels(_ bytes: [UInt8], _ x: Int, _ y: Int) -> [CGFloat] { (0..<3).map { CGFloat(bytes[(y * w + x) * 4 + $0]) / 255 } }
+        func describe(_ rgb: [CGFloat]) -> String { rgb.map { String(format: "%.2f", $0) }.joined(separator: ",") }
+        // System colours may resolve slightly differently per appearance, so inks get a loose band; white must be exact enough to tell it from the 0.88 checkerboard.
+        func expectInk(_ bytes: [UInt8], _ x: Int, _ y: Int, _ expected: NSColor, _ what: String, tolerance: CGFloat = 0.15) throws {
+            let want = expected.usingColorSpace(.sRGB)!, got = channels(bytes, x, y)
+            try expect(abs(got[0] - want.redComponent) < tolerance && abs(got[1] - want.greenComponent) < tolerance && abs(got[2] - want.blueComponent) < tolerance,
+                       "\(what) at (\(x),\(y)) must render rgb(\(describe([want.redComponent, want.greenComponent, want.blueComponent]))) but rendered rgb(\(describe(got)))")
+        }
+        let red = SketchColor(.systemRed).nsColor, green = SketchColor(.systemGreen).nsColor
+        let purple = SketchColor(.systemPurple).nsColor, blue = SketchColor(.systemBlue).nsColor
+        try expectInk(live, 132, 90, red, "Live red arrow shaft")
+        try expectInk(live, 509, 81, green, "Live green ellipse stroke (upper right)")
+        try expectInk(live, 509, 159, green, "Live green ellipse stroke (lower right)")
+        try expectInk(live, 440, 232, blue, "Live filled blue rectangle")
+        for (x, y) in [(95, 225), (157, 221), (193, 235), (260, 235)] { try expectInk(live, x, y, purple, "Live purple brush stroke") }
+        try expectInk(live, 175, 228, .white, "Live brush where the eraser cut through it", tolerance: 0.03)
+        try expectInk(live, 435, 120, .white, "Live unfilled ellipse interior", tolerance: 0.03)
+        try expectInk(live, 6, 6, .white, "Live document background covering the checkerboard", tolerance: 0.03)
+        try expectInk(live, 610, 390, .white, "Live empty canvas corner", tolerance: 0.03)
+        try expectInk(offscreen, 435, 65, green, "Offscreen ellipse top edge")
+        try expectInk(live, 435, 65, .white, "Live selection handle drawn over the ellipse top edge", tolerance: 0.03)
+        let textBounds = text.rect.integral
+        var ink = 0
+        for y in Int(textBounds.minY)..<Int(textBounds.maxY) { for x in Int(textBounds.minX)..<Int(textBounds.maxX) where channels(live, x, y).min()! < 0.8 { ink += 1 } }
+        try expect(ink > 300, "Live text block must leave glyph pixels in its rect (found \(ink))")
+        // Full-frame parity with SketchRenderer, the export path. Shadows are switched off for this pass: the live view
+        // casts them on the opposite vertical side from the renderer, so including them would measure that known
+        // difference rather than guard everything else.
+        c.document.elements = c.document.elements.map { var element = $0; element.shadowed = false; return element }
+        let plainLive = try rgba(try capture()), plainOffscreen = try rgba(SketchRenderer.bitmap(document: c.document))
+        let chromeOuter = ellipse.rect.insetBy(dx: -8, dy: -8), chromeInner = ellipse.rect.insetBy(dx: 8, dy: 8)
+        var compared = 0, mismatched = 0, worst: CGFloat = 0, firstMismatch = ""
+        for y in 0..<h { for x in 0..<w {
+            if chromeOuter.contains(CGPoint(x: x, y: y)) && !chromeInner.contains(CGPoint(x: x, y: y)) { continue }
+            compared += 1
+            let delta = zip(channels(plainLive, x, y), channels(plainOffscreen, x, y)).map { abs($0 - $1) }.max()!
+            worst = max(worst, delta)
+            if delta >= 0.05 {
+                mismatched += 1
+                if firstMismatch.isEmpty { firstMismatch = "(\(x),\(y)) live rgb(\(describe(channels(plainLive, x, y)))) vs offscreen rgb(\(describe(channels(plainOffscreen, x, y))))" }
+            }
+        } }
+        print("Visual proof: \(mismatched) of \(compared) pixels differ from the offscreen render, worst channel delta \(String(format: "%.3f", worst))")
+        try expect(mismatched == 0, "Live canvas draw must match SketchRenderer output outside the selection chrome (\(mismatched) of \(compared) pixels differ, first \(firstMismatch))")
+    }
+    /// Top-down premultiplied sRGB RGBA bytes of a bitmap, drawn 1:1 at the given pixel size.
+    static func rgbaBytes(_ bitmap: NSBitmapImageRep, width: Int, height: Int) -> [UInt8]? {
+        guard let image = bitmap.cgImage, let space = CGColorSpace(name: CGColorSpace.sRGB) else { return nil }
+        var bytes = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+            guard let context = CGContext(data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        return drawn ? bytes : nil
     }
 }
 #endif
