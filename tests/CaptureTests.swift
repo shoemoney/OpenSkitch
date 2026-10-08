@@ -358,6 +358,7 @@ private enum CaptureTests {
             try await nativeCleanupReentrantStops()
             try await nativeCountdownWithoutSelection()
             try await fullscreenTargetsActiveDisplay()
+            try topLeftFlip()
             try await runningCancellation()
             try await lateExitShutdown()
             try await repeatedFrame()
@@ -924,6 +925,25 @@ private enum CaptureTests {
         let record = start(rig)
         try await wait { record.results.count == 1 }
         try expect(flash.plays.first?.frame == left, "fullscreen flash covers the active display only")
+    }
+
+    /// AppKit (bottom-left, y up) to top-left, flipped about the PRIMARY display's top edge.
+    static func topLeftFlip() throws {
+        let primary = NSRect(x: 0, y: 0, width: 1440, height: 900) // 2x laptop panel
+        let cases: [(String, NSRect, NSRect)] = [
+            ("primary maps to origin", primary, NSRect(x: 0, y: 0, width: 1440, height: 900)),
+            ("display left of primary, 1x, raised", NSRect(x: -1920, y: 100, width: 1920, height: 1080), NSRect(x: -1920, y: -280, width: 1920, height: 1080)),
+            ("display above primary has negative top-left y", NSRect(x: 100, y: 900, width: 1280, height: 1200), NSRect(x: 100, y: -1200, width: 1280, height: 1200)),
+            ("display below primary", NSRect(x: 0, y: -1080, width: 1920, height: 1080), NSRect(x: 0, y: 900, width: 1920, height: 1080)),
+            ("mixed 1x right of 2x primary, bottom aligned", NSRect(x: 1440, y: 0, width: 2560, height: 1440), NSRect(x: 1440, y: -540, width: 2560, height: 1440)),
+        ]
+        for (name, appKit, expected) in cases {
+            let got = CaptureCoordinator.topLeft(appKit, primary: primary)
+            try expect(got == expected, "topLeft \(name): expected \(expected), got \(got)")
+        }
+        let tall = NSRect(x: 0, y: 0, width: 1000, height: 600)
+        try expect(CaptureCoordinator.topLeft(NSRect(x: 0, y: 600, width: 500, height: 400), primary: tall) == NSRect(x: 0, y: -400, width: 500, height: 400),
+                   "topLeft is relative to the primary's maxY, not a fixed height")
     }
 
     static func nativeCountdownWithoutSelection() async throws {

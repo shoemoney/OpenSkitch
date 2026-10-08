@@ -689,7 +689,12 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         let frames = NSScreen.screens.map(\.frame)
         guard let primary = frames.first,
               let hit = OriginalCaptureActiveDisplay.resolve(mouse: NSEvent.mouseLocation, in: frames) else { return nil }
-        return (hit, NSRect(x: hit.minX, y: primary.maxY - hit.maxY, width: hit.width, height: hit.height))
+        return (hit, Self.topLeft(hit, primary: primary))
+    }
+
+    /// AppKit global (bottom-left origin, y up) to top-left global, flipped about the PRIMARY display's top edge.
+    nonisolated static func topLeft(_ appKit: NSRect, primary: NSRect) -> NSRect {
+        NSRect(x: appKit.minX, y: primary.maxY - appKit.maxY, width: appKit.width, height: appKit.height)
     }
 
     private func acknowledgeStops(_ result: Result<Void, Error>) {
@@ -868,11 +873,8 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate, NSWindowDelegate
         let displays: [NSRect]
         if let supplied = environment.testDisplays { displays = supplied }
         else {
-            let baseline = NSScreen.screens.first?.frame.maxY ?? 0
-            displays = NSScreen.screens.map { screen in
-                NSRect(x: screen.frame.minX, y: baseline - screen.frame.maxY,
-                       width: screen.frame.width, height: screen.frame.height)
-            }
+            let primary = NSScreen.screens.first?.frame ?? .zero
+            displays = NSScreen.screens.map { Self.topLeft($0.frame, primary: primary) }
         }
         let intersectsDisplay = displays.contains { !integral.intersection($0).isEmpty }
         guard intersectsDisplay else { return nil }
