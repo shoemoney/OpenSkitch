@@ -759,6 +759,22 @@ enum AppSafetyTests {
         try expect(app.dirty && app.nameField.stringValue == "Screenshot" && app.status.stringValue == "Publishing image…",
                    "A successful Snap & Upload capture must be installed and handed to publishImage")
     }
+    static func newSnapCancelsRunningCapture() throws {
+        let fixture = try Fixture(), app = fixture.app
+        AppSafetyCaptureCoordinator.holdCapture = true; AppSafetyCaptureCoordinator.captureCallbacks = []
+        AppSafetyCaptureCoordinator.requests = []; AppSafetyAlert.seen = []
+        defer { AppSafetyCaptureCoordinator.holdCapture = false; AppSafetyCaptureCoordinator.captureCallbacks = [] }
+        var firstResult: Result<NSImage, Error>?
+        app.screenSnap()
+        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair"] && AppSafetyCaptureCoordinator.captureCallbacks.count == 1, "The first snap must start one capture")
+        let original = AppSafetyCaptureCoordinator.captureCallbacks[0]
+        AppSafetyCaptureCoordinator.captureCallbacks[0] = { firstResult = $0; original($0) }
+        app.screenSnap()
+        guard case .failure(let error)? = firstResult, (error as NSError).code == NSUserCancelledError else { throw Failure(description: "The first capture must be cancelled by the second Snap") }
+        try expect(AppSafetyCaptureCoordinator.requests == ["crosshair", "crosshair"] && AppSafetyCaptureCoordinator.captureCallbacks.count == 1,
+                   "Exactly two capture requests must exist and the new one must be running")
+        try expect(AppSafetyAlert.seen.isEmpty, "Re-snapping must not raise an alert")
+    }
     static func resnapPreservesAnnotations() throws {
         let fixture = try Fixture(), app = fixture.app
         var initial = SketchDocument(size: CGSize(width: 320, height: 180))
@@ -3283,6 +3299,7 @@ enum AppSafetyTests {
             ("Frame preview enter, switch and Cancel preserve document, recovery and history", framePreviewCancellation),
             ("Frame mode drops the window shadow, raises the level and sets alpha 0.8 from the recovered setSnapMode:, and leaving restores the pre-Frame values", frameWindowShadowLevelAlpha),
             ("Show Skitch and Snap & Upload global shortcuts restore the hidden editor without a second window and never publish a cancelled capture", showAndUploadHotkeys),
+            ("A new Snap during a running capture cancels it and starts the new snap", newSnapCancelsRunningCapture),
             ("Resnap preserves annotations, destination and usable Undo/Redo", resnapPreservesAnnotations),
             ("normal Frame picker and completion cancellation; Discard prompts exactly once", normalFrameDiscard),
             ("filename focus retains command-menu behavior", filenameCommands),

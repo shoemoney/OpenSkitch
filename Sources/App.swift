@@ -1659,6 +1659,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func startCapture(_ mode: String, delay: Double = 0, manualOption: Bool = false, afterInstalling: (() -> Void)? = nil) {
         guard !terminationStarted, !frameCaptureInProgress else { return }
+        if capture.isCapturing {
+            // Original snapSnap (decompiled.c:22327-22340) cancels the pending timed snap
+            // before starting; the cancelled callback is silent (NSUserCancelledError).
+            capture.cancelCapture { [weak self] result in
+                guard let self, !self.terminationStarted else { return }
+                if case .failure(let error) = result { self.updateStatus(); self.error(error); return }
+                self.startCapture(mode, delay: delay, manualOption: manualOption, afterInstalling: afterInstalling)
+            }
+            return
+        }
         helpBevel?.clear()
         leaveFrame()
         let generation = documentGeneration
