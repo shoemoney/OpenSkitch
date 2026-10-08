@@ -92,6 +92,7 @@ extension AppDelegate {
         ])
         content.canvasScrollView = chrome.scrollView
         modernChrome = chrome
+        configureWebpostButton(chrome.shareButton)
 
         snapButton = chrome.snapButton; cameraButton = chrome.cameraButton; cancelFrameButton = chrome.cancelFrameButton
         actualButton = chrome.actualButton; resizeButton = chrome.resizeButton

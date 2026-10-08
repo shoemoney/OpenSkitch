@@ -44,6 +44,8 @@ python3 - "$ROOT" "$APP_SOURCE" "$EVIDENCE" <<'PY'
 import hashlib, json, pathlib, re, sys
 root, app_source, evidence = map(pathlib.Path, sys.argv[1:])
 paths = sorted((root / 'Sources').glob('*.swift')) + [root / 'tests/AppSafetyTests.swift']
+if (root / 'tests/AppSafetyWebpostCases.swift').exists():
+    paths.append(root / 'tests/AppSafetyWebpostCases.swift')
 if (root / 'tests/AppSafetyModernCases.swift').exists():
     paths.append(root / 'tests/AppSafetyModernCases.swift')
 inputs = [(p.name, app_source if p.name == 'App.swift' else p) for p in paths]

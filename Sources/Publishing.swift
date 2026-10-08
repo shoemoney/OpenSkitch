@@ -803,7 +803,7 @@ enum PublishingTransfer {
 
 public final class PublishingCoordinator: NSObject {
     private let workController: PublishingWorkController
-    private let clipboardWriter: (URL) -> Void
+    var clipboardWriter: (URL) -> Void
     private var isShuttingDown = false
     private var isCancellationPending = false
     private var isPreparingPublish = false
@@ -813,7 +813,6 @@ public final class PublishingCoordinator: NSObject {
     private var quiescenceCallbacks: [(Result<Void, Error>) -> Void] = []
     private var successfulQuiescenceCallbacks: [() -> Void] = []
     private var settingsPanel: NSPanel?
-    private var publishPanel: NSPanel?
     private var endpointField: NSTextField?
     private var protocolField: NSPopUpButton?
     private var usernameField: NSTextField?
@@ -825,10 +824,12 @@ public final class PublishingCoordinator: NSObject {
     private var portField: NSTextField?
     private var settingsStatus: NSTextField?
     private var savedSettings = PublishingSettings()
-    private var pendingUpload: (() -> Void)?
     private var pendingCompletion: ((Result<URL, Error>) -> Void)?
-    private var transferStatus: NSTextField?
-    private var transferCancelButton: NSButton?
+    /// True when the last successful transfer wrote its verified public URL to the clipboard.
+    private(set) var lastTransferCopiedLink = false
+    // Seams for tests: destination lookup and the network transfer itself.
+    var settingsLoader: () throws -> PublishingSettings = { try PublishingStorage.load() }
+    var uploader: (Data, PublishingSettings, PublishingPlan, PublishingCancellation) throws -> URL = PublishingCoordinator.realUploader
 
     public override init() {
         workController = PublishingWorkController()
@@ -873,11 +874,6 @@ public final class PublishingCoordinator: NSObject {
     }
     private func requestCancellation(shutdown: Bool, completion: @escaping (Result<Void, Error>) -> Void) {
         isCancellationPending = true; quiescenceResult = nil; quiescenceCallbacks.append(completion)
-        if pendingUpload != nil { finishPublish(.failure(publishingCancellationError())) }
-        else if transferActive {
-            transferStatus?.stringValue = "Cancelling publishing and removing temporary files…"
-            transferCancelButton?.isEnabled = false
-        }
         workController.stop(shutdown: shutdown) { result in
             self.quiescenceResult = result; self.flushQuiescenceCallbacks()
         }
@@ -918,11 +914,10 @@ public final class PublishingCoordinator: NSObject {
     public func showSettings(relativeTo window: NSWindow) {
         if !Thread.isMainThread { PublishingMainDelivery.enqueue { self.showSettings(relativeTo: window) }; return }
         guard !isShuttingDown, !isCancellationPending, !isPreparingPublish, workController.acceptsWork else { return }
-        guard publishPanel == nil else { return }
         if let panel = settingsPanel { panel.makeKeyAndOrderFront(nil); return }
         guard window.attachedSheet == nil else { return }
         do {
-            savedSettings = try PublishingStorage.load()
+            savedSettings = try settingsLoader()
             let password = savedSettings.transport == .sftp ? "" : try PublishingKeychain.read(savedSettings.credentialID, allowMissing: !PublishingStorage.exists)
             let panel = makePanel(title: "Custom Publishing Settings", width: 800, height: 800)
             let form = verticalStack()
@@ -983,24 +978,42 @@ public final class PublishingCoordinator: NSObject {
         } catch { presentMessage(error.localizedDescription, relativeTo: window) }
     }
 
-    /// Presents a Publish confirmation. Only that button starts the upload.
+    /// True while a plan is being prepared or a transfer is running; a second upload is not queued.
+    var isBusy: Bool { isPreparingPublish || transferActive }
+    /// Menu title of the saved destination, or nil when none is configured.
+    var destinationTitle: String? {
+        guard isConfigured, let settings = try? settingsLoader() else { return nil }
+        let alias = settings.sshAlias.trimmingCharacters(in: .whitespacesAndNewlines)
+        let host = URL(string: settings.endpoint.trimmingCharacters(in: .whitespacesAndNewlines))?.host ?? settings.endpoint
+        return (settings.transport == .sftp ? "SFTP" : settings.transport.title) + " · " + (alias.isEmpty || settings.transport != .sftp ? host : alias)
+    }
+    /// Whether a destination is saved with enough detail to attempt an upload.
+    var isConfigured: Bool {
+        guard let settings = try? settingsLoader() else { return false }
+        func blank(_ text: String) -> Bool { text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        return settings.transport == .sftp ? !(blank(settings.sshAlias) && blank(settings.endpoint)) : !blank(settings.endpoint)
+    }
+
+    /// Uploads straight away with no confirmation and no sheet; the caller shows progress.
     /// Success returns the configured public URL, or the verified remote URL for status only.
-    /// Only a configured public URL is copied. Completion always runs on the main thread.
+    /// Only a configured public URL is copied (see `lastTransferCopiedLink`). Completion always runs on the main thread.
     /// Callers must not copy the completion URL unconditionally; this coordinator owns clipboard policy.
-    public func publish(data: Data, fileName: String, presenting window: NSWindow,
-                        completion: @escaping (Result<URL, Error>) -> Void) {
+    public func publish(data: Data, fileName: String, completion: @escaping (Result<URL, Error>) -> Void) {
         if !Thread.isMainThread {
-            PublishingMainDelivery.enqueue { self.publish(data: data, fileName: fileName, presenting: window, completion: completion) }; return
+            PublishingMainDelivery.enqueue { self.publish(data: data, fileName: fileName, completion: completion) }; return
         }
         guard !isShuttingDown, !isCancellationPending, workController.acceptsWork else {
             completion(.failure(publishingCancellationError())); return
         }
-        guard !isPreparingPublish, !transferActive, publishPanel == nil, settingsPanel == nil, window.attachedSheet == nil else {
-            completion(.failure(PublishingFailure("Close the current sheet before publishing."))); return
+        guard !isPreparingPublish, !transferActive else {
+            completion(.failure(PublishingFailure("An upload is already running."))); return
+        }
+        guard settingsPanel == nil else {
+            completion(.failure(PublishingFailure("Close the sharing settings before publishing."))); return
         }
         do {
             guard !data.isEmpty else { throw PublishingFailure("There is no image data to upload.") }
-            let settings = try PublishingStorage.load()
+            let settings = try settingsLoader()
             isPreparingPublish = true
             workController.start(work: { context in
                 let capabilities = settings.transport == .sftp ? nil : try PublishingCurl.capabilities(cancellation: context)
@@ -1008,39 +1021,22 @@ public final class PublishingCoordinator: NSObject {
             }) { result in
                 self.isPreparingPublish = false
                 switch result {
-                case .success(let plan): self.presentPublish(data: data, fileName: fileName, settings: settings, plan: plan, window: window, completion: completion)
+                case .success(let plan):
+                    let upload = self.uploader
+                    self.beginTransfer(copiesPublicURL: plan.publicURL != nil, work: { context in
+                        try context.check()
+                        return try upload(data, settings, plan, context)
+                    }, completion: completion)
                 case .failure(let error): completion(.failure(error))
                 }
             }
         } catch { completion(.failure(error)) }
     }
 
-    private func presentPublish(data: Data, fileName: String, settings: PublishingSettings,
-                                plan: PublishingPlan, window: NSWindow, completion: @escaping (Result<URL, Error>) -> Void) {
-            guard !isShuttingDown, !isCancellationPending, workController.acceptsWork else { completion(.failure(publishingCancellationError())); return }
-            guard window.attachedSheet == nil, publishPanel == nil else { completion(.failure(PublishingFailure("Close the current sheet before publishing."))); return }
-            let panel = makePanel(title: "Publish Image", width: 700, height: 350)
-            let form = verticalStack()
-            let description = label("Upload \(fileName) to:\n\(plan.remoteURL.absoluteString)\n\n" +
-                (plan.publicURL != nil ? "After a verified upload, the configured public link will be copied." : "Upload only. The remote file location will be returned; the clipboard will stay unchanged."))
-            description.maximumNumberOfLines = 9; description.preferredMaxLayoutWidth = 640
-            description.lineBreakMode = .byTruncatingMiddle
-            form.addArrangedSubview(description)
-            let cancel = button("Cancel", #selector(cancelPublish)), publish = button("Publish", #selector(confirmPublish))
-            form.addArrangedSubview(buttonRow([cancel, publish])); install(form, in: panel)
-            publishPanel = panel; pendingCompletion = completion; transferStatus = description; transferCancelButton = cancel
-            // Hold self until the sheet completes so a temporary coordinator is safe to use.
-            beginSheet(panel, relativeTo: window)
-            pendingUpload = { [self] in
-                pendingUpload = nil; publish.isEnabled = false
-                description.stringValue = "Uploading \(fileName)…\nUpload and public-link verification have a three-minute deadline."
-                beginTransfer(copiesPublicURL: plan.publicURL != nil, work: { context in
-                        try context.check()
-                        if settings.transport == .sftp { return try PublishingTransfer.upload(data: data, plan: plan, cancellation: context) }
-                        let password = try PublishingKeychain.read(settings.credentialID)
-                        return try PublishingTransfer.upload(data: data, plan: plan, username: settings.username, password: password, cancellation: context)
-                }, completion: completion)
-            }
+    static let realUploader: (Data, PublishingSettings, PublishingPlan, PublishingCancellation) throws -> URL = { data, settings, plan, context in
+        if settings.transport == .sftp { return try PublishingTransfer.upload(data: data, plan: plan, cancellation: context) }
+        let password = try PublishingKeychain.read(settings.credentialID)
+        return try PublishingTransfer.upload(data: data, plan: plan, username: settings.username, password: password, cancellation: context)
     }
 
     func beginTransfer(copiesPublicURL: Bool, work: @escaping (PublishingCancellation) throws -> URL,
@@ -1049,31 +1045,25 @@ public final class PublishingCoordinator: NSObject {
         guard !isShuttingDown, !isCancellationPending, !transferActive, workController.acceptsWork else {
             completion(.failure(publishingCancellationError())); return
         }
-        pendingCompletion = completion; transferActive = true
+        pendingCompletion = completion; transferActive = true; lastTransferCopiedLink = false
         workController.start(work: work) { result in
             self.transferActive = false
             if case .success(let url) = result, copiesPublicURL, !self.isShuttingDown, !self.isCancellationPending {
-                self.clipboardWriter(url)
+                self.clipboardWriter(url); self.lastTransferCopiedLink = true
             }
             self.finishPublish(result)
         }
     }
 
-    @objc private func confirmPublish() { pendingUpload?() }
     @objc private func protocolChanged() {
         guard let field = protocolField, field.indexOfSelectedItem >= 0 else { return }
         let sftp = PublishingProtocol.allCases[field.indexOfSelectedItem] == .sftp
         passwordField?.isEnabled = !sftp
         aliasField?.isEnabled = sftp; remoteRootField?.isEnabled = sftp; portField?.isEnabled = sftp
     }
-    @objc private func cancelPublish() {
-        cancelPublishing { _ in }
-    }
     private func finishPublish(_ result: Result<URL, Error>) {
         let completion = pendingCompletion
-        pendingCompletion = nil; pendingUpload = nil
-        if let panel = publishPanel { dismissSheet(panel) }
-        publishPanel = nil; transferStatus = nil; transferCancelButton = nil; completion?(result)
+        pendingCompletion = nil; completion?(result)
     }
     @objc private func cancelSettings() {
         if let panel = settingsPanel { dismissSheet(panel) }

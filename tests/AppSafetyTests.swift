@@ -338,6 +338,10 @@ enum AppSafetyTests {
             app.timer?.invalidate(); app.timer = nil
             app.window.isReleasedWhenClosed = false
             try expect(app.window is AppSafetyWindow, "Window must never be ordered on screen")
+            // No test may reach the network or the owner's real destination: a fake SFTP destination and an in-process transfer.
+            app.publishing.settingsLoader = AppSafetyTests.fakeDestination
+            app.publishing.uploader = { _, _, plan, _ in plan.publicURL ?? plan.remoteURL }
+            app.publishing.clipboardWriter = { _ in }
         }
         deinit {
             MainActor.assumeIsolated {
@@ -751,12 +755,12 @@ enum AppSafetyTests {
                    "Snap & Upload must start a crosshair capture and publish nothing before it completes")
         AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()(.failure(AppSafetyCaptureCoordinator.cancellation))
         try waitForMain("A cancelled capture settles") { true }
-        try expect(app.status.stringValue != "Publishing image…" && window.attachedSheet == nil && AppSafetyAlert.seen.isEmpty && !app.dirty,
+        try expect(!app.status.stringValue.hasPrefix("Uploading") && window.attachedSheet == nil && AppSafetyAlert.seen.isEmpty && !app.dirty,
                    "A cancelled Snap & Upload capture must not publish, alert or replace the document")
         // Success publishes exactly the installed capture.
         upload()
         AppSafetyCaptureCoordinator.captureCallbacks.removeFirst()(.success(try image()))
-        try expect(app.dirty && app.nameField.stringValue == "Screenshot" && app.status.stringValue == "Publishing image…",
+        try expect(app.dirty && app.nameField.stringValue == "Screenshot" && app.status.stringValue == "Uploading Screenshot…",
                    "A successful Snap & Upload capture must be installed and handed to publishImage")
     }
     static func newSnapCancelsRunningCapture() throws {
@@ -2266,7 +2270,8 @@ enum AppSafetyTests {
             let own = (view as? OriginalActionButton).map { [$0] } ?? []
             return own + view.subviews.flatMap { actionButtons($0) }
         }
-        let others = actionButtons(app.window.contentView!).filter { $0 !== snap }
+        // Webpost… deliberately carries its destination menu (webpostMenu covers it).
+        let others = actionButtons(app.window.contentView!).filter { $0 !== snap && $0 !== app.webpostButton }
         try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.cameraButton } &&
                    others.contains { $0.action == #selector(AppDelegate.cameraSnap) },
                    "No-alternate checks cover actual tool and Camera controls rather than fabricated buttons")
@@ -4004,7 +4009,7 @@ enum AppSafetyTests {
             ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", { try relaunchQuitSequence(Fixture()) }),
             ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", relaunchLauncherAcknowledgement)
         ]
-        let tests = ProcessInfo.processInfo.environment["SKITCH_APPEARANCE"] == "modern" ? Self.modernCases : classicCases
+        let tests = (ProcessInfo.processInfo.environment["SKITCH_APPEARANCE"] == "modern" ? Self.modernCases : classicCases) + Self.webpostCases
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []

@@ -82,13 +82,12 @@ extension AppSafetyTests {
         var popoverAppearance: NSAppearance.Name?
     }
 
-    /// The 13 command buttons, each found by the Classic action it sends so both windows are read the same way.
+    /// The 12 command buttons, each found by the Classic action it sends so both windows are read the same way.
     private static let commandActions: [(name: String, action: Selector)] = [
         ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
         ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)), ("cam", #selector(AppDelegate.cameraSnap)),
         ("cancel", #selector(AppDelegate.cancelFrame)), ("font", #selector(AppDelegate.chooseFont)), ("undo", #selector(AppDelegate.undo)),
-        ("wipe", #selector(AppDelegate.wipe)), ("actual", #selector(AppDelegate.toggleActualSize)), ("resize", #selector(AppDelegate.resize)),
-        ("share", #selector(AppDelegate.share(_:)))
+        ("wipe", #selector(AppDelegate.wipe)), ("actual", #selector(AppDelegate.toggleActualSize)), ("resize", #selector(AppDelegate.resize))
     ]
 
     private static func controlFacts(_ app: AppDelegate) -> [String: String] {
@@ -119,8 +118,9 @@ extension AppSafetyTests {
         facts["toolbox.items"] = toolbox?.itemTitles.joined(separator: "|") ?? "<nil>"
         let tools = Set(app.toolButtons.values.map(ObjectIdentifier.init))
         let plain = collect(NSButton.self, in: content).filter { !($0 is NSPopUpButton) && !tools.contains(ObjectIdentifier($0)) }
-        facts["buttons"] = plain.map(\.title).sorted().joined(separator: "|")
-        facts["share.label"] = plain.first { $0.title == "Webpost…" }?.accessibilityLabel() ?? "<nil>"
+        // Modern's upload command is icon-only with its own label; webpostModernIconOnly covers it.
+        let upload = #selector(AppDelegate.share(_:))
+        facts["buttons"] = plain.filter { $0.action != upload }.map(\.title).sorted().joined(separator: "|")
         // What VoiceOver reads for each command. Classic buttons read their titles; a symbol fallback must not read its own name instead.
         for (name, action) in commandActions { facts["axLabel.\(name)"] = plain.first { $0.action == action }?.accessibilityLabel() ?? "<nil>" }
         facts["actual.title"] = app.actualButton?.title ?? "<nil>"
@@ -210,11 +210,11 @@ extension AppSafetyTests {
         let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] }
             .map { "\($0): classic '\(classic.controls[$0] ?? "")' vs modern '\(modern[$0] ?? "")'" }
         try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
-        try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool" && modern["share.label"] == "Share drawing"
+        try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool"
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
-        // At launch the rail Wipe reads its Blank stage; every other command reads its title, and Webpost… keeps its explicit label.
+        // At launch the rail Wipe reads its Blank stage; every other command reads its title, (the icon-only upload button is checked on its own).
         let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cam": "Cam", "cancel": "Cancel", "font": "Font",
-                      "undo": "Undo", "wipe": "Blank", "actual": "Actual Size", "resize": "Resize…", "share": "Share drawing"]
+                      "undo": "Undo", "wipe": "Blank", "actual": "Actual Size", "resize": "Resize…"]
         let misread = spoken.keys.sorted().filter { modern["axLabel.\($0)"] != spoken[$0] }
             .map { "\($0): '\(modern["axLabel.\($0)"] ?? "")' instead of '\(spoken[$0] ?? "")'" }
         try expect(misread.isEmpty && spoken.count == commandActions.count, "VoiceOver reads the wrong command labels: " + misread.joined(separator: "; "))
