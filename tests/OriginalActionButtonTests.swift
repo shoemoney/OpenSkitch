@@ -18,9 +18,7 @@ private final class ActionReceiver: NSObject {
     }
 }
 
-/// Observe tracking without NSButton's blocking native mouse-tracking loop. Returning
-/// true ends tracking at once; returning false makes NSControl.mouseDown wait for input
-/// forever, which a test only discovers once its click really reaches the cell.
+/// Records the tracked event and ends tracking at once (returns true), so no native tracking loop runs.
 @MainActor
 private final class TrackingCell: NSButtonCell {
     var trackedEvents: [NSEvent] = []
