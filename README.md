@@ -19,6 +19,12 @@ On macOS 26 and newer OpenSkitch opens in the Modern appearance by default; Clas
 
 Modern draws its icons with Font Awesome Pro when it is available and falls back to SF Symbols when it is not. The Pro fonts are licensed, so they are optional and never committed: with your own Pro token in `FONTAWESOME_TOKEN`, run `OPENSKITCH_FETCH_FONTAWESOME=1 ./tools/build.sh` and the build downloads the package, subsets only the glyphs the app uses into the git-ignored `build/fonts` and bundles them. Without a token the build still succeeds and uses SF Symbols.
 
+## Releases
+
+Release builds come from `sh tools/release.sh VERSION`, which refuses a VERSION that differs from `Info.plist`, builds without Font Awesome Pro, fails if any font file is inside the bundle, verifies the signature and writes `build/OpenSkitch-VERSION-arm64.zip` plus `build/release-manifest.json` (version, git SHA, binary and zip SHA-256).
+
+Release builds are ad-hoc signed and not notarized, so Gatekeeper blocks the first launch of a downloaded copy. Right-click the app and choose Open, or run `xattr -d com.apple.quarantine OpenSkitch.app` once. Font Awesome Pro is never shipped: public builds draw the Modern appearance with SF Symbols.
+
 ## Current functionality
 
 Native capture controls, editable annotation tools, text, selection, undo, groups, cropping, resizing, rotation, flipping, clipboard import/export, drag export, local history, session recovery, printing, image exports and SVG export are implemented. Actual Size preserves normal output history and restores the normal window on exit, with a native overview navigator for panning. Border drags crop or expand the visible canvas, Option applies symmetry, and corner drags resize output with one Undo step. Raster imports and ordinary captures fit their output to the available screen while retaining full source pixels. The original bundled `firstlaunch.skitch` opens with editable paths and text. Save now uses SVG-native `.skitch` files with original attributes and supplemental editing state; existing `.skitchredux` JSON remains supported. Native save, recovery and history retain background pixels hidden by panning or cropping. Complete historical file interoperability remains unverified.
