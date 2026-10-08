@@ -122,8 +122,7 @@ struct TextStyleFormTests {
         popup.itemArray[0].attributedTitle = NSAttributedString(string: "All Fonts",
                                 attributes: [.font: NSFont.boldSystemFont(ofSize: 24)])
         let item = NSToolbarItem(itemIdentifier: NSToolbarItem.Identifier("controlled-collection"))
-        item.view = popup; item.minSize = NSSize(width: 220, height: 32)
-        item.maxSize = NSSize(width: 600, height: 80)
+        item.view = popup
         let searchField = NSSearchField(frame: NSRect(x: 0, y: 0, width: 325, height: 32))
         searchField.stringValue = "Helvetica"; searchField.font = .systemFont(ofSize: 13)
         let searchItem = NSToolbarItem(itemIdentifier: NSToolbarItem.Identifier("controlled-search"))
@@ -148,13 +147,16 @@ struct TextStyleFormTests {
         let callbacksBefore = (outlines, shadows, defaults)
         let accessoryActions = [form.outline.action, form.shadowControl.action, form.defaults.action]
         TextStyleForm.prepareFontPanel(panel)
+        func floors() -> [NSLayoutConstraint] { popup.constraints.filter { $0.identifier?.hasPrefix("skitch.toolbar.") == true } }
+        expect(!popup.translatesAutoresizingMaskIntoConstraints && floors().count == 2
+               && floors().allSatisfy { $0.isActive && $0.relation == .greaterThanOrEqual && $0.firstItem === popup }
+               && floors().first { $0.identifier == "skitch.toolbar.minWidth" }?.constant == 220
+               && (floors().first { $0.identifier == "skitch.toolbar.minHeight" }?.constant ?? 0) >= 32,
+               "Collection popup is floored at 220x32 by Auto Layout and never capped")
         expect(popup.frame == popupBefore, "Typography refresh does not sizeToFit a toolbar view")
-        expect(item.maxSize.width >= 600 && item.maxSize.height >= 80,
-               "Toolbar keeps AppKit's flexible size range")
         let titleFont = popup.itemArray[0].attributedTitle?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont
         expect(titleFont?.pointSize == 24 && NSFontManager.shared.traits(of: titleFont!).contains(.boldFontMask),
                "Readable attributed menu title retains its size and weight")
-        expect(item.minSize.width == 220, "Long menu titles do not reserve the toolbar's field space")
         expect(popup.indexOfSelectedItem == 1 && popup.itemArray.elementsEqual(menuBefore, by: { $0 === $1 }),
                "Preparation preserves menu item ownership and selected collection")
         expect(searchField.frame == searchBefore && searchField.stringValue == "Helvetica"
@@ -169,10 +171,9 @@ struct TextStyleFormTests {
                "Small menu text grows without losing native weight")
         expect(popup.itemArray[1].attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == .systemBlue,
                "Menu typography adjustment preserves unrelated attributed styling")
-        let sizesBeforeRefresh = (item.minSize, item.maxSize)
         for _ in 0..<4 { TextStyleForm.prepareFontPanel(panel) }
-        expect(popup.frame == popupBefore && item.minSize == sizesBeforeRefresh.0 && item.maxSize == sizesBeforeRefresh.1,
-               "Repeated preparation does not grow or reset toolbar allocations")
+        expect(floors().count == 2, "Repeated preparation does not stack floor constraints")
+        expect(popup.frame == popupBefore, "Repeated preparation does not resize the toolbar view")
         expect(outlines == callbacksBefore.0 && shadows == callbacksBefore.1 && defaults == callbacksBefore.2,
                "Layout and typography preparation do not send text changes")
         expect([form.outline.action, form.shadowControl.action, form.defaults.action] == accessoryActions

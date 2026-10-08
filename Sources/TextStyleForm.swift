@@ -187,11 +187,8 @@ final class TextStyleForm: NSView {
             }
             if let browser = view as? NSBrowser {
                 browser.rowHeight = max(32, browser.rowHeight)
-                // Columns copy their cells from the prototype: restyle it, then rebuild the loaded
-                // columns once (the guard keeps later refreshes from reloading and moving the selection).
                 if let prototype = browser.cellPrototype as? NSCell, prototype.font != .systemFont(ofSize: 20) {
                     prototype.font = .systemFont(ofSize: 20)
-                    if browser.lastColumn >= 0 { for column in 0...browser.lastColumn { browser.reloadColumn(column) } }
                 }
             }
             if let table = view as? NSTableView {
