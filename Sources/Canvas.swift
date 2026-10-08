@@ -385,6 +385,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var strokeSamples: [StrokeSample] = []
     private var drawingPencil = false
     private var drawingArrow = false
+    /// Line left open by an Option release (original ToolLine::mouseUp, decompiled.c:312123-312137); the next drag appends to it.
+    private var openPolygon: (id: UUID, points: [CGPoint])?
+    private var extendingPolygon: (index: Int, base: [CGPoint])?
     private var arrowEnd: CGPoint = .zero
     private var tabletEraser = false
     private var textEditor: SketchTextEditor?
@@ -1445,7 +1448,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         preview = nil; marquee = nil; gestureState = nil; gestureDocument = nil
         gestureColor = nil; dragMode = .none; strokePoints = []; strokeSamples = []; drawingPencil = false; resizingHandle = nil
         copyOnDrag = false; copiesCreated = false
-        drawingArrow = false; arrowEnd = .zero
+        drawingArrow = false; arrowEnd = .zero; extendingPolygon = nil
     }
     private func sampleColor(at point: CGPoint) {
         guard document.canvasRect.contains(point) else { return }
@@ -1620,6 +1623,15 @@ final class CanvasView: NSView, NSTextViewDelegate {
             beginTextEditing(element.id, before: gestureState)
         default:
             guard let kind = SketchElement.Kind(rawValue: activeTool.rawValue) else { return }
+            if kind == .line, let open = openPolygon,
+               let index = document.elements.firstIndex(where: { $0.id == open.id }),
+               document.elements[index].points == open.points {
+                // ToolLine::mouseDown 311880-311926 continues the sample vector of the open line.
+                extendingPolygon = (index, open.points)
+                selection.removeAll(); dragMode = .create; needsDisplay = true
+                return
+            }
+            openPolygon = nil
             var element = styledElement(kind)
             element.points = [point, point]
             if kind == .brush {
@@ -1643,6 +1655,22 @@ final class CanvasView: NSView, NSTextViewDelegate {
         let dx = point.x - gestureStart.x, dy = point.y - gestureStart.y
         switch dragMode {
         case .create:
+            if let extending = extendingPolygon, let baseline = gestureDocument, let last = extending.base.last {
+                if event.modifierFlags.contains(.shift) {
+                    let sx = point.x - last.x, sy = point.y - last.y
+                    let angle = (atan2(sy, sx) / (.pi / 4)).rounded() * (.pi / 4)
+                    let length = hypot(sx, sy)
+                    point = CGPoint(x: last.x + cos(angle) * length, y: last.y + sin(angle) * length)
+                }
+                var extended = baseline
+                extended.elements[extending.index].points = extending.base + [point]
+                extended.elements[extending.index].rect = extended.elements[extending.index].points.reduce(CGRect.null) {
+                    $0.union(CGRect(origin: $1, size: .zero))
+                }
+                document = extended
+                needsDisplay = true
+                return
+            }
             guard var element = preview else { return }
             if drawingPencil {
                 if strokeSamples.count < StrokeFitter.maximumSamples { strokeSamples.append(strokeSample(event, at: point)) }
@@ -1706,9 +1734,21 @@ final class CanvasView: NSView, NSTextViewDelegate {
         } else if dragMode != .none && dragMode != .erase && !drawingPencil { mouseDragged(with: event) }
         switch dragMode {
         case .create:
-            if let element = preview,
+            if let extending = extendingPolygon {
+                let id = document.elements[extending.index].id
+                let points = document.elements[extending.index].points
+                if let tip = points.last, let last = extending.base.last, points.count > extending.base.count,
+                   hypot(tip.x - last.x, tip.y - last.y) > 0.5 {
+                    openPolygon = event.modifierFlags.contains(.option) ? (id, document.elements[extending.index].points) : nil
+                    if let before = gestureState { recordUndo(before, name: "Extend Line") }
+                } else if let baseline = gestureDocument {
+                    document = baseline   // click without movement adds no segment
+                    if !event.modifierFlags.contains(.option) { openPolygon = nil }
+                }
+            } else if let element = preview,
                !element.pathCommands.isEmpty || element.kind == .brush || element.bounds.width > 0.5 || element.bounds.height > 0.5 {
                 document.elements.append(element); selection = [element.id]
+                openPolygon = element.kind == .line && event.modifierFlags.contains(.option) ? (element.id, element.points) : nil
                 if let before = gestureState { recordUndo(before, name: drawingArrow ? "Draw Arrow" : "Draw \(element.kind.rawValue.capitalized)") }
             }
         case .move, .resize, .pan:
@@ -2010,7 +2050,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 strokeColor = previous; onColorChange?(previous)
             }
         } else {
-            selection.removeAll(); cropRect = nil
+            selection.removeAll(); cropRect = nil; openPolygon = nil
         }
         resetGesture(); needsDisplay = true
     }
