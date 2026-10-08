@@ -173,8 +173,10 @@ final class TextStyleForm: NSView {
     /// so only browsers whose delegate implements the item-based API get a row height.
     static func browserSupportsRowHeight(_ browser: NSBrowser) -> Bool {
         guard let delegate = browser.delegate else { return false }
-        return delegate.responds(to: #selector(NSBrowserDelegate.rootItem(for:)))
-            && delegate.responds(to: #selector(NSBrowserDelegate.browser(_:numberOfChildrenOfItem:)))
+        return delegate.responds(to: #selector(NSBrowserDelegate.browser(_:numberOfChildrenOfItem:)))
+            && delegate.responds(to: #selector(NSBrowserDelegate.browser(_:child:ofItem:)))
+            && delegate.responds(to: #selector(NSBrowserDelegate.browser(_:isLeafItem:)))
+            && delegate.responds(to: #selector(NSBrowserDelegate.browser(_:objectValueForItem:)))
     }
 
     static func styleBrowser(_ browser: NSBrowser) {
