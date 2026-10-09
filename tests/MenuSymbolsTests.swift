@@ -1,5 +1,5 @@
 // Standalone NSMenu trees only; no application delegate, no windows, no desktop input.
-// xcrun swiftc -swift-version 5 -strict-concurrency=complete -warnings-as-errors -target arm64-apple-macosx13.0 \
+// xcrun swiftc -swift-version 5 -strict-concurrency=complete -warnings-as-errors -target arm64-apple-macosx26.0 \
 //   -D MENU_SYMBOLS_TESTS Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift Sources/MenuSymbols.swift tests/MenuSymbolsTests.swift -o build/menu-symbols-tests
 // build/menu-symbols-tests
 #if MENU_SYMBOLS_TESTS
@@ -22,7 +22,7 @@ private enum MenuSymbolsTests {
         _ = NSApplication.shared
         mapping()
         sourceActions()
-        if #available(macOS 26, *) { application() } else { skipped.append("apply(to:) (needs macOS 26)") }
+        application()
         let note = skipped.isEmpty ? "" : "; SKIPPED: " + skipped.joined(separator: ", ")
         print("MenuSymbolsTests: \(checks) checks passed (standalone menus; no desktop input)\(note)")
     }
@@ -52,7 +52,6 @@ private enum MenuSymbolsTests {
         }
     }
 
-    @available(macOS 26, *)
     private static func application() {
         let preset = NSImage(size: NSSize(width: 4, height: 4))
         let root = NSMenu(title: "Root")

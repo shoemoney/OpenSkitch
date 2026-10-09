@@ -365,7 +365,6 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate {
     private let nativeSelection: Bool
     private let nativeCountdown: Bool
     private var nativeFlash = false
-    var onSound: ((String) -> Void)?
     var isCapturing: Bool { operationID != nil || cleaningUp }
     private var hidApplication = false
     private var wasActive = false
@@ -782,10 +781,7 @@ final class CaptureCoordinator: NSObject, WKNavigationDelegate {
         }
         if delay > 0, nativeCountdown {
             if countdown == nil { countdown = OriginalCaptureCountdown() }
-            countdown?.start(rect: rect, parent: nil, delay: delay, cue: { [weak self] in
-                guard let self, self.operationID == id else { return }
-                self.onSound?("pre-snap-countdown")
-            }, completion: launch)
+            countdown?.start(rect: rect, parent: nil, delay: delay, cue: {}, completion: launch)
         } else if delay > 0 {
             delayedCapture = Task { [weak self] in
                 do { try await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000)) }

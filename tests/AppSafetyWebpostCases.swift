@@ -1,4 +1,4 @@
-// Webpost one-click upload: both appearances share these cases. Every transfer is an in-process fake; nothing touches the network.
+// Webpost one-click upload. Every transfer is an in-process fake; nothing touches the network.
 #if APP_SAFETY_TESTS
 import AppKit
 
@@ -40,10 +40,9 @@ extension AppSafetyTests {
             ("The upload right-click menu uses the 20 pt menu font", webpostMenuFont),
             ("The right-click menu lists every destination; choosing one persists it and the next Webpost click uploads there", webpostMultipleDestinations),
             ("Destination settings: Add, Make Default and Remove round-trip through storage with an S3 profile destination", webpostDestinationSettingsRoundTrip),
-            ("--eye-dump is ignored unless SKITCH_APP_SUPPORT names an existing directory", webpostEyeDumpGate)
-        ] + (Appearance.isModern
-             ? [("Modern upload button is icon-only with the iCloud upload symbol and an explicit label", webpostModernIconOnly)]
-             : [("Classic upload button reads exactly Webpost… and speaks as Upload to destination", webpostClassicButton)])
+            ("--eye-dump is ignored unless SKITCH_APP_SUPPORT names an existing directory", webpostEyeDumpGate),
+            ("The upload button is icon-only with the iCloud upload symbol and an explicit label", webpostModernIconOnly)
+        ]
     }
 
     private static func webpostButton(_ app: AppDelegate) throws -> NSButton {
@@ -297,16 +296,9 @@ extension AppSafetyTests {
         try expect(AppDelegate.eyeDumpDirectory(arguments: ["OpenSkitch"], environment: ["SKITCH_APP_SUPPORT": NSTemporaryDirectory()]) == nil, "No flag: nil")
     }
 
-    static func webpostClassicButton() throws {
-        let fixture = try Fixture(), app = fixture.app
-        let button = try webpostButton(app)
-        try expect(button.title == "Webpost…", "Classic title is exactly Webpost… (\(button.title))")
-        try expect(button.accessibilityLabel() == "Upload to destination", "Classic VoiceOver label matches what it does (\(button.accessibilityLabel() ?? "nil"))")
-    }
-
     static func webpostModernIconOnly() throws {
         let fixture = try Fixture(), app = fixture.app
-        guard #available(macOS 26, *), let chrome = app.modernChrome as? ModernEditorChrome else { throw Failure(description: "Modern chrome required") }
+        guard let chrome = app.modernChrome as? ModernEditorChrome else { throw Failure(description: "Modern chrome required") }
         let button = chrome.shareButton
         try expect(button.title.isEmpty && button.imagePosition == .imageOnly && button.icon == nil && button.image?.isTemplate == true,
                    "The upload button has no title and a native symbol image")

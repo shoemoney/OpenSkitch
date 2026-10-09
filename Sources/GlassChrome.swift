@@ -58,7 +58,7 @@ class GlassChromeButton: OriginalActionButton {
     }
 
     // NSButton's title convenience initializer assigns its small standard font after init(frame:);
-    // keep the caller's face but never fall under the 18-point floor ToolButton enforces too.
+    // keep the caller's face but never fall under the 18-point floor.
     override var font: NSFont? {
         didSet {
             if let font, font.pointSize < 18 {
@@ -173,9 +173,19 @@ class GlassChromeButton: OriginalActionButton {
         if !isEnabled {
             color = .disabledControlTextColor
         } else if usesAccentForeground {
-            effectiveAppearance.performAsCurrentDrawingAppearance { color = ToolButton.textColor(on: .controlAccentColor) }
+            effectiveAppearance.performAsCurrentDrawingAppearance { color = Self.textColor(on: .controlAccentColor) }
         }
         if contentTintColor != color { contentTintColor = color }
+    }
+
+    static func textColor(on background: NSColor) -> NSColor {
+        guard let rgb = background.usingColorSpace(.deviceRGB) else { return .labelColor }
+        func linear(_ value: CGFloat) -> Double {
+            let channel = Double(value)
+            return channel <= 0.04045 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(rgb.redComponent) + 0.7152 * linear(rgb.greenComponent) + 0.0722 * linear(rgb.blueComponent)
+        return luminance > 0.179 ? .black : .white
     }
 
     private func notifyChange() { onInteractionChange?(self) }
@@ -236,7 +246,6 @@ class GlassChromeButton: OriginalActionButton {
 
 /// One Liquid Glass surface around one control. State lives here (hover, press, selection, prominence, disabled)
 /// and maps to a tint, an alpha and, with Increase Contrast, a 1-point ring; the control inside only draws its glyph and label.
-@available(macOS 26, *)
 @MainActor
 final class GlassSurfaceView: NSGlassEffectView {
     enum Prominence { case neutral, primary }
@@ -397,7 +406,6 @@ final class GlassSurfaceView: NSGlassEffectView {
     }
 }
 
-@available(macOS 26, *)
 @MainActor
 enum GlassChrome {
     enum Metrics {
@@ -457,5 +465,17 @@ enum GlassChrome {
         container.identifier = NSUserInterfaceItemIdentifier(identifier)
         container.translatesAutoresizingMaskIntoConstraints = false
         return container
+    }
+}
+
+/// The three system display options the chrome adapts to, as a value so tests can inject them.
+struct ChromeAccessibility: Equatable, Sendable {
+    var reduceTransparency: Bool, increaseContrast: Bool, reduceMotion: Bool
+    static let none = ChromeAccessibility(reduceTransparency: false, increaseContrast: false, reduceMotion: false)
+    @MainActor static var live: ChromeAccessibility { reading(.shared) }
+    @MainActor static func reading(_ workspace: NSWorkspace) -> ChromeAccessibility {
+        ChromeAccessibility(reduceTransparency: workspace.accessibilityDisplayShouldReduceTransparency,
+                            increaseContrast: workspace.accessibilityDisplayShouldIncreaseContrast,
+                            reduceMotion: workspace.accessibilityDisplayShouldReduceMotion)
     }
 }

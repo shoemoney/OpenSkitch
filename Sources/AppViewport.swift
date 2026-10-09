@@ -171,8 +171,6 @@ extension AppDelegate {
 
     @objc func canvasViewportChanged(_ notification: Notification) { updateViewportChrome() }
     func updateViewportChrome() {
-        actualButton?.title = isActualSize ? "Normal View" : "Actual Size"
-        actualButton?.isEnabled = canToggleActualSize
         resizeButton?.isEnabled = !isActualSize && !frameMode
         zoomControl.isEnabled = !isActualSize
         dragOriginalControl.isHidden = isActualSize || !isLargeShot

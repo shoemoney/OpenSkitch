@@ -1,17 +1,13 @@
-// Modern appearance integration cases. tools/test-app-safety.sh --appearance modern runs these instead of the
-// Classic list: the same real AppDelegate launch, with ModernEditorChrome as the window content.
+// Glass-chrome integration cases: the real AppDelegate launch, with ModernEditorChrome as the window content.
 #if APP_SAFETY_TESTS
 import AppKit
 import UniformTypeIdentifiers
 
 extension AppSafetyTests {
     static var modernCases: [(String, () throws -> Void)] {
-        guard #available(macOS 26, *) else {
-            return [("Modern appearance requires macOS 26", { throw Failure(description: "SKITCH_APPEARANCE=modern needs a macOS 26 host") })]
-        }
         return [
-            ("Modern chrome fills the Frame-aware content view and replaces every Classic control", modernWindowStructure),
-            ("Modern shared controls keep the Classic accessibility labels, tooltips, titles and hint tracking", modernControlStrings),
+            ("Modern chrome fills the Frame-aware content view and replaces the old controls", modernWindowStructure),
+            ("Modern shared controls keep the recovered accessibility labels, tooltips, titles and hint tracking", modernControlStrings),
             ("Every Modern command is icon-only with a native tooltip and its old title as the VoiceOver label, whatever the overlay preference says", modernIconOnlyCommands),
             ("setTool selects one glass surface in the solid family for every path that changes the tool", modernToolSelection),
             ("Frame enter and leave swap Snap and Cancel, clear and restore the Fullscreen alternate, and dim Resize", modernFrameMode),
@@ -20,12 +16,9 @@ extension AppSafetyTests {
             ("Injected display options reach every glass surface and clear again", modernAccessibilityInjection),
             ("Header and footer buttons reach the real AppDelegate actions", modernActionRouting),
             ("Modern rail Wipe presses follow the Blank/Clear/Wipe stages with the dimmed glass and the stage spoken", modernWipeStages),
-            ("Preferences Appearance row writes the stored choice without switching the running window", modernPreferencesAppearance),
-            ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", modernRelaunch),
-            ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", modernRelaunchLauncher),
             ("writeLayoutEvidence reports the Modern style and finds the header and brand one level deeper", modernLayoutEvidence),
             ("Main menu items carry symbols in Modern only and keep validating", modernMenus),
-            ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover),
+            ("Color popover follows the system appearance", modernPalettePopover),
             ("Modern centres a small canvas in the editor area at default and minimum size and leaves larger and wide documents panning unconstrained", modernCanvasCentred),
             ("Hide and Undo tooltips read their shortcuts from the real menu items", modernShortcutHintsFollowMenu),
             ("Rename is unavailable during Frame capture and termination", modernRenameAvailability),
@@ -33,12 +26,11 @@ extension AppSafetyTests {
             ("A click at the visual centre of the centred canvas selects the element at the document centre", modernCanvasCentredHitTest),
             ("Modern puts every tool and Resize in the top bar, drops the left rail, and keeps Undo and Wipe under the slider", modernTopBarLayout),
             ("Modern has one footer row and no file-name field; the window title is the document name and Rename changes the export name", modernDocumentNameInTitle),
-            ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures),
+            ("Modern canvas border corner and edge mouse drags resize and crop with one Undo each, and Escape cancels", modernBorderGestures),
             ("Modern footer is a [PNG | JPG] toggle: PNG on a fresh install, JPG encodes drag, export and upload at 0.75, and a stored JPEG row reads as JPG", modernFormatToggle)
         ]
     }
 
-    @available(macOS 26, *)
     private static func modernFormatToggle() throws {
         let defaults = UserDefaults.standard, key = FormatToggle.defaultsKey
         let saved = defaults.object(forKey: key)
@@ -117,14 +109,12 @@ extension AppSafetyTests {
 
     // MARK: fixtures and walkers
 
-    @available(macOS 26, *)
     private static func canvasMargins(_ app: AppDelegate, _ chrome: ModernEditorChrome) -> (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) {
         let area = chrome.scrollView.contentView.frame
         let rect = chrome.scrollView.convert(app.canvas.bounds, from: app.canvas)
         return (rect.minX - area.minX, area.maxX - rect.maxX, rect.minY - area.minY, area.maxY - rect.maxY)
     }
 
-    @available(macOS 26, *)
     private static func modernTopBarLayout() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -160,7 +150,6 @@ extension AppSafetyTests {
         }
     }
 
-    @available(macOS 26, *)
     private static func modernDocumentNameInTitle() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -190,7 +179,6 @@ extension AppSafetyTests {
         try expect(app.window.title == "Direct" && app.safeName() == "Direct", "Setting the document name directly also updates the title")
     }
 
-    @available(macOS 26, *)
     private static func modernCanvasCentred() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -237,7 +225,6 @@ extension AppSafetyTests {
         try expect(clip.bounds.origin.x == 120 && abs(clip.bounds.origin.y - centredY) < 0.5, "Panning a wide document keeps x and the y centre: \(clip.bounds.origin)")
     }
 
-    @available(macOS 26, *)
     private static func modernCanvasCentredHitTest() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -260,9 +247,7 @@ extension AppSafetyTests {
         try expect(app.canvas.selection == [element.id], "A click at the visual centre selects the element at the document centre: \(app.canvas.selection)")
     }
 
-    @available(macOS 26, *)
     private static func modernFixture() throws -> (Fixture, ModernEditorChrome) {
-        try expect(Appearance.isModern, "SKITCH_APPEARANCE=modern selects the Modern chrome")
         let fixture = try Fixture()
         guard let chrome = fixture.app.modernChrome as? ModernEditorChrome else { throw Failure(description: "AppDelegate did not build ModernEditorChrome") }
         // The host's Reduce Transparency or Increase Contrast must never decide a result.
@@ -288,7 +273,6 @@ extension AppSafetyTests {
         return nil
     }
 
-    @available(macOS 26, *)
     private static func surface(_ chrome: ModernEditorChrome, _ control: NSView?) throws -> GlassSurfaceView {
         guard let control, let surface = chrome.surface(for: control) else { throw Failure(description: "A control has no glass surface") }
         return surface
@@ -302,17 +286,9 @@ extension AppSafetyTests {
 
     private static let toolOrder = ["select", "brush", "line", "ellipse", "rectangle", "fill", "eraser", "text", "arrow", "crop"]
 
-    // MARK: Classic baseline
+    // MARK: Control facts
 
-    /// What the Classic window says about its controls, read from a real Classic AppDelegate in this same process.
-    /// A Fixture clears NSApp.mainMenu when it goes away, so this finishes before any Modern fixture exists.
-    private struct ClassicBaseline {
-        var controls: [String: String]
-        var menuImageCount: Int
-        var popoverAppearance: NSAppearance.Name?
-    }
-
-    /// The 11 command buttons, each found by the Classic action it sends so both windows are read the same way.
+    /// The 10 command buttons, each found by the action it sends.
     private static let commandActions: [(name: String, action: Selector)] = [
         ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
         ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)),
@@ -333,7 +309,7 @@ extension AppSafetyTests {
         facts["palette.label"] = app.paletteButton.accessibilityLabel() ?? "<nil>"
         facts["palette.tip"] = app.paletteButton.toolTip ?? "<nil>"
         facts["zoom.label"] = app.zoomControl.accessibilityLabel() ?? "<nil>"
-        facts["format.label"] = (app.modernChrome != nil ? app.dragFormatToggle : app.dragFormatControl).accessibilityLabel() ?? "<nil>"
+        facts["format.label"] = app.dragFormatToggle.accessibilityLabel() ?? "<nil>"
         facts["drag.label"] = app.dragExportView?.accessibilityLabel() ?? "<nil>"
         facts["drag.tip"] = app.dragExportView?.toolTip ?? "<nil>"
         facts["original.title"] = app.dragOriginalControl.title
@@ -351,38 +327,14 @@ extension AppSafetyTests {
         // Modern's upload command is icon-only with its own label; webpostModernIconOnly covers it.
         let upload = #selector(AppDelegate.share(_:))
         facts["buttons"] = plain.filter { $0.action != upload && $0.action != #selector(AppDelegate.toggleActualSize) }.map(\.title).sorted().joined(separator: "|")
-        // What VoiceOver reads for each command. Classic buttons read their titles; a symbol fallback must not read its own name instead.
+        // What VoiceOver reads for each command. Buttons read their titles; a symbol fallback must not read its own name instead.
         for (name, action) in commandActions { facts["axLabel.\(name)"] = plain.first { $0.action == action }?.accessibilityLabel() ?? "<nil>" }
         facts["resize.title"] = app.resizeButton?.title ?? "<nil>"
         return facts
     }
 
-    @available(macOS 26, *)
-    private static func classicBaseline() throws -> ClassicBaseline {
-        Appearance.overrideForTesting(.classic)
-        defer { Appearance.overrideForTesting(.modern) }
-        let fixture = try Fixture(), app = fixture.app
-        try expect(app.modernChrome == nil && app.toolButtons[.brush] is ToolButton, "The Classic baseline builds the Classic window")
-        guard let bar = NSApp.mainMenu, let window = app.window as? AppSafetyWindow else { throw Failure(description: "Classic baseline fixture") }
-        var images = 0
-        // AppKit itself decorates its own standard commands (Hide Others, Show All, Bring All to Front); only ours count.
-        func walk(_ menu: NSMenu) {
-            for item in menu.items {
-                if item.image != nil, let action = item.action, MenuSymbols.map[action] != nil { images += 1 }
-                if let sub = item.submenu { walk(sub) }
-            }
-        }
-        walk(bar)
-        window.simulatesVisibility = true; window.shown = true
-        app.showDrawingColors(app.paletteButton)
-        let popover = app.colorPopover?.appearance?.name
-        app.closeDrawingColors()
-        return ClassicBaseline(controls: controlFacts(app), menuImageCount: images, popoverAppearance: popover)
-    }
-
     // MARK: cases
 
-    @available(macOS 26, *)
     private static func modernWindowStructure() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -390,7 +342,7 @@ extension AppSafetyTests {
         content.layoutSubtreeIfNeeded()
         try expect(chrome.superview === content && !chrome.translatesAutoresizingMaskIntoConstraints, "The chrome is a constrained child of the content view")
         try expect(chrome.frame == content.bounds, "The chrome is pinned to all four content edges at origin 0: \(chrome.frame) vs \(content.bounds)")
-        try expect(!content.usesRecoveredBezel && content.appearance == nil, "Modern draws no recovered bezel and never forces aqua")
+        try expect(content.appearance == nil, "The window never forces aqua")
         try expect(content.canvasScrollView === chrome.scrollView && app.canvas.enclosingScrollView === chrome.scrollView && chrome.scrollView.documentView === app.canvas,
                    "The Frame hole and the canvas both use the chrome's scroll view")
         try expect(app.canvasBorder.superview === chrome && chrome.subviews.last === app.canvasBorder, "The canvas border stays the topmost sibling in chrome coordinates")
@@ -398,10 +350,10 @@ extension AppSafetyTests {
 
         // Controls the app keeps by reference are the chrome's own.
         try expect(app.snapButton === chrome.snapButton && app.cancelFrameButton === chrome.cancelFrameButton
-                   && app.actualButton == nil && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cancel and Resize through the chrome's buttons; Modern has no Actual Size button")
+                   && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cancel and Resize through the chrome's buttons")
         let tools = toolOrder.compactMap { SketchTool(rawValue: $0).flatMap { app.toolButtons[$0] } }
         try expect(tools.count == 10 && app.toolButtons.count == 10, "All ten tools, Crop included, are registered")
-        try expect(tools.allSatisfy { $0 is GlassChromeButton && !($0 is ToolButton) }, "Modern tools are glass buttons, not the Classic ToolButton")
+        try expect(tools.allSatisfy { $0 is GlassChromeButton }, "Tools are glass buttons")
         try expect(tools.map { $0.identifier?.rawValue ?? "" } == toolOrder, "Tool identifiers keep the archive order and raw values")
         let across = tools.sorted { $0.convert($0.bounds, to: content).minX < $1.convert($1.bounds, to: content).minX }
         try expect(across.map { $0.identifier?.rawValue ?? "" } == toolOrder, "The top bar runs the tools left to right in archive order with Crop last")
@@ -431,18 +383,73 @@ extension AppSafetyTests {
         try expect(app.sizeLabel.stringValue == "Size · 9" && abs(app.widthControl.doubleValue - 9.38) < 0.001, "Size label shows a whole number while the stored value keeps its fraction")
     }
 
-    @available(macOS 26, *)
     private static func modernControlStrings() throws {
-        let classic = try classicBaseline()
         let (fixture, _) = try modernFixture()
         let app = fixture.app
         let modern = controlFacts(app)
-        try expect(classic.controls.count >= 40 && modern.count == classic.controls.count, "Both windows report the same set of facts (\(classic.controls.count) vs \(modern.count))")
-        // Modern tooltips lead with the command name (and Size shows its live value), so only these tips may differ; every label, title and the rest still match.
-        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip", "format.label"]
-        let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] && !modernTips.contains($0) }
-            .map { "\($0): classic '\(classic.controls[$0] ?? "")' vs modern '\(modern[$0] ?? "")'" }
-        try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
+        let expectedFacts: [String: String] = [
+            "axLabel.cancel": "Cancel",
+            "axLabel.font": "Font",
+            "axLabel.hide": "Hide",
+            "axLabel.history": "History",
+            "axLabel.photos": "Photos",
+            "axLabel.resize": "Resize…",
+            "axLabel.save": "Save",
+            "axLabel.snap": "Snap",
+            "axLabel.undo": "Undo",
+            "axLabel.wipe": "Blank",
+            "buttons": "Blank|Cancel|Color…|Font|Hide|History|Original size|Photos|Resize…|Save|Snap|Undo",
+            "drag.label": "Drag Me",
+            "drag.tip": "Drag the drawing into Finder or another app",
+            "format.label": "Image format",
+            "name.placeholder": "Image name",
+            "original.label": "Drag out at original size",
+            "original.title": "Original size",
+            "palette.label": "Drawing colors",
+            "palette.tip": "Color: hover for original preset colors; hold Shift to change the canvas background",
+            "resize.title": "Resize…",
+            "size.label": "Drawing size",
+            "size.tip": "Size 7",
+            "snap.tip": "Snap: drag an area or click a window; right-click or Control-click for Fullscreen",
+            "status.font": "18.0",
+            "tool.arrow.id": "arrow",
+            "tool.arrow.label": "Arrow",
+            "tool.arrow.tip": "Arrow tool (selected); Option reverses direction, Shift constrains the angle",
+            "tool.brush.id": "brush",
+            "tool.brush.label": "Brush",
+            "tool.brush.tip": "Brush tool",
+            "tool.crop.id": "crop",
+            "tool.crop.label": "Crop",
+            "tool.crop.tip": "Crop tool",
+            "tool.ellipse.id": "ellipse",
+            "tool.ellipse.label": "Ellipse",
+            "tool.ellipse.tip": "Ellipse tool",
+            "tool.eraser.id": "eraser",
+            "tool.eraser.label": "Eraser",
+            "tool.eraser.tip": "Eraser tool",
+            "tool.fill.id": "fill",
+            "tool.fill.label": "Fill",
+            "tool.fill.tip": "Fill tool",
+            "tool.line.id": "line",
+            "tool.line.label": "Line",
+            "tool.line.tip": "Line tool",
+            "tool.rectangle.id": "rectangle",
+            "tool.rectangle.label": "Rectangle",
+            "tool.rectangle.tip": "Rectangle tool",
+            "tool.select.id": "select",
+            "tool.select.label": "Select",
+            "tool.select.tip": "Select tool",
+            "tool.text.id": "text",
+            "tool.text.label": "Text",
+            "tool.text.tip": "Text tool",
+            "toolbox.items": "Toolbox|About OpenSkitch|Preferences…|Quit OpenSkitch||New|Open...|Browse Photos|Save to History|Export...|Save As...|Print...||Cut|Copy|Paste|Delete|Select All|Duplicate|Show Fonts||Crosshair Snapshot|Fullscreen Snapshot|Frame Snapshot|Re-snap (Keep Pen)||Set Snap to Normal Size|Flip|Rotate 90° Clockwise|Background Color to Transparent|Crop Snap at Current View|Wipe Snap Only||More Commands|Filled Shapes|Shadow",
+            "toolbox.label": "Toolbox",
+            "toolbox.tip": "Common drawing and capture commands; additional actions are in More Commands",
+            "zoom.label": "Canvas zoom"
+        ]
+        let differing = expectedFacts.keys.sorted().filter { expectedFacts[$0] != modern[$0] }
+            .map { "\($0): expected '\(expectedFacts[$0] ?? "")' but found '\(modern[$0] ?? "<missing>")'" }
+        try expect(differing.isEmpty && modern.count == expectedFacts.count, "Control strings differ from the recovered ones (\(modern.count) vs \(expectedFacts.count) facts): " + differing.joined(separator: "; "))
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool"
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me" && modern["format.label"] == "Image format", "The strings are the recovered ones, not merely equal to each other")
         // At launch the rail Wipe reads its Blank stage; every other command reads its title (the icon-only upload button is checked on its own).
@@ -458,7 +465,6 @@ extension AppSafetyTests {
         }
     }
 
-    @available(macOS 26, *)
     private static func modernIconOnlyCommands() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -519,7 +525,6 @@ extension AppSafetyTests {
         try expect(withThumb == inked, "A thumbnail never changes the icon-only well (\(withThumb) vs \(inked))")
     }
 
-    @available(macOS 26, *)
     private static func modernShortcutHintsFollowMenu() throws {
         let (fixture, chrome) = try modernFixture()
         _ = fixture
@@ -539,7 +544,6 @@ extension AppSafetyTests {
         try expect(chrome.hideButton.toolTip == "Hide (⌥⇧⌘H)", "Changing Minimize's shortcut changes Hide's tooltip: \(chrome.hideButton.toolTip ?? "nil")")
     }
 
-    @available(macOS 26, *)
     private static func modernRenameAvailability() throws {
         let (fixture, _) = try modernFixture()
         let app = fixture.app
@@ -557,7 +561,6 @@ extension AppSafetyTests {
         try expect(app.validateMenuItem(rename), "Rename returns after the state clears")
     }
 
-    @available(macOS 26, *)
     private static func modernFrameStatusFits() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -572,7 +575,6 @@ extension AppSafetyTests {
         _ = chrome
     }
 
-    @available(macOS 26, *)
     private static func modernToolSelection() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -587,7 +589,7 @@ extension AppSafetyTests {
                 try expect(button.toolTip?.contains("(selected)") == isOn, "\(label): \(tool) tooltip '\(button.toolTip ?? "")'")
                 if isOn {
                     try expect(abs((surface.currentTint?.alphaComponent ?? 0) - 0.85) < 0.001, "\(label): \(tool) carries the accent tint")
-                    try expect(sameColor(button.contentTintColor, ToolButton.textColor(on: .controlAccentColor)), "\(label): \(tool) glyph contrasts with the accent")
+                    try expect(sameColor(button.contentTintColor, GlassChromeButton.textColor(on: .controlAccentColor)), "\(label): \(tool) glyph contrasts with the accent")
                     let expected: ChromeIconSource = FontAwesomeFont.isAvailable(.solid) ? .fontAwesome(.solid) : .sfSymbol(button.icon?.sfSymbolFallback ?? "")
                     try expect(button.iconSource == expected, "\(label): \(tool) icon source \(button.iconSource)")
                 }
@@ -608,7 +610,6 @@ extension AppSafetyTests {
         try verify(.crop, "Crop")
     }
 
-    @available(macOS 26, *)
     private static func modernFrameWindowShadowLevelAlpha() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -625,7 +626,6 @@ extension AppSafetyTests {
         try expect(app.window.hasShadow && app.window.level == .floating && app.window.alphaValue == 0.9, "Cancel must restore them too")
     }
 
-    @available(macOS 26, *)
     private static func modernFrameMode() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -659,7 +659,6 @@ extension AppSafetyTests {
         try state("newFile", frame: false)
     }
 
-    @available(macOS 26, *)
     private static func modernCanvasBleed() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -691,8 +690,7 @@ extension AppSafetyTests {
     }
 
     /// Real mouse and key events into the CanvasBorderView that ModernEditorChrome hosts, compared with the same
-    /// gesture driven through beginWindowGesture/previewBorderGesture/endWindowGesture (what Classic's tests call).
-    @available(macOS 26, *)
+    /// gesture driven through beginWindowGesture/previewBorderGesture/endWindowGesture .
     private static func modernBorderGestures() throws {
         enum Handle { case corner(CanvasCorner), edge(CanvasEdge) }
         struct Outcome { var data: Data; var geometry: [CGRect]; var background: Data?; var output: CGSize; var canvas: CGSize; var frame: CGRect; var undoName: String? }
@@ -788,7 +786,7 @@ extension AppSafetyTests {
             try expect(mouse.0.output == reference.0.output && mouse.0.canvas == reference.0.canvas &&
                        mouse.0.geometry == reference.0.geometry && mouse.0.background == reference.0.background &&
                        mouse.0.undoName == reference.0.undoName,
-                       "Mouse drag on \(handle) yields the Classic outputSize/crop result (\(mouse.0.output) vs \(reference.0.output))")
+                       "Mouse drag on \(handle) yields the same outputSize/crop result as the direct gesture API (\(mouse.0.output) vs \(reference.0.output))")
             try expect(mouse.undoneClean, "\(handle) mouse gesture is exactly one Undo and Redo restores it")
             try expect(mouse.borderOK, "canvasBorder.frame tracks the canvas after the \(handle) gesture")
             let escaped = try run(handle, viaMouse: true, cancel: true)
@@ -800,11 +798,10 @@ extension AppSafetyTests {
             let width: CGFloat = (corner == .topLeft || corner == .bottomLeft) ? 130 : 170
             let result = try run(.corner(corner), viaMouse: true, cancel: false)
             try expect(result.0.output == CGSize(width: width, height: (width * 0.6).rounded()),
-                       "Mouse-dragged \(corner) corner matches the Classic width-driven numbers")
+                       "Mouse-dragged \(corner) corner matches the width-driven numbers")
         }
     }
 
-    @available(macOS 26, *)
     private static func modernAccessibilityInjection() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -826,7 +823,6 @@ extension AppSafetyTests {
         undo.setHovered(false)
     }
 
-    @available(macOS 26, *)
     private static func modernActionRouting() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -840,7 +836,7 @@ extension AppSafetyTests {
             ("Webpost…", chrome.shareButton, #selector(AppDelegate.share(_:)))
         ]
         for (name, button, action) in routes {
-            try expect(button.target === app && button.action == action, "\(name) sends its Classic action to the AppDelegate")
+            try expect(button.target === app && button.action == action, "\(name) sends its recovered action to the AppDelegate")
         }
         try expect(chrome.snapButton.menu == nil && chrome.snapButton.alternateTarget === app && chrome.snapButton.alternateAction == #selector(AppDelegate.fullscreenSnap),
                    "Snap keeps a primary crosshair with the Fullscreen secondary and no menu")
@@ -862,8 +858,7 @@ extension AppSafetyTests {
         chrome.resizeButton.isEnabled = true
     }
 
-    /// The Classic stage cases, driven through the glass button: what the title, the enabled state, the glass and VoiceOver each report.
-    @available(macOS 26, *)
+    /// The stage cases, driven through the glass button: what the title, the enabled state, the glass and VoiceOver each report.
     private static func modernWipeStages() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app, canvas = app.canvas
@@ -872,8 +867,6 @@ extension AppSafetyTests {
             throw Failure(description: "The rail Wipe button must be the chrome's, located by its action")
         }
         let glass = try surface(chrome, button)
-        var sounds: [String] = []
-        canvas.onSound = { sounds.append($0) }
         func reads(_ title: String, _ enabled: Bool) -> Bool {
             button.title == title && button.isEnabled == enabled && button.accessibilityLabel() == title
                 && button.isAccessibilityEnabled() == enabled
@@ -887,104 +880,40 @@ extension AppSafetyTests {
         let untouched = canvas.editingUndoManager.undoActionName
         try expect(reads("Blank", false), "A fresh drawing reads a dimmed, disabled Blank: " + detail())
         button.performClick(nil)
-        try expect(sounds.isEmpty && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched, "A disabled Blank button ignores presses")
+        try expect(reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched, "A disabled Blank button ignores presses")
         app.wipe()
-        try expect(sounds == ["wipe_already_blank"] && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
-                   "The Wipe menu command on a blank drawing is sound-only")
-        sounds.removeAll()
-
+        try expect(reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
+                   "The Wipe menu command on a blank drawing changes nothing")
+        
         canvas.setBackground(try image(size: CGSize(width: 120, height: 80)))
         try expect(reads("Clear", true) && canvas.document.backgroundPNG != nil, "A snap image alone reads a live Clear: " + detail())
         canvas.document.elements = [shape]
         try expect(reads("Wipe", true), "Artwork over a snap reads a live Wipe: " + detail())
         button.performClick(nil)
-        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.document.backgroundPNG != nil && reads("Clear", true),
+        try expect(canvas.document.elements.isEmpty && canvas.document.backgroundPNG != nil && reads("Clear", true),
                    "Wipe removes only the artwork and the glass reads Clear: " + detail())
         button.performClick(nil)
-        try expect(sounds == ["wipe_brushlayer", "wipe_snap"] && canvas.document.backgroundPNG == nil && canvas.document.backgroundColor == .white && reads("Blank", false),
+        try expect(canvas.document.backgroundPNG == nil && canvas.document.backgroundColor == .white && reads("Blank", false),
                    "Clear removes the snap and the glass dims to Blank: " + detail())
         button.performClick(nil)
-        try expect(sounds.count == 2, "The disabled Blank button stays silent after the last stage")
+        try expect(reads("Blank", false), "The disabled Blank button stays Blank after the last stage")
 
-        sounds.removeAll()
-        canvas.document.elements = [shape]
+                canvas.document.elements = [shape]
         try expect(reads("Wipe", true), "Artwork over a white drawing without a snap reads Wipe: " + detail())
         button.performClick(nil)
-        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && reads("Blank", false), "Wiping artwork with no snap lands on a dimmed Blank: " + detail())
+        try expect(canvas.document.elements.isEmpty && reads("Blank", false), "Wiping artwork with no snap lands on a dimmed Blank: " + detail())
 
-        sounds.removeAll()
-        canvas.setBackgroundColor(.red)
+                canvas.setBackgroundColor(.red)
         try expect(reads("Clear", true), "A coloured backdrop alone reads Clear: " + detail())
         app.undo(); try expect(reads("Blank", false), "Undo returns the glass to the dimmed Blank: " + detail())
         app.redo(); try expect(reads("Clear", true), "Redo brings the live Clear back: " + detail())
         _ = try editor(app, text: "Typing")
         try expect(reads("Wipe", true), "Field editing over a coloured backdrop reads Wipe: " + detail())
         button.performClick(nil)
-        try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.subviews.compactMap { $0 as? NSTextView }.isEmpty && reads("Clear", true),
+        try expect(canvas.document.elements.isEmpty && canvas.subviews.compactMap { $0 as? NSTextView }.isEmpty && reads("Clear", true),
                    "Wipe commits and removes the field and leaves the coloured backdrop as Clear: " + detail())
     }
 
-    @available(macOS 26, *)
-    private static func modernPreferencesAppearance() throws {
-        let defaults = UserDefaults.standard, key = AppearanceResolver.defaultsKey
-        let previous = defaults.object(forKey: key)
-        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
-        defaults.removeObject(forKey: key)
-        let (fixture, chrome) = try modernFixture()
-        let app = fixture.app
-        try expect(AppearanceResolver(defaults: defaults).storedChoice == nil, "The run starts with no stored choice")
-        app.showPreferences()
-        guard let form = app.preferencesForm else { throw Failure(description: "Preferences form") }
-        guard let classic = descendant(form, identifier: "appearanceClassic") as? NSButton, let modern = descendant(form, identifier: "appearanceModern") as? NSButton,
-              let relaunch = descendant(form, identifier: "appearanceRelaunch") as? NSButton else { throw Failure(description: "The Appearance row is missing on a macOS 26 host") }
-        try expect(form.onRelaunch != nil, "Preferences routes its Relaunch button to the AppDelegate")
-        classic.performClick(nil)
-        try expect(defaults.string(forKey: key) == "classic" && AppearanceResolver(defaults: defaults).storedChoice == .classic, "Choosing Classic stores the choice under \(key)")
-        try expect(app.generalPreferences.state.appearance == .classic, "The Preferences model reads it back")
-        try expect(Appearance.isModern && app.modernChrome === chrome && app.window.contentView?.subviews.contains(chrome) == true, "The running window keeps its Modern chrome until relaunch")
-        modern.performClick(nil)
-        try expect(defaults.string(forKey: key) == "modern" && app.generalPreferences.state.appearance == .modern, "Choosing Modern stores it again")
-        try expect(AppSafetyTermination.requests == 0, "Choosing an appearance never quits")
-        relaunch.performClick(nil)
-        try expect(AppSafetyTermination.requests == 1 && app.pendingRelaunch != nil, "The Relaunch button asks to quit once")
-        app.pendingRelaunch = nil
-        defaults.removeObject(forKey: key)
-        if let previous { defaults.set(previous, forKey: key) }
-        try expect(defaults.object(forKey: key) as? String == previous as? String, "The test restored the key it changed")
-    }
-
-    @available(macOS 26, *)
-    private static func modernRelaunch() throws {
-        let (fixture, _) = try modernFixture()
-        try relaunchQuitSequence(fixture)
-    }
-
-    @available(macOS 26, *)
-    private static func modernRelaunchLauncher() throws {
-        try relaunchLauncherAcknowledgement()
-
-        // The wiring OpenSkitchMain installs, driven from the Modern window: the real Preferences button, the quit, then the launcher.
-        let (fixture, _) = try modernFixture()
-        let app = fixture.app, seen = LaunchLog()
-        app.relaunchRequest = { url in
-            _ = RelaunchLauncher.launch(url, environment: ["SKITCH_APPEARANCE": "modern", "SKITCH_FIXTURE": "/fixture.skitch", "SKITCH_APP_SUPPORT": "/isolated",
-                                                           "SKITCH_EVIDENCE_DIR": "/evidence", "PATH": "/bin"], timeout: 2) { opened, configuration, completion in
-                seen.url = opened; seen.configuration = configuration
-                DispatchQueue.global().asyncAfter(deadline: .now() + 0.1) { seen.answered = true; completion(nil, nil) }
-            }
-        }
-        app.showPreferences()
-        guard let form = app.preferencesForm, let button = descendant(form, identifier: "appearanceRelaunch") as? NSButton else { throw Failure(description: "Preferences has no Relaunch button") }
-        button.performClick(nil)
-        try expect(AppSafetyTermination.requests == 1 && seen.url == nil, "The Relaunch button asks to quit and starts nothing yet")
-        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
-        try expect(seen.answered && seen.url == Bundle.main.bundleURL, "The launcher held the quit until LaunchServices had the request for this bundle")
-        try expect(seen.configuration?.createsNewApplicationInstance == true
-                   && seen.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence"],
-                   "The new instance is a separate process that keeps the support and evidence folders and drops the pinned appearance and fixture: \(String(describing: seen.configuration?.environment))")
-    }
-
-    @available(macOS 26, *)
     private static func modernLayoutEvidence() throws {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
@@ -993,8 +922,7 @@ extension AppSafetyTests {
         let data = try Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent("layout.json"))
         guard let evidence = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure(description: "layout.json is not an object") }
         let appearance = evidence["appearance"] as? [String: Any]
-        try expect(appearance?["style"] as? String == "modern" && appearance?["modernChrome"] as? Bool == true, "appearance.style reports modern with its chrome: \(String(describing: appearance))")
-        try expect((evidence["bezelLayout"] as? [String: Any])?["recoveredArtwork"] as? Bool == false, "Modern reports no recovered bezel artwork")
+        try expect(appearance?["modernChrome"] as? Bool == true, "appearance reports the glass chrome: \(String(describing: appearance))")
         try expect(evidence["bezelHeader"] == nil, "Modern has no logo, so the brand-centred header evidence is absent")
         let tools = evidence["toolButtons"] as? [[String: Any]] ?? []
         try expect(tools.count == 10 && tools.allSatisfy { ($0["fontSize"] as? Double ?? 0) >= 18 }, "Ten tool buttons report readable fonts")
@@ -1012,19 +940,16 @@ extension AppSafetyTests {
             try expect(!frame.isEmpty && abs(frame.width - visible.width) < 0.5 && abs(frame.height - visible.height) < 0.5, "\(label) is not clipped (\(frame) vs \(visible))")
         }
         try expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "The top bar carries no logo")
-        try expect(app.window.contentView?.subviews.contains { $0.identifier?.rawValue == "OpenSkitchHeader" } == false, "The header is one level deeper than Classic, which the evidence accommodates")
+        try expect(app.window.contentView?.subviews.contains { $0.identifier?.rawValue == "OpenSkitchHeader" } == false, "The header lives inside the chrome, which the evidence accommodates")
     }
 
-    @available(macOS 26, *)
     private static func modernMenus() throws {
-        let classic = try classicBaseline()
         let (fixture, _) = try modernFixture()
         let app = fixture.app
         guard let bar = NSApp.mainMenu else { throw Failure(description: "Main menu") }
         var items: [NSMenuItem] = []
         func walk(_ menu: NSMenu) { for item in menu.items { items.append(item); if let sub = item.submenu { walk(sub) } } }
         walk(bar)
-        try expect(classic.menuImageCount == 0, "Classic menus carry no symbols")
         let mapped = items.filter { !$0.isSeparatorItem && $0.action.map { MenuSymbols.map[$0] != nil } == true }
         try expect(mapped.count >= 40, "The main menu holds the mapped commands (\(mapped.count))")
         let missing = mapped.filter { $0.image == nil }.map(\.title)
@@ -1041,10 +966,7 @@ extension AppSafetyTests {
         try expect(toolbox?.menu?.items.contains { $0.title == "More Commands" } == true, "The Toolbox menu keeps its More Commands entry")
     }
 
-    @available(macOS 26, *)
     private static func modernPalettePopover() throws {
-        let classic = try classicBaseline()
-        try expect(classic.popoverAppearance == .aqua, "Classic forces aqua on the color popover")
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
         guard let window = app.window as? AppSafetyWindow else { throw Failure(description: "Isolated window") }

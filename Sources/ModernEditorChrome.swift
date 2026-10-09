@@ -26,7 +26,6 @@ private final class ControlHolderView: NSView {
 
 /// The Modern editor layout: a window backdrop, a header holding every command, the canvas beside one right rail and a single footer row.
 /// Glass sits only on the command layer and never over the canvas; every control is owned by the caller and re-parented here.
-@available(macOS 26, *)
 @MainActor
 final class ModernEditorChrome: NSView {
     struct SharedControls {

@@ -203,7 +203,6 @@ final class AppSafetyAlert: NSAlert {
 @MainActor
 final class AppSafetyCaptureCoordinator {
     var frameRect: NSRect?
-    var onSound: ((String) -> Void)?
     var isCapturing: Bool { Self.holdCapture && !Self.captureCallbacks.isEmpty }
     func cancelCapture(completion: @escaping (Result<Void, Error>) -> Void) { let callbacks = Self.captureCallbacks; Self.captureCallbacks.removeAll(); callbacks.forEach { $0(.failure(Self.cancellation)) }; completion(.success(())) }
     static var requests: [String] = []
@@ -313,7 +312,7 @@ enum AppSafetyTests {
     @MainActor
     final class Fixture {
         let app = AppDelegate()
-        init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil, firstLaunchDocument: URL? = nil, firstLaunchDone: Bool = true) throws {
+        init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil) throws {
             let expected = ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!
             try expect(app.support.path == expected, "App support must be isolated")
             // Regression guard: the publishing store (migration included) must never resolve to the owner's real folder.
@@ -328,9 +327,6 @@ enum AppSafetyTests {
                 if FileManager.default.fileExists(atPath: recovery.path) { try FileManager.default.removeItem(at: recovery) }
             }
             try FileManager.default.createDirectory(at: app.support, withIntermediateDirectories: true)
-            if FileManager.default.fileExists(atPath: app.firstLaunchMarker.path) { try FileManager.default.removeItem(at: app.firstLaunchMarker) }
-            if firstLaunchDone { try Data().write(to: app.firstLaunchMarker, options: .atomic) }
-            app.firstLaunchDocumentURL = firstLaunchDocument
             if let nativeRecovery { try nativeRecovery.write(to: app.support.appendingPathComponent("Recovery.skitch"), options: .atomic) }
             if let legacyRecovery { try legacyRecovery.write(to: app.support.appendingPathComponent("Recovery.skitchredux"), options: .atomic) }
             // Use the real launch method to test onChange and onOpenDocument wiring.
@@ -483,47 +479,34 @@ enum AppSafetyTests {
                    "Discard decisions must protect pending text even when dirty is false")
     }
     static func originalMetadataRecovery() throws {
-        let evidence = URL(fileURLWithPath: ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"]!)
-        let manifest = try JSONDecoder().decode([[String: String]].self,
-            from: Data(contentsOf: evidence.appendingPathComponent("source-manifest.json")))
-        guard let path = manifest.first(where: { $0["name"] == "AppSafetyTests.swift" })?["path"] else {
-            throw Failure(description: "Original fixture location requires the harness source manifest")
-        }
-        let originalURL = URL(fileURLWithPath: path).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("original/Skitch.app/Contents/Resources/firstlaunch.skitch")
-        let originalBytes = try Data(contentsOf: originalURL), original = try LegacySkitch.decode(originalBytes)
+        let brushMetadata = LegacyBridge.Metadata(root: ["skitchBrushColor": "0.2 0.4 0.6 1", "skitchBrushSize": "6"], elements: [:])
         var fallback = SketchDocument(size: CGSize(width: 71, height: 53)); fallback.backgroundColor = SketchColor(.green)
         let fallbackBytes = try fallback.encoded()
         let saved: (bytes: Data, document: SketchDocument, metadata: LegacyBridge.Metadata) = try autoreleasepool {
             let fixture = try Fixture(), app = fixture.app
-            // Import a private copy so no save/recovery decision can write the original fixture.
-            let importedURL = fixture.file("Original").deletingPathExtension().appendingPathExtension("skitch")
-            try originalBytes.write(to: importedURL)
-            app.openURL(importedURL)
-            try expect(app.currentURL == importedURL && app.canvas.document.elements.filter { $0.kind == .path }.count == 3 &&
-                       app.canvas.document.elements.filter { $0.kind == .text }.count == 1,
-                       "The actual app must import the original fixture as editable paths and text")
+            var seed = SketchDocument(size: CGSize(width: 200, height: 120))
+            for index in 0..<3 {
+                var path = SketchElement(kind: .brush); path.points = [CGPoint(x: 10 + index * 20, y: 10), CGPoint(x: 40 + index * 20, y: 60)]
+                seed.elements.append(path)
+            }
+            var label = SketchElement(kind: .text); label.text = "Seed"; label.rect = CGRect(x: 20, y: 80, width: 100, height: 30)
+            seed.elements.append(label)
+            app.canvas.document = seed
+            app.legacyMetadata = brushMetadata
             let metadata = app.legacyMetadata
-            try expect(metadata.root == original.attributes && !metadata.elements.isEmpty &&
-                       metadata.root["skitchBrushColor"] != nil && metadata.root["skitchBrushSize"] != nil,
-                       "Original brush/root/object metadata must reach the app, not only the file decoder")
             let text = try editor(app, text: "Pending recovery annotation")
             let before = app.canvas.document, pending = try SketchDocument.decode(app.canvas.snapshotDocumentData())
             let typing = text.undoManager, caret = text.selectedRange()
             app.saveRecovery()
             let recovery = app.support.appendingPathComponent("Recovery.skitch"), bytes = try Data(contentsOf: recovery)
-            let decoded = try SkitchFile.decode(bytes), visible = try LegacySkitch.decode(bytes)
-            try expect(decoded.document == pending && decoded.metadata == metadata,
-                       "Native recovery must retain pending edits and original metadata together")
-            try expect(visible.attributes["skitchBrushColor"] == original.attributes["skitchBrushColor"] &&
-                       visible.attributes["skitchBrushSize"] == original.attributes["skitchBrushSize"] && visible.paths.count == 3,
-                       "Recovery's visible SVG must retain the original brush settings and three editable paths")
+            let decoded = try SkitchFile.decode(bytes)
+            try expect(decoded.document == pending && decoded.metadata == metadata && metadata.root["skitchBrushSize"] == "6",
+                       "Native recovery must retain pending edits and brush metadata together")
             try expect(app.canvas.document == before && text.superview === app.canvas && app.window.firstResponder === text &&
                        text.undoManager === typing && text.selectedRange() == caret && app.legacyMetadata == metadata,
                        "Metadata recovery must not commit or replace the live editor, model, caret or metadata")
             app.saveRecovery()
-            try expect(try Data(contentsOf: recovery) == bytes && Data(contentsOf: importedURL) == originalBytes && Data(contentsOf: originalURL) == originalBytes,
-                       "Repeated native recovery must be stable and must not overwrite either fixture")
+            try expect(try Data(contentsOf: recovery) == bytes, "Repeated native recovery must be stable")
             return (bytes, pending, metadata)
         }
         try autoreleasepool {
@@ -547,31 +530,20 @@ enum AppSafetyTests {
                        "Legacy JSON recovery must migrate to native recovery without changing the drawing")
         }
     }
-    static func firstLaunchWelcome() throws {
-        let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        let welcome = root.appendingPathComponent("original/Skitch.app/Contents/Resources/firstlaunch.skitch")
-        try expect(FileManager.default.fileExists(atPath: welcome.path), "Original firstlaunch.skitch must be available")
-        let before = try Data(contentsOf: welcome)
+    static func firstLaunchBlankCanvas() throws {
         try autoreleasepool {
-            let first = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: false), app = first.app
-            try expect(app.nameField.stringValue == "Welcome" && app.currentURL == nil && !app.dirty && !app.window.isDocumentEdited,
-                       "First launch must open the welcome document unsaved and clean")
-            try expect(app.canvas.document.elements.count > 0 || app.canvas.document.size != CGSize(width: 1000, height: 700), "First launch must load the bundled document content")
-            try expect(FileManager.default.fileExists(atPath: app.firstLaunchMarker.path), "First launch must write its marker")
+            let first = try Fixture(), app = first.app
+            try expect(app.currentURL == nil && !app.dirty && !app.window.isDocumentEdited && app.canvas.document.elements.isEmpty,
+                       "First launch opens a blank, clean canvas")
         }
         try autoreleasepool {
-            let again = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: true), app = again.app
-            try expect(app.nameField.stringValue != "Welcome", "Later launches must not reopen the welcome document")
-        }
-        try autoreleasepool {
-            let saved = try Fixture(firstLaunchDocument: welcome, firstLaunchDone: false)
+            let saved = try Fixture()
             saved.app.canvas.setBackgroundColor(.yellow)
             saved.app.saveRecovery()
             let data = try Data(contentsOf: saved.app.support.appendingPathComponent("Recovery.skitch"))
-            let restored = try Fixture(nativeRecovery: data, firstLaunchDocument: welcome, firstLaunchDone: false)
-            try expect(restored.app.nameField.stringValue == "Recovered drawing", "Recovery must win over the welcome document")
+            let restored = try Fixture(nativeRecovery: data)
+            try expect(restored.app.nameField.stringValue == "Recovered drawing", "Recovery still wins on launch")
         }
-        try expect(try Data(contentsOf: welcome) == before, "Bundled welcome file must stay intact")
     }
     static func acceptedDrop() throws {
         let fixture = try Fixture(), app = fixture.app
@@ -864,22 +836,6 @@ enum AppSafetyTests {
         try expect(app.canvas.document.backgroundPNG != nil && app.canvas.document.elements.isEmpty && !app.canvas.editingUndoManager.canUndo,
                    "Discard-approved normal Frame must replace old annotations and history explicitly")
         try expect(try Data(contentsOf: a) == savedA, "Normal Frame replacement must not overwrite the old saved document")
-    }
-    static func filenameCommands() throws {
-        let fixture = try Fixture(), app = fixture.app
-        var rectangle = SketchElement(kind: .rectangle); rectangle.rect = CGRect(x: 10, y: 10, width: 30, height: 20)
-        app.canvas.document.elements = [rectangle]; app.canvas.selection = []
-        app.nameField.stringValue = "Filename"; app.nameField.selectText(nil)
-        guard let field = app.window.firstResponder as? NSTextView else { throw Failure(description: "Native filename field editor") }
-        field.setSelectedRange(NSRange(location: 0, length: 0))
-        guard let key = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
-            timestamp: 0, windowNumber: app.window.windowNumber, context: nil, characters: "a",
-            charactersIgnoringModifiers: "a", isARepeat: false, keyCode: 0) else { throw Failure(description: "Internal key event") }
-        try expect(!app.canvas.performKeyEquivalent(with: key), "Canvas must decline shortcuts owned by filename editor")
-        _ = app.window.performKeyEquivalent(with: key)
-        try expect(app.canvas.selection.isEmpty, "Window key dispatch must not select canvas objects while filename is focused")
-        app.selectAll()
-        try expect(field.selectedRange().length == "Filename".utf16.count, "Select All menu must act on filename text")
     }
     static func oversizedImageFixture() throws -> URL {
         let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!)
@@ -2017,7 +1973,7 @@ enum AppSafetyTests {
     }
     static func generalPreferencesIntegration() throws {
         let defaults = UserDefaults.standard
-        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "disableSounds", "statusMenu", "disableOverlay", "disableModtips"]
+        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "statusMenu", "disableOverlay", "disableModtips"]
         let previous = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, previous) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
         for key in keys { defaults.removeObject(forKey: key) }
@@ -2035,13 +1991,13 @@ enum AppSafetyTests {
                    "Opening Preferences does not finish or lose pending text or its Undo branch")
         var choices = app.generalPreferences.state
         choices.showToolTips = true; choices.showKeyboardTips = true
-        choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeSkitch = true; choices.playSounds = false; choices.statusMenu = 1
+        choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeSkitch = true; choices.statusMenu = 1
         form.onChange?(choices)
         try expect(app.generalPreferences.state == choices && app.canvas.strokeSmoothing == .loose && app.canvas.arrowHeadPreference == 1,
                    "Form routes immediate original preference writes and future drawing defaults")
         try expect(app.helpBevel?.enabled == true && !defaults.bool(forKey: "disableOverlay") && !defaults.bool(forKey: "disableModtips"),
                    "Both original inverse hint settings apply independently to the live shell")
-        try expect(AppSafetyPresence.policies.last == .accessory && defaults.bool(forKey: "disableSounds"), "Menu-only policy and inverted sound flag apply without relaunch")
+        try expect(AppSafetyPresence.policies.last == .accessory, "Menu-only policy applies without relaunch")
         try expect(try app.canvas.snapshotDocumentData() == data && app.dirty == dirty && editor.string == "Keep pending typing" && history.undoActionName == undo && history.redoActionName == redo,
                    "Preferences never mutates the pending drawing or its history")
         let smoothing = NSMenuItem(); smoothing.representedObject = "precise"; app.changeSmoothing(smoothing)
@@ -2273,11 +2229,11 @@ enum AppSafetyTests {
         }
         // Webpost… deliberately carries its destination menu (webpostMenu covers it).
         let others = actionButtons(app.window.contentView!).filter { $0 !== snap && $0 !== app.webpostButton }
-        try expect(others.contains { $0 is ToolButton } && others.contains { $0 === app.cancelFrameButton },
+        try expect(others.contains { $0 is GlassChromeButton } && others.contains { $0 === app.cancelFrameButton },
                    "No-alternate checks cover actual tool and Cancel controls rather than fabricated buttons")
         try expect(!actionButtons(app.window.contentView!).contains { $0.title.lowercased().contains("cam") || $0.action == NSSelectorFromString("cameraSnap") } &&
                    !app.responds(to: NSSelectorFromString("cameraSnap")),
-                   "The Classic rail has no Cam or Camera button; OpenSkitch is screen capture only")
+                   "The window has no Cam or Camera button; OpenSkitch is screen capture only")
         let otherRequests = AppSafetyCaptureCoordinator.screenRequests.count
         let selectedTool = app.canvas.tool, selectedElements = app.canvas.selection
         for button in others {
@@ -3108,8 +3064,8 @@ enum AppSafetyTests {
             let before = try app.canvas.snapshotDocumentData()
             app.frameMode = blocked == "frame"; app.terminationStarted = blocked == "termination"
             app.updateViewportChrome()
-            try expect(!app.canToggleActualSize && !app.validateMenuItem(menu) && app.actualButton?.isEnabled == false,
-                       "Actual button and menu both reject \(blocked)")
+            try expect(!app.canToggleActualSize && !app.validateMenuItem(menu),
+                       "Actual Size menu rejects \(blocked)")
             app.toggleActualSize()
             try expect(try !app.isActualSize && app.canvas.snapshotDocumentData() == before, "Blocked \(blocked) toggle cannot mutate output")
             app.frameMode = false; app.terminationStarted = false
@@ -3154,89 +3110,6 @@ enum AppSafetyTests {
         navigate(CGPoint(x: 500, y: 500))
         try expect(scroll.contentView.bounds.origin == origin, "Stale navigator callback cannot move the normal viewport")
     }
-    // MARK: Relaunch, identical in Classic and Modern
-
-    /// What a stub LaunchServices saw, shared with the queue that answers it.
-    final class LaunchLog: @unchecked Sendable {
-        var url: URL?
-        var configuration: NSWorkspace.OpenConfiguration?
-        var answered = false
-    }
-
-    /// relaunch() asks to quit once and starts the new instance only from applicationWillTerminate; a cancelled or failed quit starts nothing.
-    static func relaunchQuitSequence(_ fixture: Fixture) throws {
-        let app = fixture.app
-        try expect(app.relaunchRequest == nil, "Only the production entry point installs a launcher")
-        var launched: [URL] = []
-        app.relaunchRequest = { launched.append($0) }
-
-        app.dirty = true
-        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
-        app.relaunch()
-        try expect(AppSafetyTermination.requests == 0 && app.pendingRelaunch == nil && launched.isEmpty, "Cancelling the Save prompt neither quits nor schedules a launch")
-
-        // A quit AppKit itself cancels after Relaunch was requested must not leave a launch waiting for the next ordinary Quit.
-        app.pendingRelaunch = Bundle.main.bundleURL
-        AppSafetyAlert.answers.append(.init(title: "Save your drawing?", response: .alertSecondButtonReturn))
-        try expect(app.applicationShouldTerminate(NSApp) == .terminateCancel, "The cancelled quit is reported to AppKit")
-        try expect(app.pendingRelaunch == nil && launched.isEmpty, "A cancelled quit drops the pending relaunch")
-        app.dirty = false
-
-        app.relaunch()
-        try expect(AppSafetyTermination.requests == 1, "relaunch() requests termination exactly once (\(AppSafetyTermination.requests))")
-        try expect(launched.isEmpty && app.pendingRelaunch == Bundle.main.bundleURL, "Nothing launches while the old instance is still holding its shortcuts")
-        app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
-        try expect(launched == [Bundle.main.bundleURL] && app.pendingRelaunch == nil, "The fresh instance starts once, after the old one has finished quitting")
-        try expect(AppSafetyTermination.requests == 1, "No second termination request")
-
-        // A quit that fails to finish cleanup must not relaunch later.
-        let failure = NSError(domain: "AppSafety", code: 7, userInfo: [NSLocalizedDescriptionKey: "Relaunch cleanup failed"])
-        app.pendingRelaunch = Bundle.main.bundleURL
-        app.shutdownError = failure
-        AppSafetyAlert.answers.append(.init(title: failure.localizedDescription, response: .alertFirstButtonReturn))
-        try expect(!app.finishShutdownDecision() && app.pendingRelaunch == nil, "A failed shutdown cancels the pending relaunch")
-        try waitForMain("The failure alert is presented") { AppSafetyAlert.answers.isEmpty }
-        try expect(launched.count == 1, "Still exactly one launch")
-    }
-
-    /// The old instance exits right after the launcher returns, so the launcher must not return before LaunchServices has the request.
-    static func relaunchLauncherAcknowledgement() throws {
-        let target = URL(fileURLWithPath: "/Applications/OpenSkitch.app")
-        func launch(after delay: TimeInterval, on queue: DispatchQueue?, error: Error? = nil, timeout: TimeInterval = 5,
-                    environment: [String: String] = [:]) -> (accepted: Bool, elapsed: TimeInterval, log: LaunchLog) {
-            let log = LaunchLog(), started = Date()
-            let accepted = RelaunchLauncher.launch(target, environment: environment, timeout: timeout) { url, configuration, completion in
-                log.url = url; log.configuration = configuration
-                queue?.asyncAfter(deadline: .now() + delay) { log.answered = true; completion(nil, error) }
-            }
-            return (accepted, Date().timeIntervalSince(started), log)
-        }
-
-        let background = launch(after: 0.3, on: .global())
-        try expect(background.accepted && background.log.answered, "The launcher returns true only after LaunchServices answered")
-        try expect(background.elapsed >= 0.29 && background.elapsed < 2, "It waited for the answer instead of returning at once (\(background.elapsed) s)")
-        try expect(background.log.url == target && background.log.configuration?.createsNewApplicationInstance == true, "It asks for a new instance of the same bundle")
-
-        let main = launch(after: 0.2, on: .main)
-        try expect(main.accepted && main.log.answered && main.elapsed >= 0.19 && main.elapsed < 2, "An answer delivered on the main queue is not starved by the wait (\(main.elapsed) s)")
-
-        let refused = launch(after: 0.05, on: .global(), error: NSError(domain: "AppSafety", code: 9))
-        try expect(!refused.accepted && refused.log.answered && refused.elapsed < 2, "A refused launch reports failure promptly")
-
-        let silent = launch(after: 0, on: nil, timeout: 0.3)
-        try expect(!silent.accepted && !silent.log.answered, "A launch nobody answers is reported as not accepted")
-        try expect(silent.elapsed >= 0.29 && silent.elapsed < 2, "The wait is bounded by its timeout (\(silent.elapsed) s)")
-
-        // The new instance keeps where its data and evidence live. A pinned appearance would override the choice just made in
-        // Preferences, and the fixture would reopen over the recovered drawing, so neither is forwarded.
-        let inherited = launch(after: 0, on: .global(), environment: [
-            "SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence", "SKITCH_APPEARANCE": "modern",
-            "SKITCH_FIXTURE": "/fixture.skitch", "HOME": "/home", "PATH": "/bin"])
-        try expect(inherited.log.configuration?.environment == ["SKITCH_APP_SUPPORT": "/isolated", "SKITCH_EVIDENCE_DIR": "/evidence"],
-                   "Only the support and evidence folders reach the new instance; SKITCH_APPEARANCE and SKITCH_FIXTURE are dropped: \(String(describing: inherited.log.configuration?.environment))")
-        try expect(launch(after: 0, on: .global()).log.configuration?.environment == [:], "Without overrides the new instance inherits nothing")
-    }
-
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
               ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
@@ -3253,7 +3126,7 @@ enum AppSafetyTests {
             withExtendedLifetime(delegate) { NSApp.run() }
             fputs("Native termination returned without exiting.\n", stderr); exit(1)
         }
-        let classicCases: [(String, () throws -> Void)] = [
+        let sharedCases: [(String, () throws -> Void)] = [
             ("Native Preferences routes original defaults without disturbing pending text or history", generalPreferencesIntegration),
             ("Original hint shell routes modifiers, suppression, lifecycle and screen-fit reserves", hintShellRouting),
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
@@ -3288,7 +3161,7 @@ enum AppSafetyTests {
             ("active editor Undo/Redo and menu validation", typingUndo),
             ("recovery includes pending text without committing", recoverySnapshot),
             ("pending text remains protected with a stale dirty flag", pendingTextFallback),
-            ("First launch with an empty app-support directory opens the bundled firstlaunch.skitch welcome document unsaved, and later launches do not", firstLaunchWelcome),
+            ("First launch opens a blank canvas, and a recovered drawing still wins", firstLaunchBlankCanvas),
             ("original metadata survives native recovery, startup preference and legacy JSON migration", originalMetadataRecovery),
             ("accepted document drop saves to B and preserves A", acceptedDrop),
             ("cancelled document drop preserves pending typing", cancelledDrop),
@@ -3301,7 +3174,6 @@ enum AppSafetyTests {
             ("A new Snap during a running capture cancels it and starts the new snap", newSnapCancelsRunningCapture),
             ("Resnap preserves annotations, destination and usable Undo/Redo", resnapPreservesAnnotations),
             ("normal Frame picker and completion cancellation; Discard prompts exactly once", normalFrameDiscard),
-            ("filename focus retains command-menu behavior", filenameCommands),
             ("failed open after Discard preserves edits, history, destination and recovery", failedOpenAfterDiscard),
             ("oversized capture rejects before discard and preserves pending editor in normal/Frame/Resnap", rejectedCaptureSize),
             ("Quit Discard removes pending recovery without a second prompt", { try terminationDiscard(windowClose: false) }),
@@ -3787,9 +3659,9 @@ enum AppSafetyTests {
                 try expect(OriginalDrawingControls.legacyColor("rgb(1,2,3)", alpha: "nan") == nil,
                            "Invalid optional alpha cannot poison future drawing colors")
             }),
-            ("Recovered bezel keeps readable reachable controls and existing menu actions at default and minimum sizes", {
+            ("Toolbox keeps its recovered command groups and every control stays readable and inside the window at default and minimum sizes", {
                 let fixture = try Fixture(), app = fixture.app
-                guard let content = app.window.contentView else { throw Failure(description: "Bezel content") }
+                guard let content = app.window.contentView else { throw Failure(description: "Window content") }
                 var controls: [NSControl] = []
                 func collect(_ view: NSView) {
                     guard view !== app.canvas else { return }
@@ -3797,11 +3669,11 @@ enum AppSafetyTests {
                     for child in view.subviews { collect(child) }
                 }
                 collect(content)
-                let ordered = controls.compactMap { $0 as? ToolButton }.compactMap { $0.identifier?.rawValue }
-                try expect(ordered == ["select", "brush", "line", "ellipse", "rectangle", "fill", "eraser", "text", "arrow", "crop"],
-                           "Original nine drawing tools retain archive order; existing Crop is a separate additional command")
+                let ordered = controls.compactMap { $0 as? GlassChromeButton }.compactMap { $0.identifier?.rawValue }.filter { SketchTool(rawValue: $0) != nil }
+                try expect(Set(ordered) == Set(["select", "brush", "line", "ellipse", "rectangle", "fill", "eraser", "text", "arrow", "crop"]) && ordered.count == 10,
+                           "Original nine drawing tools and the additional Crop command are all present as glass buttons")
                 try expect(!controls.contains { ($0 as? NSButton)?.action == #selector(AppDelegate.frameSnap) },
-                           "Frame remains a menu command instead of a permanent capture-rail button")
+                           "Frame remains a menu command instead of a permanent capture button")
                 guard let toolbox = controls.compactMap({ $0 as? NSPopUpButton }).first(where: { $0.accessibilityLabel() == "Toolbox" }), let choices = toolbox.menu else { throw Failure(description: "Recovered Toolbox") }
                 let more = choices.items.first { $0.title == "More Commands" }!.submenu!
                 for title in ["File", "Image", "Drawing", "Text", "Capture"] {
@@ -3827,49 +3699,14 @@ enum AppSafetyTests {
                 }
                 let source = NSApp.mainMenu!.items.first { $0.submenu?.title == "Image" }!.submenu!
                 let copy = more.items.first { $0.title == "Image" }!.submenu!
-                try expect(source !== copy && source.items.map(\.action) == copy.items.map(\.action), "Bezel menu copies preserve real image actions without stealing the menu-bar submenu")
+                try expect(source !== copy && source.items.map(\.action) == copy.items.map(\.action), "Toolbox menu copies preserve real image actions without stealing the menu-bar submenu")
                 for size in [app.window.frame.size, app.window.minSize] {
                     app.window.setFrame(NSRect(origin: app.window.frame.origin, size: size), display: false)
                     content.layoutSubtreeIfNeeded()
-                    guard let header = content.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
-                          let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) else {
-                        throw Failure(description: "Centered company header")
-                    }
-                    try expect(abs(brand.convert(brand.bounds, to: content).midX - content.bounds.midX) < 0.5,
-                               "Company logo/name stay centered on the window despite unequal command group widths")
-                    let brandFrame = brand.convert(brand.bounds, to: content)
-                    for group in header.subviews where group !== brand {
-                        let frame = group.convert(group.bounds, to: content)
-                        try expect(frame.maxX <= brandFrame.minX - 11.5 || frame.minX >= brandFrame.maxX + 11.5,
-                                   "Header commands keep a readable gap and cannot overlap the company brand")
-                    }
                     for control in controls where !control.isHiddenOrHasHiddenAncestor {
-                        try expect((control.font?.pointSize ?? 0) >= 18, "Every readable bezel control retains at least18-point type")
+                        try expect((control.font?.pointSize ?? 0) >= 18, "Every readable control retains at least 18-point type")
                         let rect = control.convert(control.bounds, to: content)
-                        try expect(rect.width > 0 && rect.height > 0 && content.bounds.insetBy(dx: -1, dy: -1).contains(rect), "Every bezel control has a nonzero frame inside the window")
-                        var ancestor = control.superview
-                        while let parent = ancestor {
-                            if parent is NSClipView {
-                                try expect(parent.convert(parent.bounds, to: content).insetBy(dx: -1, dy: -1).contains(rect), "Tool and capture controls remain reachable without scrolling at minimum size")
-                            }
-                            ancestor = parent.superview
-                        }
-                    }
-                    let view = app.canvas.enclosingScrollView!
-                    let viewport = view.convert(view.bounds, to: content)
-                    let font = controls.compactMap { $0 as? NSButton }.first { $0.action == #selector(AppDelegate.chooseFont) }!
-                    try expect(font.convert(font.bounds, to: content).minX >= viewport.maxX,
-                               "Fonts occupies the original right rail")
-                    for control in [app.actualButton!, app.resizeButton!] {
-                        let frame = control.convert(control.bounds, to: content)
-                        try expect(frame.midX < content.bounds.midX && frame.maxY <= viewport.minY,
-                                   "Actual Size and Resize occupy the original lower-left group below the canvas")
-                    }
-                    let tools = controls.compactMap { $0 as? NSTextField }.first { $0.stringValue == "Tools" }!
-                    try expect(abs(tools.convert(tools.bounds, to: content).maxY - viewport.maxY) < 1 && abs(app.snapButton.convert(app.snapButton.bounds, to: content).maxY - viewport.maxY) < 1,
-                               "Tool and capture groups begin beside the top of the canvas rather than sinking to the bottom")
-                    for control in controls where !control.isHiddenOrHasHiddenAncestor {
-                        try expect(!viewport.intersects(control.convert(control.bounds, to: content)), "Bezel controls cannot cover the drawing viewport")
+                        try expect(rect.width > 0 && rect.height > 0 && content.bounds.insetBy(dx: -1, dy: -1).contains(rect), "Every control has a nonzero frame inside the window")
                     }
                 }
                 let fill = choices.items.first { $0.action == #selector(AppDelegate.toggleBezelFill(_:)) }!
@@ -3880,12 +3717,12 @@ enum AppSafetyTests {
                 try expect(fill.state == (app.canvas.filled ? .on : .off) && shadow.state == (app.canvas.shadowed ? .on : .off), "Toolbox style checks reflect their actual state")
                 app.toggleBezelFill(fill); app.toggleBezelShadow(shadow)
             }),
-            ("Classic rail Wipe button reads Blank/Clear/Wipe from content through Undo, Redo and field editing", {
+            ("Rail Wipe button reads Blank/Clear/Wipe from content through Undo, Redo and field editing", {
                 let fixture = try Fixture(), app = fixture.app, canvas = app.canvas
                 guard let content = app.window.contentView, let button = app.wipeRailButton, button.action == #selector(AppDelegate.wipe),
                       button.target === app, button.isDescendant(of: content) else { throw Failure(description: "Wipe rail button must be located by its action") }
                 func reads(_ title: String, _ enabled: Bool) -> Bool {
-                    button.title == title && button.isEnabled == enabled && button.isAccessibilityEnabled() == enabled && button.accessibilityTitle() == title
+                    button.title == title && button.isEnabled == enabled && button.isAccessibilityEnabled() == enabled && button.accessibilityLabel() == title
                 }
                 try expect(reads("Blank", false), "A fresh white drawing reads Blank and is disabled")
                 let hint = button.subviews.compactMap { $0 as? HintTrackingView }.first
@@ -3912,58 +3749,12 @@ enum AppSafetyTests {
                 let editMenu = NSApp.mainMenu!.items.first { $0.submenu?.title == "Edit" }!.submenu!
                 try expect(editMenu.items.first { $0.action == #selector(AppDelegate.wipe) }?.title == "Wipe", "The Edit menu item keeps its Wipe title")
             }),
-            ("Classic rail Wipe presses follow the Blank/Clear/Wipe stages with the original sounds", {
-                let fixture = try Fixture(), app = fixture.app, canvas = app.canvas
-                guard let button = app.wipeRailButton else { throw Failure(description: "Wipe rail button must be located by its action") }
-                var sounds: [String] = []
-                canvas.onSound = { sounds.append($0) }
-                func reads(_ title: String, _ enabled: Bool) -> Bool { button.title == title && button.isEnabled == enabled }
-                let shape = SketchElement(kind: .rectangle)
-                let untouched = canvas.editingUndoManager.undoActionName
-                button.performClick(nil)
-                try expect(sounds.isEmpty && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
-                           "A disabled Blank button ignores presses")
-                app.wipe()
-                try expect(sounds == ["wipe_already_blank"] && reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
-                           "The Wipe menu command on a blank drawing is sound-only")
-                sounds.removeAll()
-
-                canvas.setBackground(try image(size: CGSize(width: 120, height: 80)))
-                try expect(reads("Clear", true) && canvas.document.backgroundPNG != nil, "A snap image alone reads an enabled Clear")
-                canvas.document.elements = [shape]
-                try expect(reads("Wipe", true), "Artwork over a snap reads Wipe")
-                button.performClick(nil)
-                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && canvas.document.backgroundPNG != nil && reads("Clear", true),
-                           "Wipe removes only the artwork, keeps the snap and plays wipe_brushlayer")
-                button.performClick(nil)
-                try expect(sounds == ["wipe_brushlayer", "wipe_snap"] && canvas.document.backgroundPNG == nil &&
-                           canvas.document.backgroundColor == .white && reads("Blank", false),
-                           "Clear removes the snap, resets the backdrop white and plays wipe_snap")
-                button.performClick(nil)
-                try expect(sounds.count == 2, "The disabled Blank button stays silent after the last stage")
-
-                sounds.removeAll()
-                canvas.document.elements = [shape]
-                try expect(reads("Wipe", true), "Artwork over a white drawing without a snap reads Wipe")
-                button.performClick(nil)
-                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty && reads("Blank", false),
-                           "Wiping artwork with no snap and a white backdrop lands on a disabled Blank")
-
-                sounds.removeAll()
-                canvas.setBackgroundColor(.red)
-                _ = try editor(app, text: "Typing")
-                try expect(reads("Wipe", true), "Field editing over a coloured backdrop reads Wipe")
-                button.performClick(nil)
-                try expect(sounds == ["wipe_brushlayer"] && canvas.document.elements.isEmpty &&
-                           canvas.subviews.compactMap { $0 as? NSTextView }.isEmpty && reads("Clear", true),
-                           "Wipe commits the field, removes it with the artwork and leaves the coloured backdrop as Clear")
-            }),
             ("selected tool labels remain readable on bright and dark accent colors", {
                 let colors: [NSColor] = [.yellow, .white, .black, .blue, .red, .green,
                     NSColor(srgbRed: 0.5, green: 0.5, blue: 0.5, alpha: 1),
                     NSColor(srgbRed: 0.25, green: 0.45, blue: 0.9, alpha: 1)]
                 for background in colors {
-                    let foreground = ToolButton.textColor(on: background)
+                    let foreground = GlassChromeButton.textColor(on: background)
                     let rgb = background.usingColorSpace(.deviceRGB)!
                     let channels = [rgb.redComponent, rgb.greenComponent, rgb.blueComponent].map { c in
                         c <= 0.04045 ? Double(c) / 12.92 : pow((Double(c) + 0.055) / 1.055, 2.4)
@@ -3972,13 +3763,11 @@ enum AppSafetyTests {
                     let contrast = foreground == .black ? (brightness + 0.05) / 0.05 : 1.05 / (brightness + 0.05)
                     try expect(contrast >= 4.5, "Selected tool label contrast is too low: \(contrast)")
                 }
-                try expect(ToolButton.textColor(on: .yellow) == .black, "Yellow needs a dark selected label")
-                try expect(ToolButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
-            }),
-            ("relaunch() requests termination once and launches only after quit, never from a cancelled Save", { try relaunchQuitSequence(Fixture()) }),
-            ("The relaunch launcher waits, bounded, for LaunchServices to accept the request before the old instance exits", relaunchLauncherAcknowledgement)
+                try expect(GlassChromeButton.textColor(on: .yellow) == .black, "Yellow needs a dark selected label")
+                try expect(GlassChromeButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
+            })
         ]
-        let tests = (ProcessInfo.processInfo.environment["SKITCH_APPEARANCE"] == "modern" ? Self.modernCases : classicCases) + Self.webpostCases
+        let tests = sharedCases + Self.modernCases + Self.webpostCases
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []

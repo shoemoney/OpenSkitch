@@ -305,7 +305,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
     var onToolChange: ((SketchTool) -> Void)?
     var onColorChange: ((NSColor) -> Void)?
     /// Original resource stems: wipe_brushlayer, wipe_snap, wipe_already_blank.
-    var onSound: ((String) -> Void)?
     var onHintModifiers: ((NSEvent.ModifierFlags) -> Void)?
     var onHintHover: ((Bool) -> Void)?
     /// See-through framing is a view state; rendering/export/recovery keep the full document.
@@ -725,14 +724,12 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 document.elements.removeAll(); selection.removeAll()
                 if document.backgroundPNG == nil { resetViewport() }
             }
-            onSound?("wipe_brushlayer")
         case .clear:
             edit("Wipe Snap") {
                 document.backgroundPNG = nil; document.backgroundColor = .white; resetViewport()
             }
-            onSound?("wipe_snap")
         case .blank:
-            onSound?("wipe_already_blank")
+            break
         }
     }
     private func resetViewport() { cropRect = nil; panBackground = nil; document.renderSize = nil }
@@ -740,10 +737,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
     func wipeSnap() {
         finishTextEditing()
         guard document.backgroundPNG != nil || document.backgroundColor != .white else {
-            onSound?("wipe_already_blank"); return
+            return
         }
         edit("Wipe Snap Only") { document.backgroundPNG = nil; document.backgroundColor = .white; panBackground = nil }
-        onSound?("wipe_snap")
     }
     func clearAnnotations() {
         edit("Clear Annotations") { document.elements.removeAll(); selection.removeAll() }

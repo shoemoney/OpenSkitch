@@ -715,8 +715,6 @@ private enum CaptureTests {
                 let picker = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
                 picker.respondDuringCancel = true; countdown.respondDuringCancel = true
                 let rig = try make(selectionPicker: picker, countdown: countdown)
-                var sounds: [String] = []
-                rig.coordinator.onSound = { sounds.append($0) }
                 let record = start(rig, mode: "crosshair")
                 try await wait { picker.requests.count == 1 }
                 let oldSelection = picker.requests[0]
@@ -724,17 +722,15 @@ private enum CaptureTests {
                     oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
                     try expect(countdown.requests.count == 1 && countdown.requests[0].delay == 6, "selected Shift must enter a cancellable six-second countdown")
                     countdown.requests[0].cue()
-                    try expect(sounds == ["pre-snap-countdown"], "active native countdown must route its original cue")
                 }
                 let oldCountdown = countdown.requests.first
                 try await stopped(rig, record, shutdown: shutdown)
                 try expect(picker.cancellations == 1 && countdown.cancellations == 1,
                            "selection/countdown owners must be cancelled before acknowledgement")
-                let frozenSounds = sounds
                 oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: 987, modifiers: [.shift])))
                 oldCountdown?.cue(); oldCountdown?.completion()
                 try await pause(0.03)
-                try expect(sounds == frozenSounds && record.results.count == 1 && record.acknowledgements.count == 1,
+                try expect(record.results.count == 1 && record.acknowledgements.count == 1,
                            "synchronous teardown and late callbacks must not emit cues or complete twice")
                 try expect(!FileManager.default.fileExists(atPath: rig.marker.path), "stopped native phases must never launch a helper")
                 let resumed = start(rig, mode: "crosshair")
@@ -746,19 +742,17 @@ private enum CaptureTests {
                     try await wait { picker.requests.count == 2 }
                     oldSelection.completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
                     oldCountdown?.cue(); oldCountdown?.completion()
-                    try expect(countdown.requests.count == (duringCountdown ? 1 : 0) && sounds == frozenSounds,
+                    try expect(countdown.requests.count == (duringCountdown ? 1 : 0),
                                "old operation callbacks must not modify a newer selection")
                     picker.requests[1].completion(.success(OriginalCaptureSelection(rect: region, windowID: nil, modifiers: [.shift])))
                     let fresh = countdown.requests.last!
                     fresh.cue()
-                    try expect(sounds == frozenSounds + ["pre-snap-countdown"], "a fresh capture must still receive its own countdown cue")
                     fresh.completion()
                     try await wait { resumed.results.count == 1 }
                     try expect(errorCode(resumed.results.first) == nil && resumed.allMain, "cancelled native flow must remain reusable")
-                    let completedSounds = sounds
                     fresh.cue(); fresh.completion()
                     try await pause(0.03)
-                    try expect(sounds == completedSounds && resumed.results.count == 1, "finished countdown cues and completions must be ignored")
+                    try expect(resumed.results.count == 1, "finished countdown cues and completions must be ignored")
                 }
                 let repeated = CaptureRecord()
                 rig.coordinator.cancelCapture(completion: repeated.acknowledged)
@@ -778,8 +772,6 @@ private enum CaptureTests {
                 let picker = FakeCaptureSelectionPicker(journal), countdown = FakeCaptureCountdown(journal)
                 picker.respondDuringCancel = true; countdown.respondDuringCancel = true
                 let rig = try make(selectionPicker: picker, countdown: countdown)
-                var sounds: [String] = []
-                rig.coordinator.onSound = { sounds.append($0) }
                 let record = start(rig, mode: "crosshair")
                 try await wait { picker.requests.count == 1 && directories(rig).count == 1 }
                 let ownedDirectory = directories(rig)[0]
@@ -832,7 +824,7 @@ private enum CaptureTests {
                 try await pause(0.03)
                 try expect(record.results.count == 1 && record.acknowledgements.count == 1 && nested.acknowledgements.count == 1,
                            "stale callbacks after reentrant teardown must not redeliver capture or acknowledgements")
-                try expect(sounds.isEmpty && !FileManager.default.fileExists(atPath: rig.marker.path) && directories(rig).isEmpty,
+                try expect(!FileManager.default.fileExists(atPath: rig.marker.path) && directories(rig).isEmpty,
                            "reentrant native teardown must leave no files, helper launch, or cancellation/stale countdown cues")
             }
         }

@@ -2379,19 +2379,17 @@ struct CanvasTests {
         var a = rectangle(CGRect(x: 15, y: 15, width: 30, height: 30)); a.groupID = UUID()
         c.document.elements = [a]; c.selection = [a.id]; c.cropRect = CGRect(x: 3, y: 4, width: 60, height: 50)
         c.editingUndoManager.removeAllActions(); let original = c.document
-        var sounds: [String] = []; var dirty = 0
-        c.onSound = { sounds.append($0) }; c.onChange = { dirty += 1 }
+        var dirty = 0
+        c.onChange = { dirty += 1 }
         c.wipe(); let noDrawing = c.document
         try expect(noDrawing.elements.isEmpty && noDrawing.backgroundPNG == original.backgroundPNG &&
-                   noDrawing.backgroundColor == .clear && sounds == ["wipe_brushlayer"], "First Wipe clears drawing only")
+                   noDrawing.backgroundColor == .clear, "First Wipe clears drawing only")
         c.undo(); try expect(c.document == original, "Undo first Wipe restores drawing/groups")
-        c.wipe(); try expect(c.document == noDrawing && sounds.last == "wipe_brushlayer", "Wipe stage comes from restored content")
+        c.wipe(); try expect(c.document == noDrawing, "Wipe stage comes from restored content")
         c.wipe(); let blank = c.document
-        try expect(blank.backgroundPNG == nil && blank.backgroundColor == .white && blank.size == original.size &&
-                   sounds.last == "wipe_snap", "Second Wipe removes snap and resets backdrop white without resize")
+        try expect(blank.backgroundPNG == nil && blank.backgroundColor == .white && blank.size == original.size, "Second Wipe removes snap and resets backdrop white without resize")
         let notifications = dirty, undoName = c.editingUndoManager.undoActionName
-        c.wipe(); try expect(dirty == notifications && c.editingUndoManager.undoActionName == undoName &&
-                            sounds.last == "wipe_already_blank", "Wiping blank canvas is sound-only no-op")
+        c.wipe(); try expect(dirty == notifications && c.editingUndoManager.undoActionName == undoName, "Wiping blank canvas is a no-op")
         c.undo(); try expect(c.document == noDrawing, "Undo snap Wipe restores photo and transparency")
         c.undo(); try expect(c.document == original, "Second undo restores first-stage drawing")
         c.selectAll(); let selected = c.selection, crop = c.cropRect
