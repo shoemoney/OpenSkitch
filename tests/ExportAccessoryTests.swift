@@ -132,6 +132,12 @@ private enum ExportAccessoryTests {
                    "Caller-restored selection and snapped quality")
         try expect(ExportAccessoryOptions().jpegQuality == 0.7, "Restoring 60% does not change file default")
 
+        let fixed = ExportAccessory(format: "jpeg", jpegQuality: 0.4)
+        fixed.fixedJPEGQuality = 0.75
+        try expect(fixed.effectiveJPEGQuality == 0.75, "A fixed quality overrides the stored one")
+        fixed.jpegQuality = 0.3
+        try expect(fixed.effectiveJPEGQuality == 0.75 && fixed.jpegQuality == 0.3, "A fixed quality survives later quality changes")
+
         var live: ExportAccessory!
         var liveCallbacks = 0
         live = ExportAccessory(onChange: {

@@ -128,7 +128,12 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
         if !succeeded { payloads.removeValue(forKey: provider) }
         onEnd?(export.id, succeeded)
     }
-    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { (payloads[ObjectIdentifier(filePromiseProvider)]?.payload.name ?? "Skitch") + "." + (payloads[ObjectIdentifier(filePromiseProvider)]?.payload.format ?? "png") }
+    /// The file extension for a payload format: JPEG files are named .jpg, matching uploads.
+    static func fileExtension(forFormat format: String) -> String { format == "jpeg" ? "jpg" : format }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
+        let payload = payloads[ObjectIdentifier(filePromiseProvider)]?.payload
+        return (payload?.name ?? "Skitch") + "." + Self.fileExtension(forFormat: payload?.format ?? "png")
+    }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
         let export = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
         do {
@@ -1482,9 +1487,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if format == "skitch" { return try file.encoded() }
         if format == "svg" { return try file.encoded(includeSupplementalState: false) }
         let view = CanvasView(frame: .zero); try view.loadDocument(data: file.canvasData)
-        guard let data = view.imageData(format: format) else { throw HistoryStore.Failure.missing }
+        guard let data = view.imageData(format: format, jpegQuality: historyJPEGQuality) else { throw HistoryStore.Failure.missing }
         return data
     }
+    /// Modern writes every JPG at the toggle's fixed quality; Classic keeps its 0.7 default.
+    var historyJPEGQuality: Double { modernChrome != nil ? FormatToggle.jpgQuality : 0.7 }
     func copyHistory(_ ids: [UUID]) {
         do {
             guard let id = ids.first else { return }
@@ -1557,14 +1564,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         return encoded
     }
-    @objc func exportFile() {
-        let panel = NSSavePanel()
-        panel.title = "Export"; panel.nameFieldLabel = "Export As:"; panel.prompt = "Export"
+    func exportPanelAccessory() -> ExportAccessory {
         let modern = modernChrome != nil
         let options = ExportAccessory(format: modern ? dragFormat : UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
             originalSize: UserDefaults.standard.bool(forKey: "ExportOriginalSize"),
             jpegQuality: UserDefaults.standard.object(forKey: "ExportQuality") as? Double ?? 0.7)
         if modern { options.fixedJPEGQuality = FormatToggle.jpgQuality }
+        return options
+    }
+    func exportPanelData(_ options: ExportAccessory) throws -> Data {
+        try exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.effectiveJPEGQuality)
+    }
+    @objc func exportFile() {
+        let panel = NSSavePanel()
+        panel.title = "Export"; panel.nameFieldLabel = "Export As:"; panel.prompt = "Export"
+        let options = exportPanelAccessory()
         panel.accessoryView = options.view; panel.allowsOtherFileTypes = false
         let refresh = { [weak self, weak panel, weak options] in
             guard let self, let panel, let options else { return }
@@ -1577,7 +1591,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let stem = (panel.nameFieldStringValue as NSString).deletingPathExtension
             panel.nameFieldStringValue = (stem.isEmpty ? self.safeName() : stem) + "." + options.format
             let size = options.originalSize && self.canvas.document.backgroundPNG != nil ? self.canvas.canvasSize : self.canvas.outputSize
-            let data = try? self.exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.effectiveJPEGQuality)
+            let data = try? self.exportPanelData(options)
             options.updateByteCount(data?.count, size: size)
         }
         options.onChange = refresh
@@ -1585,7 +1599,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         refresh()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let data = try exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.effectiveJPEGQuality)
+            let data = try exportPanelData(options)
             try data.write(to: url, options: .atomic)
             UserDefaults.standard.set(options.format, forKey: "ExportFormat")
             UserDefaults.standard.set(options.originalSize, forKey: "ExportOriginalSize")
@@ -1746,6 +1760,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard modernChrome != nil else { return ("png", 0.7, "png") }
         return (dragFormat, dragQuality, dragFormat == "jpeg" ? "jpg" : "png")
     }
+    func uploadPayload() -> (Data, String)? {
+        let encoding = uploadEncoding
+        guard let data = canvas.imageData(format: encoding.format, jpegQuality: encoding.quality) else { return nil }
+        return (data, encoding.fileExtension)
+    }
     @objc func publishImage() {
         guard !terminationStarted else { return }
         if publishing.isBusy { status.stringValue = "An upload is already running…"; return }
@@ -1753,9 +1772,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             openDestinationSettings(); return
         }
         let encoding = uploadEncoding
-        guard let data = canvas.imageData(format: encoding.format, jpegQuality: encoding.quality), let snapshot = try? historySnapshot() else { return }
+        guard let (data, fileExtension) = uploadPayload(), let snapshot = try? historySnapshot() else { return }
         let name = safeName(), generation = documentGeneration
-        let fileName = name+"-"+UUID().uuidString.lowercased()+"."+encoding.fileExtension
+        let fileName = name+"-"+UUID().uuidString.lowercased()+"."+fileExtension
         let binding = try? historyRemoteDeletion.captureBinding(fileName: fileName)
         uploadStatus = "Uploading \(name)…"; status.stringValue = uploadStatus!
         publishing.publish(data: data, fileName: fileName) { [weak self] result in

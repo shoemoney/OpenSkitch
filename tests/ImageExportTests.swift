@@ -187,9 +187,6 @@ enum ImageExportTests {
                            && FormatToggle.storedChoice(forSegment: 0, current: 4) == 0, "Stored row writing")
                 let jpg = FormatToggle.payload(forSegment: 1), png = FormatToggle.payload(forSegment: 0)
                 try expect(jpg.format == "jpeg" && jpg.quality == 0.75 && png.format == "png", "Payload parameters")
-                let document = fixture()
-                let data = try bytes(document, document.size, jpg.format, quality: jpg.quality)
-                try expect(data.prefix(3) == Data([0xFF, 0xD8, 0xFF]) && data == (try bytes(document, document.size, "jpeg", quality: 0.75)), "JPG payload is JPEG at 0.75")
             }),
             ("JPEG quality controls detailed-gradient bytes and defaults to 0.7", {
                 let document = try gradient()

@@ -2,6 +2,7 @@
 // Classic list: the same real AppDelegate launch, with ModernEditorChrome as the window content.
 #if APP_SAFETY_TESTS
 import AppKit
+import UniformTypeIdentifiers
 
 extension AppSafetyTests {
     static var modernCases: [(String, () throws -> Void)] {
@@ -75,11 +76,32 @@ extension AppSafetyTests {
         let flat = try (NSBitmapImageRep(data: jpg)).unwrap("JPEG decodes")
         try expect((flat.colorAt(x: 2, y: 2)?.redComponent ?? 0) > 0.97 && (flat.colorAt(x: 2, y: 2)?.greenComponent ?? 0) > 0.97, "JPG composites transparency onto white")
         let drag = try (app.dragExportView).unwrap("drag"), payload = try (drag.prepare?()).unwrap("drag payload")
-        try expect(isJPEG(payload.data) && payload.format == "jpeg", "The drag payload follows the toggle")
+        try expect(payload.format == "jpeg" && payload.data == want, "The real drag payload bytes are exactly the 0.75 encoding")
+        let provider = NSFilePromiseProvider(fileType: UTType.jpeg.identifier, delegate: drag)
+        try expect(drag.beginExport(provider: provider, payload: payload, controlRect: .zero), "The drag begins")
+        let promised = drag.filePromiseProvider(provider, fileNameForType: UTType.jpeg.identifier)
+        drag.endExport(provider: ObjectIdentifier(provider), succeeded: false)
+        try expect(promised == payload.name + ".jpg", "The dragged JPEG file is named .jpg like uploads: \(promised)")
+        let upload = try app.uploadPayload().unwrap("upload payload")
+        try expect(upload.0 == want && upload.1 == "jpg", "The real upload bytes are the 0.75 encoding with a .jpg name")
         try expect(app.uploadEncoding.format == "jpeg" && app.uploadEncoding.quality == 0.75 && app.uploadEncoding.fileExtension == "jpg", "Upload follows the toggle")
-        let accessory = ExportAccessory(format: app.dragFormat, jpegQuality: 0.4)
-        accessory.fixedJPEGQuality = FormatToggle.jpgQuality
-        try expect(accessory.format == "jpeg" && accessory.effectiveJPEGQuality == 0.75, "Export defaults to JPEG at 0.75 under the toggle")
+        defaults.set(0.3, forKey: "ExportQuality")
+        defer { defaults.removeObject(forKey: "ExportQuality") }
+        let accessory = app.exportPanelAccessory()
+        try expect(accessory.format == "jpeg" && accessory.effectiveJPEGQuality == 0.75, "The real export accessory is JPEG at 0.75 despite a stored 0.3")
+        accessory.jpegQuality = 0.3
+        var sliders: [NSSlider] = []
+        func findSliders(_ view: NSView) { if let slider = view as? NSSlider { sliders.append(slider) }; view.subviews.forEach(findSliders) }
+        findSliders(accessory.view)
+        try expect(sliders.count == 1 && !sliders[0].isEnabled, "The export quality slider is locked at 0.75: \(sliders.map { ($0.isEnabled, $0.doubleValue) })")
+        try expect(try app.exportPanelData(accessory) == want, "The real export bytes are exactly the 0.75 encoding")
+        let historyID = try app.archiveStore().archive(try app.historySnapshot(), name: "Toggle", action: .archived)
+        let history = try app.historyExport(historyID, format: "jpeg")
+        let stored = CanvasView(frame: .zero)
+        try stored.loadDocument(data: try app.archiveStore().read(historyID).canvasData)
+        let historyWant = try stored.imageData(format: "jpeg", jpegQuality: 0.75).unwrap("history reference")
+        let historyOther = try stored.imageData(format: "jpeg", jpegQuality: 0.7).unwrap("history 0.7")
+        try expect(history == historyWant && history != historyOther, "The real History export is the 0.75 encoding, not 0.7")
         try expect(defaults.integer(forKey: key) == FormatToggle.jpgStoredChoice, "Choosing JPG stores a JPEG row in the shared preference")
 
         for (stored, segment) in [(0, 0), (1, 1), (3, 1), (5, 1), (6, 0), (11, 0), (-1, 0), (99, 0)] {
