@@ -6,8 +6,6 @@ import argparse, hashlib, json, os, platform, re, subprocess, sys, tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64"], default=platform.machine())
-parser.add_argument("--concurrent-app-safety", action="store_true",
-                    help="also run Classic and Modern app-safety in parallel and require both to pass")
 options = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 build = root / "build"
@@ -73,7 +71,7 @@ def suite(name, sources, test, define=None, arguments=(), environment=None, opti
             if not (snapshot / needed).exists():
                 return "SKIP", f"{name}: {needed} not present"
     binary = snapshot / name
-    command = ["xcrun", "swiftc", "-swift-version", "5", "-target", options.arch + "-apple-macosx13.0"]
+    command = ["xcrun", "swiftc", "-swift-version", "5", "-target", options.arch + "-apple-macosx26.0"]
     if define:
         command += ["-D", define]
     command += [str(snapshot / source) for source in sources]
@@ -82,15 +80,12 @@ def suite(name, sources, test, define=None, arguments=(), environment=None, opti
     subprocess.run([str(binary), *arguments], cwd=root, check=True, env=environment)
     return "PASS", name
 
-# Appearance.swift joins the preference suites once it exists.
-appearance = ["Appearance.swift"] if (snapshot / "Appearance.swift").exists() else []
 # Subsets from tools/fetch-fontawesome.sh are exercised when they have been built.
 fonts = root / "build/fonts"
 font_environment = os.environ | {"OPENSKITCH_FA_FONT_DIR": str(fonts)} if any(fonts.glob("*-subset.ttf")) else None
 
 suites = [
     ("original-action-button-tests", ["OriginalActionButton.swift"], "OriginalActionButtonTests.swift", "ORIGINAL_ACTION_BUTTON_TESTS", ()),
-    ("tool-button-tests", ["OriginalActionButton.swift", "ToolButton.swift"], "ToolButtonTests.swift", "TOOL_BUTTON_TESTS", ()),
     ("original-capture-timing-tests", ["OriginalCaptureTiming.swift"], "OriginalCaptureTimingTests.swift", "ORIGINAL_CAPTURE_TIMING_TESTS", ()),
     ("original-capture-picker-tests", ["OriginalCaptureMagnifier.swift", "OriginalCapturePicker.swift"], "OriginalCapturePickerTests.swift", "ORIGINAL_CAPTURE_PICKER_TESTS", ()),
     ("original-capture-countdown-tests", ["OriginalCaptureTiming.swift", "OriginalCaptureCountdown.swift"], "OriginalCaptureCountdownTests.swift", "ORIGINAL_CAPTURE_COUNTDOWN_TESTS", ()),
@@ -98,8 +93,8 @@ suites = [
     ("original-help-bevel-tests", ["OriginalHelpBevel.swift"], "OriginalHelpBevelTests.swift", "ORIGINAL_HELP_BEVEL_TESTS", ()),
     ("window-zoom-tests", ["WindowZoom.swift"], "WindowZoomTests.swift", "WINDOW_ZOOM_TESTS", ()),
     ("text-style-form-tests", ["TextStyleForm.swift"], "TextStyleFormTests.swift", "TEXT_STYLE_FORM_TESTS", ()),
-    ("general-preferences-form-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "GeneralPreferencesForm.swift", *appearance], "GeneralPreferencesFormTests.swift", "GENERAL_PREFERENCES_FORM_TESTS", ()),
-    ("original-general-preferences-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "DocumentModel.swift", "GeneralPreferencesForm.swift", "OriginalGeneralPreferences.swift", *appearance], "OriginalGeneralPreferencesTests.swift", "ORIGINAL_GENERAL_PREFERENCES_TESTS", ()),
+    ("general-preferences-form-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "GeneralPreferencesForm.swift"], "GeneralPreferencesFormTests.swift", "GENERAL_PREFERENCES_FORM_TESTS", ()),
+    ("original-general-preferences-tests", ["LegacySkitch.swift", "StrokeFitting.swift", "DocumentModel.swift", "GeneralPreferencesForm.swift", "OriginalGeneralPreferences.swift"], "OriginalGeneralPreferencesTests.swift", "ORIGINAL_GENERAL_PREFERENCES_TESTS", ()),
     ("resize-presets-tests", ["ResizePresets.swift"], "ResizePresetsTests.swift", "RESIZE_PRESETS_TESTS", ()),
     ("window-sizing-tests", ["WindowSizing.swift"], "WindowSizingTests.swift", "WINDOW_SIZING_TESTS", ()),
     ("canvas-navigator-tests", ["CanvasNavigator.swift"], "CanvasNavigatorTests.swift", "CANVAS_NAVIGATOR_TESTS", ()),
@@ -125,10 +120,9 @@ suites = [
 ]
 # Modern appearance suites are skipped, not failed, while their files are not in the tree yet.
 optional_suites = [
-    ("appearance-tests", ["Appearance.swift"], "AppearanceTests.swift", "APPEARANCE_TESTS", ()),
     ("fontawesome-icons-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift"], "FontAwesomeIconsTests.swift", "FONTAWESOME_ICONS_TESTS", (), font_environment),
     ("menu-symbols-tests", ["FontAwesomeIcons.swift", "ChromeIcons.swift", "MenuSymbols.swift"], "MenuSymbolsTests.swift", "MENU_SYMBOLS_TESTS", ()),
-    ("glass-chrome-tests", ["Appearance.swift", "OriginalActionButton.swift", "ToolButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "DocumentModel.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
+    ("glass-chrome-tests", ["OriginalActionButton.swift", "FontAwesomeIcons.swift", "ChromeIcons.swift", "BezelDrawingControls.swift", "LegacySkitch.swift", "DocumentModel.swift", "GlassChrome.swift", "ModernEditorChrome.swift"], "GlassChromeTests.swift", "GLASS_CHROME_TESTS", ()),
 ]
 # Every unimplemented progress row must carry a disposition; the checker must also reject a row without one.
 subprocess.run([sys.executable, str(root / "tools" / "check-dispositions.py")], cwd=root, check=True)
@@ -150,20 +144,8 @@ with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as execu
 if failures:
     check_real_store(real_store_before)
     raise SystemExit(1)
-# Classic is the pinned baseline everywhere; Modern needs macOS 26+ and its integration cases.
-safety_runs = ["classic"]
-if int(platform.mac_ver()[0].split(".")[0] or 0) < 26:
-    print("SKIP app-safety modern: host is older than macOS 26", flush=True)
-elif not (root / "tests/AppSafetyModernCases.swift").exists():
-    print("SKIP app-safety modern: tests/AppSafetyModernCases.swift not present", flush=True)
-else:
-    safety_runs.append("modern")
-for style in safety_runs:
-    print("== app-safety", style, flush=True)
-    subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root, check=True)
-if options.concurrent_app_safety:
-    print("== app-safety concurrent", flush=True)
-    subprocess.run([str(root / "tools" / "test-app-safety-concurrent.sh"), "--arch", options.arch], cwd=root, check=True)
+print("== app-safety", flush=True)
+subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch], cwd=root, check=True)
 check_real_store(real_store_before)
 if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")

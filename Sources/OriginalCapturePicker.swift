@@ -253,7 +253,7 @@ final class OriginalCapturePicker: CaptureSelectionPicking {
     private static func nativeScreenImage(_ frame: NSRect) -> OriginalCaptureScreenImage? {
         guard CGPreflightScreenCaptureAccess(), let primary = NSScreen.screens.first else { return nil }
         let cgRect = flip(frame, primaryTop: primary.frame.maxY)
-        guard let image = CGWindowListCreateImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]),
+        guard let image = windowListImage(cgRect, .optionOnScreenOnly, kCGNullWindowID, [.bestResolution]),
               image.width > 0, frame.width > 0 else { return nil }
         return OriginalCaptureScreenImage(image: image, scale: CGFloat(image.width) / frame.width)
     }
@@ -447,4 +447,12 @@ final class OriginalCaptureSelectionView: NSView {
         NSBezierPath(roundedRect: bezel, xRadius: 5, yRadius: 5).fill()
         text.draw(at: origin, withAttributes: attributes)
     }
+}
+
+/// CGWindowListCreateImage is marked unavailable to the macOS 26 SDK although the symbol still ships; look it up at run time.
+/// Without Screen Recording access the system returns nil, which every caller already treats as "no image".
+func windowListImage(_ rect: CGRect, _ options: CGWindowListOption, _ window: CGWindowID, _ imageOptions: CGWindowImageOption) -> CGImage? {
+    typealias Function = @convention(c) (CGRect, CGWindowListOption, CGWindowID, CGWindowImageOption) -> Unmanaged<CGImage>?
+    guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
+    return unsafeBitCast(symbol, to: Function.self)(rect, options, window, imageOptions)?.takeRetainedValue()
 }

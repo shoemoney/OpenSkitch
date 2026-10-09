@@ -1,18 +1,15 @@
 import AppKit
 
-/// Original MainMenu.nib bindings and PrefsController/SkitchSound preference keys.
-/// `appearanceKey` is the one reconstruction key here: it has no original Skitch counterpart.
+/// Preference keys for the General tab.
 /// Parent controllers own effects; this store only resolves and persists values.
 @MainActor
 struct OriginalGeneralPreferences {
     let defaults: UserDefaults
     static let precisionKey = "fittingPrecision"
     static let captureKey = "skitchInSnap"
-    static let soundsKey = "disableSounds"
     static let presenceKey = "statusMenu"
     static let overlaysKey = "disableOverlay"
     static let keyboardTipsKey = "disableModtips"
-    static let appearanceKey = AppearanceResolver.defaultsKey
 
     static func precisionTag(_ mode: StrokeSmoothing) -> Int {
         switch mode { case .precise: return 0; case .medium: return 1; case .loose: return 2 }
@@ -29,11 +26,9 @@ struct OriginalGeneralPreferences {
         return GeneralPreferencesState(drawingPrecision: original ?? previous ?? .medium,
             arrowHead: defaults.integer(forKey: OriginalArrowGeometry.preferenceKey) == 1 ? 1 : 2,
             includeSkitch: defaults.bool(forKey: Self.captureKey),
-            playSounds: !defaults.bool(forKey: Self.soundsKey),
             statusMenu: (0...2).contains(presence) ? presence : 0,
             showToolTips: defaults.object(forKey: Self.overlaysKey) != nil && !defaults.bool(forKey: Self.overlaysKey),
-            showKeyboardTips: defaults.object(forKey: Self.keyboardTipsKey) != nil && !defaults.bool(forKey: Self.keyboardTipsKey),
-            appearance: AppearanceResolver(defaults: defaults).preferredStyle)
+            showKeyboardTips: defaults.object(forKey: Self.keyboardTipsKey) != nil && !defaults.bool(forKey: Self.keyboardTipsKey))
     }
     func setPrecision(_ mode: StrokeSmoothing) {
         defaults.set(Self.precisionTag(mode), forKey: Self.precisionKey)
@@ -46,13 +41,11 @@ struct OriginalGeneralPreferences {
             defaults.set(proposed.arrowHead, forKey: OriginalArrowGeometry.preferenceKey)
         }
         if proposed.includeSkitch != current.includeSkitch { defaults.set(proposed.includeSkitch, forKey: Self.captureKey) }
-        if proposed.playSounds != current.playSounds { defaults.set(!proposed.playSounds, forKey: Self.soundsKey) }
         if proposed.statusMenu != current.statusMenu, (0...2).contains(proposed.statusMenu) {
             defaults.set(proposed.statusMenu, forKey: Self.presenceKey)
         }
         if proposed.showToolTips != current.showToolTips { defaults.set(!proposed.showToolTips, forKey: Self.overlaysKey) }
         if proposed.showKeyboardTips != current.showKeyboardTips { defaults.set(!proposed.showKeyboardTips, forKey: Self.keyboardTipsKey) }
-        if proposed.appearance != current.appearance { AppearanceResolver(defaults: defaults).store(proposed.appearance) }
     }
     func includeApp(mode: String, manualOption: Bool) -> Bool {
         guard mode == "crosshair" || mode == "fullscreen" else { return false }

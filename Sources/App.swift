@@ -5,14 +5,6 @@ import UniformTypeIdentifiers
 /// opaque backdrop so their adaptive label colors remain readable.
 final class FrameChromeView: NSView {
     weak var canvasScrollView: NSScrollView?
-    var usesRecoveredBezel = false
-    private lazy var bezelImages: [String: NSImage] = {
-        var images: [String: NSImage] = [:]
-        for name in ["TopLeft", "TopRight", "BottomLeft", "BottomRight", "Top", "Bottom", "Left", "Right"] {
-            if let url = Bundle.main.url(forResource: "docWin_" + name, withExtension: "png"), let image = NSImage(contentsOf: url) { images[name] = image }
-        }
-        return images
-    }()
     var showsCanvasHole = false { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
         let chrome = NSBezierPath(rect: bounds)
@@ -23,28 +15,8 @@ final class FrameChromeView: NSView {
             chrome.windingRule = .evenOdd
         }
         NSColor.windowBackgroundColor.setFill(); chrome.fill()
-        if usesRecoveredBezel {
-            NSGraphicsContext.saveGraphicsState()
-            chrome.addClip()
-            NSGradient(starting: NSColor(white: 0.91, alpha: 1), ending: NSColor(white: 0.78, alpha: 1))?.draw(in: bounds, angle: -90)
-            let opening = canvasScrollView.map { $0.convert($0.bounds, to: self) } ?? bounds.insetBy(dx: 37, dy: 33)
-            let left = max(0, opening.minX), right = max(0, bounds.maxX-opening.maxX)
-            let top = max(0, bounds.maxY-opening.maxY), bottom = max(0, opening.minY)
-            let pieces: [(String, NSRect)] = [
-                ("TopLeft", NSRect(x: 0, y: opening.maxY, width: left, height: top)),
-                ("TopRight", NSRect(x: opening.maxX, y: opening.maxY, width: right, height: top)),
-                ("BottomLeft", NSRect(x: 0, y: 0, width: left, height: bottom)),
-                ("BottomRight", NSRect(x: opening.maxX, y: 0, width: right, height: bottom)),
-                ("Top", NSRect(x: opening.minX, y: opening.maxY, width: opening.width, height: top)),
-                ("Bottom", NSRect(x: opening.minX, y: 0, width: opening.width, height: bottom)),
-                ("Left", NSRect(x: 0, y: opening.minY, width: left, height: opening.height)),
-                ("Right", NSRect(x: opening.maxX, y: opening.minY, width: right, height: opening.height))
-            ]
-            for (name, rect) in pieces { bezelImages[name]?.draw(in: rect, from: .zero, operation: .sourceOver, fraction: 1) }
-            NSGraphicsContext.restoreGraphicsState()
-        }
     }
-    override func layout() { super.layout(); if showsCanvasHole || usesRecoveredBezel { needsDisplay = true } }
+    override func layout() { super.layout(); if showsCanvasHole { needsDisplay = true } }
 }
 
 final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDelegate {
@@ -170,17 +142,25 @@ final class DragThumbnailView: NSView {
         image?.draw(in: bounds, from: .zero, operation: .sourceOver, fraction: 1)
         if clickToExpand {
             NSColor.white.withAlphaComponent(0.1).setFill(); bounds.fill()
-            let name = hovering ? "Skitch_ShowSkitch_mouseover" : "Skitch_ShowSkitch"
-            if let overlay = NSImage(named: name) {
-                overlay.draw(in: NSRect(x: (bounds.width-overlay.size.width)/2, y: (bounds.height-overlay.size.height)/2, width: overlay.size.width, height: overlay.size.height), from: .zero, operation: .sourceOver, fraction: 1)
-            }
-        } else if hovering, let overlay = NSImage(named: "Skitch_Cancel_DragMe") {
-            overlay.draw(in: NSRect(x: (bounds.width-overlay.size.width)/2, y: (bounds.height-overlay.size.height)/2, width: overlay.size.width, height: overlay.size.height), from: .zero, operation: .sourceOver, fraction: 1)
+            drawBadge(symbol: "arrow.up.left.and.arrow.down.right", emphasized: hovering)
+        } else if hovering {
+            drawBadge(symbol: "xmark", emphasized: true)
         }
+    }
+    private func drawBadge(symbol: String, emphasized: Bool) {
+        let diameter = min(56, min(bounds.width, bounds.height) * 0.6)
+        let disc = NSRect(x: (bounds.width-diameter)/2, y: (bounds.height-diameter)/2, width: diameter, height: diameter)
+        NSColor.black.withAlphaComponent(emphasized ? 0.78 : 0.55).setFill()
+        NSBezierPath(ovalIn: disc).fill()
+        let configuration = NSImage.SymbolConfiguration(pointSize: diameter*0.42, weight: .semibold)
+            .applying(.init(paletteColors: [.white]))
+        guard let glyph = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
+        let size = glyph.size
+        glyph.draw(in: NSRect(x: disc.midX-size.width/2, y: disc.midY-size.height/2, width: size.width, height: size.height), from: .zero, operation: .sourceOver, fraction: 1)
     }
 }
 
-/// The document name. Classic shows it as an editable field; Modern keeps it off screen and mirrors it into the window title.
+/// The document name. It stays off screen and is mirrored into the window title.
 @MainActor
 final class DocumentNameField: NSTextField {
     var onChange: ((String) -> Void)?
@@ -207,7 +187,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var generalPreferences: OriginalGeneralPreferences { OriginalGeneralPreferences(defaults: .standard) }
     var preferencesWindow: NSWindow?
     var preferencesForm: GeneralPreferencesForm?
-    var soundEffects = OriginalSoundEffects()
     var helpBevel: OriginalHelpBevel?
     private var hintEventMonitor: Any?
     let photoBrowser = PhotoBrowserCoordinator()
@@ -224,7 +203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var sizeUndoGrouping = false
     var customDrawingColor = NSColor(calibratedRed: 0, green: 1, blue: 1, alpha: 1)
     let zoomControl = NSPopUpButton(frame: .zero, pullsDown: false)
-    let dragFormatControl = NSPopUpButton(frame: .zero, pullsDown: false)
     let dragFormatToggle = NSSegmentedControl(labels: FormatToggle.titles, trackingMode: .selectOne, target: nil, action: nil)
     let dragOriginalControl = NSButton(checkboxWithTitle: "Export at original size", target: nil, action: nil)
     let dragSizeLabel = NSTextField(labelWithString: "")
@@ -237,7 +215,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var windowZoomID: UUID?
     var visibilityZoomOrigin: CGRect?
     var animatesWindowZoom: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }
-    var actualButton: NSButton?
     var resizeButton: NSButton?
     let navigator = CanvasNavigator(frame: NSRect(x: 0, y: 0, width: 180, height: 170))
     var navigatorWindow: NSPanel?
@@ -273,9 +250,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var activeResizeSession: ResizePanelSession?
     var toolButtons: [SketchTool: NSButton] = [:]
     var modernChrome: NSView?
-    /// Launches a fresh instance; only `OpenSkitchMain` installs one, so tests and tools never spawn an app.
-    var relaunchRequest: ((URL) -> Void)?
-    var pendingRelaunch: URL?
     var currentURL: URL?
     var documentGeneration = UUID()
     var legacyMetadata = LegacyBridge.Metadata()
@@ -318,8 +292,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SkitchRedux", isDirectory: true)
     }()
 
-    var firstLaunchDocumentURL: URL? = Bundle.main.url(forResource: "firstlaunch", withExtension: "skitch")
-    var firstLaunchMarker: URL { support.appendingPathComponent("FirstLaunchDone") }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenus(); buildWindow()
@@ -328,8 +300,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         installHintMonitoring()
         NSColorPanel.shared.showsAlpha = true
         canvas.onChange = { [weak self] in self?.changed() }
-        canvas.onSound = { [weak self] name in self?.playOriginalSound(name) }
-        capture.onSound = { [weak self] name in self?.playOriginalSound(name) }
         canvas.onTextStyleRequested = { [weak self] in self?.chooseFont() }
         canvas.onTextStyleContextChange = { [weak self] in self?.syncFontPanelSelection(); self?.updateWipeButton() }
         canvas.onViewportEditCancelled = { [weak self] in
@@ -354,15 +324,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         let fixturePath = ProcessInfo.processInfo.environment["SKITCH_FIXTURE"]
         if let fixture = fixturePath { openURL(URL(fileURLWithPath: fixture)) }
-        else if recoveryData == nil, !FileManager.default.fileExists(atPath: firstLaunchMarker.path) {
-            // Original launch path (decompiled.c:7880-7893): the bundled firstlaunch.skitch loads once, unsaved.
-            if let welcome = firstLaunchDocumentURL {
-                openURL(welcome)
-                if currentURL != nil || nameField.stringValue != "Welcome" { currentURL = nil; nameField.stringValue = "Welcome" }
-                dirty = false; window.isDocumentEdited = false
-            }
-            try? Data().write(to: firstLaunchMarker, options: .atomic)
-        }
         updateStatus(); updateWipeButton()
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in self?.saveRecovery() } }
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
@@ -377,9 +338,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if let dumpDirectory = AppDelegate.eyeDumpDirectory() {
             DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runEyeDump(to: dumpDirectory) }
         }
-        if CommandLine.arguments.contains("--relaunch-smoke") {
-            DispatchQueue.main.asyncAfter(deadline: .now()+1) { self.runRelaunchSmoke() }
-        }
     }
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -387,7 +345,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         widthControl.endTracking(); closeDrawingColors()
         if windowZoom != nil { makeVisible() }
         saveRecovery()
-        guard allowDiscard(discardingForTermination: true) else { pendingRelaunch = nil; return .terminateCancel }
+        guard allowDiscard(discardingForTermination: true) else { return .terminateCancel }
         terminationStarted = true; decidingTermination = true
         shutdownPending = ["capture", "publishing", "photos", "history-deletion"]; shutdownError = nil
         historyRemoteDeletion.shutdown { [weak self] result in self?.acknowledgeShutdown("history-deletion", result: result) }
@@ -408,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func finishShutdownDecision() -> Bool {
         guard let failure = shutdownError else { return true }
-        terminationStarted = false; pendingRelaunch = nil
+        terminationStarted = false
         if discardedForTermination { dirty = true; window.isDocumentEdited = true }
         discardedForTermination = false; saveRecovery(); updateStatus()
         // Reply to AppKit before presenting an error about incomplete cleanup.
@@ -427,9 +385,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
         if let button = item.button {
-            button.image = NSImage(named: "menu")
-            button.alternateImage = NSImage(named: "menu-sel")
-            button.toolTip = "Click to show/hide Skitch"
+            let symbol = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "OpenSkitch")
+            symbol?.isTemplate = true
+            button.image = symbol
+            button.toolTip = "Click to show/hide OpenSkitch"
             button.setAccessibilityLabel("Show or hide OpenSkitch")
             button.target = self; button.action = #selector(showHide)
         }
@@ -443,7 +402,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             NSStatusBar.system.removeStatusItem(item); statusItem = nil
         } else if presence != 2 { installMenuPresence() }
     }
-    func playOriginalSound(_ name: String) { soundEffects.play(name, enabled: generalPreferences.state.playSounds) }
     func trackHint(_ view: NSView, owner: String, message: @escaping () -> String?) {
         let tracking = HintTrackingView(); tracking.translatesAutoresizingMaskIntoConstraints = false
         tracking.setAccessibilityElement(false)
@@ -554,12 +512,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if discardedForTermination { removeRecovery() }
         else { saveRecovery(finalizingTermination: true) }
         timer?.invalidate(); historyFollowTimer?.invalidate(); dragPreviewTimer?.invalidate(); navigatorTimer?.invalidate(); closeFontPanel(); try? hotkeys.unregister()
-        preferencesWindow?.orderOut(nil); soundEffects.stop()
+        preferencesWindow?.orderOut(nil)
         helpBevel?.shutdown()
         if let hintEventMonitor { NSEvent.removeMonitor(hintEventMonitor); self.hintEventMonitor = nil }
         removeDragThumbnail(); activeDragID = nil; visibilityZoomOrigin = nil
         if let statusItem { NSStatusBar.system.removeStatusItem(statusItem); self.statusItem = nil }
-        if let url = pendingRelaunch { pendingRelaunch = nil; relaunchRequest?(url) }
     }
     static func dragThumbnailRect(windowFrame: NSRect, controlRect: NSRect) -> NSRect {
         guard windowFrame.width > 0, windowFrame.height > 0 else { return .zero }
@@ -650,10 +607,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func stack(_ views: [NSView], horizontal: Bool = false) -> NSStackView {
         let s = NSStackView(views: views); s.orientation = horizontal ? .horizontal : .vertical; s.spacing = 12; s.alignment = horizontal ? .centerY : .leading; return s
     }
-    func recoveredImage(_ name: String) -> NSImage? {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
-    }
     func copiedMainMenuItem(_ action: Selector, title: String? = nil) -> NSMenuItem? {
         func find(_ menu: NSMenu) -> NSMenuItem? {
             for item in menu.items {
@@ -716,152 +669,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1024, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "OpenSkitch"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
-        if #available(macOS 26, *), Appearance.isModern { buildModernWindowContent(); return }
-        window.contentView = FrameChromeView(frame: window.contentView?.bounds ?? .zero)
-        guard let content = window.contentView else { return }
-        content.appearance = NSAppearance(named: .aqua)
-        (content as? FrameChromeView)?.usesRecoveredBezel = true
-        let toolbox = bezelToolbox()
-        let photos = button("Photos", #selector(showPhotos))
-        let companyLogo = NSImageView(); companyLogo.image = recoveredImage("OpenSkitch")
-        companyLogo.imageScaling = .scaleProportionallyUpOrDown
-        companyLogo.setAccessibilityLabel("OpenSkitch logo")
-        companyLogo.widthAnchor.constraint(equalToConstant: 32).isActive = true
-        companyLogo.heightAnchor.constraint(equalToConstant: 32).isActive = true
-        let companyName = label("OpenSkitch"); companyName.font = .systemFont(ofSize: 20, weight: .semibold)
-        companyName.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let title = stack([companyLogo, companyName], horizontal: true); title.spacing = 8
-        title.identifier = NSUserInterfaceItemIdentifier("OpenSkitchBrand")
-        let hide = button("Hide", #selector(vanish)); hide.image = recoveredImage("Hide"); hide.imagePosition = .imageLeading
-        let save = button("Save", #selector(saveHistory)); save.image = recoveredImage("SaveToHistoryArrow"); save.imagePosition = .imageTrailing
-        let leadingCommands = stack([hide, toolbox, photos], horizontal: true); leadingCommands.spacing = 8
-        let trailingCommands = stack([save, button("History", #selector(showHistory))], horizontal: true)
-        trailingCommands.spacing = 8
-        let top = NSView(); top.identifier = NSUserInterfaceItemIdentifier("OpenSkitchHeader")
-        for group in [leadingCommands, title, trailingCommands] {
-            group.translatesAutoresizingMaskIntoConstraints = false; top.addSubview(group)
-        }
-        NSLayoutConstraint.activate([
-            leadingCommands.leadingAnchor.constraint(equalTo: top.leadingAnchor),
-            trailingCommands.trailingAnchor.constraint(equalTo: top.trailingAnchor),
-            title.centerXAnchor.constraint(equalTo: top.centerXAnchor),
-            title.leadingAnchor.constraint(greaterThanOrEqualTo: leadingCommands.trailingAnchor, constant: 12),
-            trailingCommands.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 12),
-            leadingCommands.centerYAnchor.constraint(equalTo: top.centerYAnchor),
-            title.centerYAnchor.constraint(equalTo: top.centerYAnchor),
-            trailingCommands.centerYAnchor.constraint(equalTo: top.centerYAnchor)
-        ])
-        snapButton = button("Snap", #selector(snapButtonPressed))
-        (snapButton as? OriginalActionButton)?.alternateTarget = self
-        (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
-        snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-        snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imagePosition = .imageLeading
-        cancelFrameButton = button("Cancel", #selector(cancelFrame)); cancelFrameButton.isHidden = true
-        cancelFrameButton.image = recoveredImage("SnapCancel"); cancelFrameButton.imagePosition = .imageLeading
-        var sidebarViews: [NSView] = [label("Tools")]
-        let originalToolOrder: [SketchTool] = [.select, .brush, .line, .ellipse, .rectangle, .fill, .eraser, .text, .arrow]
-        for tool in originalToolOrder + [.crop] {
-            let b = ToolButton(title: tool == .crop ? "Crop" : "", target: self, action: #selector(chooseTool(_:)))
-            b.isBordered = false; b.font = .systemFont(ofSize: 18)
-            b.identifier = NSUserInterfaceItemIdentifier(tool.rawValue); b.setButtonType(.toggle)
-            let assets: [String: String] = ["select":"Cursor", "arrow":"Arrow", "line":"Line", "rectangle":"Rect", "ellipse":"Circle", "brush":"Brush", "text":"Text", "fill":"Fill", "eraser":"Eraser"]
-            if let asset = assets[tool.rawValue], let image = recoveredImage("ToolOff"+asset) {
-                b.image = image; b.alternateImage = recoveredImage("ToolOn"+asset); b.imagePosition = .imageOnly; b.imageScaling = .scaleNone
-            }
-            b.setAccessibilityLabel(tool.rawValue.capitalized); b.toolTip = tool.rawValue.capitalized + " tool"
-            b.widthAnchor.constraint(equalToConstant: 54).isActive = true; b.heightAnchor.constraint(equalToConstant: 34).isActive = true
-            sidebarViews.append(b); toolButtons[tool] = b
-            trackHint(b, owner: "tool-" + tool.rawValue) { OriginalHintMessages.hover(tool: tool) }
-        }
-        let sidebar = stack(sidebarViews); sidebar.spacing = 4; sidebar.alignment = .centerX
-        let sidebarRail = NSView(); sidebarRail.addSubview(sidebar)
-        sidebar.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([sidebar.leadingAnchor.constraint(equalTo: sidebarRail.leadingAnchor), sidebar.topAnchor.constraint(equalTo: sidebarRail.topAnchor), sidebar.widthAnchor.constraint(equalToConstant: 58)])
-        colorWell.color = OriginalDrawingControls.presets[0].color; colorWell.target = self; colorWell.action = #selector(changeColor(_:))
-        paletteButton.font = .systemFont(ofSize: 18); paletteButton.target = self; paletteButton.action = #selector(showDrawingColors(_:))
-        paletteButton.imagePosition = .imageLeading; paletteButton.setAccessibilityLabel("Drawing colors")
-        paletteButton.toolTip = "Hover for original preset colors; hold Shift to change the canvas background"
-        paletteButton.onHover = { [weak self] inside in self?.drawingColorHover(inside, palette: false) }
-        sizeLabel.font = .systemFont(ofSize: 18)
-        widthControl.target = self; widthControl.action = #selector(changeWidth(_:))
-        widthControl.widthAnchor.constraint(equalToConstant: 40).isActive = true; widthControl.heightAnchor.constraint(equalToConstant: 82).isActive = true
-        widthControl.onBegin = { [weak self] in
-            guard let self, !self.terminationStarted, !self.frameCaptureInProgress, self.window.attachedSheet == nil else { return false }
-            self.canvas.editingUndoManager.beginUndoGrouping(); self.sizeUndoGrouping = true; return true
-        }
-        widthControl.onEnd = { [weak self] in self?.endDrawingSizeGesture() }
-        let actual = button("Actual Size", #selector(toggleActualSize)); actualButton = actual
-        actual.setButtonType(.toggle); actual.image = recoveredImage("ActualSizeToggleOff"); actual.alternateImage = recoveredImage("ActualSizeToggleOn")
-        actual.imagePosition = .imageLeading
-        let numericResize = button("Resize…", #selector(resize)); resizeButton = numericResize
-        numericResize.image = recoveredImage("Resize"); numericResize.imagePosition = .imageLeading
-        let sizing = stack([actual, numericResize]); sizing.spacing = 4; sizing.alignment = .centerX
-        for control in [actual, numericResize] {
-            control.widthAnchor.constraint(equalToConstant: 142).isActive = true
-            control.heightAnchor.constraint(equalToConstant: 34).isActive = true
-        }
-        dragOriginalControl.title = "Original size"; dragOriginalControl.font = .systemFont(ofSize: 18)
-        dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
-        dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
-        dragOriginalControl.setAccessibilityLabel("Drag out at original size")
-        let wipeButton = button("Wipe", #selector(wipe))
-        trackHint(wipeButton, owner: "wipe") { OriginalHintMessages.hover(actionTag: 50) }
-        trackHint(widthControl, owner: "drawing-size") { OriginalHintMessages.hover(actionTag: 20) }
-        let font = button("Font", #selector(chooseFont)); font.image = recoveredImage("Font"); font.imagePosition = .imageLeading
-        let capture = stack([snapButton, cancelFrameButton]); capture.spacing = 4; capture.alignment = .centerX
-        for control in [snapButton!, cancelFrameButton!] {
-            control.widthAnchor.constraint(equalToConstant: 132).isActive = true
-            control.heightAnchor.constraint(equalToConstant: 34).isActive = true
-        }
-        let undoWipe = stack([button("Undo", #selector(undo)), wipeButton]); undoWipe.spacing = 4; undoWipe.alignment = .centerX
-        for control in undoWipe.arrangedSubviews {
-            control.widthAnchor.constraint(equalToConstant: 132).isActive = true
-            control.heightAnchor.constraint(equalToConstant: 30).isActive = true
-        }
-        let railSpace = NSView()
-        let right = stack([capture, paletteButton, font, sizeLabel, widthControl, dragOriginalControl, railSpace, undoWipe])
-        right.spacing = 4; right.alignment = .centerX
-        for control in right.arrangedSubviews where control is NSButton || control is NSPopUpButton {
-            control.widthAnchor.constraint(equalToConstant: 132).isActive = true; control.heightAnchor.constraint(equalToConstant: 30).isActive = true
-        }
-        let rightRail = NSView(); rightRail.addSubview(right)
-        right.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([right.leadingAnchor.constraint(equalTo: rightRail.leadingAnchor), right.topAnchor.constraint(equalTo: rightRail.topAnchor), right.widthAnchor.constraint(equalToConstant: 138)])
-        right.bottomAnchor.constraint(equalTo: rightRail.bottomAnchor).isActive = true
-        let scroll = NSScrollView(); scroll.documentView = canvas; scroll.hasHorizontalScroller = true; scroll.hasVerticalScroller = true; scroll.autohidesScrollers = true; scroll.backgroundColor = .windowBackgroundColor
-        (content as? FrameChromeView)?.canvasScrollView = scroll
-        nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"; nameField.widthAnchor.constraint(greaterThanOrEqualToConstant: 160).isActive = true
-        zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"]); for (index,item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25,0.5,0.75,1,1.5,2][index] }; zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18); zoomControl.target = self; zoomControl.action = #selector(changeZoom(_:)); zoomControl.setAccessibilityLabel("Canvas zoom")
-        zoomControl.widthAnchor.constraint(equalToConstant: 160).isActive = true
-        let drag = DragExportView(); dragExportView = drag; drag.widthAnchor.constraint(equalToConstant: 115).isActive = true; drag.heightAnchor.constraint(equalToConstant: 50).isActive = true
-        configureDragExport(drag)
-        let webpost = button("Webpost…", #selector(share(_:))); webpost.font = .systemFont(ofSize: 20); webpost.setAccessibilityLabel("Upload to destination")
-        configureWebpostButton(webpost)
-        dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
-        dragFormatControl.font = .systemFont(ofSize: 20); dragFormatControl.widthAnchor.constraint(equalToConstant: 176).isActive = true
-        dragFormatControl.setAccessibilityLabel("Drag Me format")
-        for item in dragFormatControl.itemArray { item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)]) }
-        dragFormatControl.target = self; dragFormatControl.action = #selector(changeDragOptions(_:))
-        let choice = UserDefaults.standard.integer(forKey: "DragFormatChoice")
-        dragFormatControl.selectItem(at: (0..<dragFormatControl.numberOfItems).contains(choice) ? choice : 0)
-        let bottom = stack([nameField, dragFormatControl, drag, webpost], horizontal: true); bottom.spacing = 8
-        dragSizeLabel.font = .systemFont(ofSize: 18); dragSizeLabel.lineBreakMode = .byTruncatingTail
-        status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
-        let options = stack([zoomControl, dragSizeLabel, status], horizontal: true); options.spacing = 12
-        status.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        for v in [top, sidebarRail, rightRail, scroll, sizing, bottom, options] { v.translatesAutoresizingMaskIntoConstraints = false; content.addSubview(v) }
-        NSLayoutConstraint.activate([
-            top.topAnchor.constraint(equalTo: content.topAnchor, constant: 8), top.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), top.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), top.heightAnchor.constraint(equalToConstant: 36),
-            sidebarRail.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 6), sidebarRail.topAnchor.constraint(equalTo: top.bottomAnchor, constant: 8), sidebarRail.widthAnchor.constraint(equalToConstant: 62), sidebarRail.bottomAnchor.constraint(equalTo: sizing.topAnchor, constant: -8),
-            rightRail.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -6), rightRail.topAnchor.constraint(equalTo: sidebarRail.topAnchor), rightRail.widthAnchor.constraint(equalToConstant: 142), rightRail.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
-            scroll.leadingAnchor.constraint(equalTo: sidebarRail.trailingAnchor, constant: 8), scroll.trailingAnchor.constraint(equalTo: rightRail.leadingAnchor, constant: -8), scroll.topAnchor.constraint(equalTo: sidebarRail.topAnchor), scroll.bottomAnchor.constraint(equalTo: sidebarRail.bottomAnchor),
-            sizing.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), sizing.bottomAnchor.constraint(equalTo: options.topAnchor, constant: -4), sizing.heightAnchor.constraint(equalToConstant: 72), sizing.widthAnchor.constraint(equalToConstant: 142),
-            bottom.leadingAnchor.constraint(equalTo: sizing.trailingAnchor, constant: 12), bottom.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), bottom.centerYAnchor.constraint(equalTo: sizing.centerYAnchor), bottom.heightAnchor.constraint(equalToConstant: 50),
-            options.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12), options.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12), options.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8), options.heightAnchor.constraint(equalToConstant: 30)
-        ])
-        content.addSubview(canvasBorder)
-        wireEditorChrome(scroll: scroll)
-        setTool(.arrow)
+        buildModernWindowContent()
     }
     func configureDragExport(_ drag: DragExportView) {
         drag.prepare = { [weak self] in
@@ -932,10 +740,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         close.target = self; file.insertItem(close, at: 3)
         let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
         setup.target = self; file.insertItem(setup, at: file.numberOfItems - 1)
-        if modernChrome == nil, Appearance.isModern, #available(macOS 26, *) {
-            let rename = NSMenuItem(title: "Rename…", action: #selector(renameDocument), keyEquivalent: "")
-            rename.target = self; file.insertItem(rename, at: (file.items.firstIndex { $0.title == "Save As…" } ?? 3) + 1)
-        }
+        let rename = NSMenuItem(title: "Rename…", action: #selector(renameDocument), keyEquivalent: "")
+        rename.target = self; file.insertItem(rename, at: (file.items.firstIndex { $0.title == "Save As…" } ?? 3) + 1)
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
         let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Add Shadow", #selector(addShadow), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Skitch Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
@@ -967,7 +773,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let minimize = NSMenuItem(title: "Minimize", action: #selector(vanish), keyEquivalent: "m")
         minimize.target = self; windows.insertItem(minimize, at: 0)
         for m in [appMenu, file, edit, image, drawing, text, snap, windows] { let i = NSMenuItem(); i.submenu = m; bar.addItem(i) }
-        if #available(macOS 26, *), Appearance.isModern { MenuSymbols.apply(to: bar) }
+        MenuSymbols.apply(to: bar)
         NSApp.mainMenu = bar; NSApp.windowsMenu = windows
     }
     @objc func changeSmoothing(_ sender: NSMenuItem) {
@@ -1046,9 +852,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         widthControl.doubleValue = Double(canvas.strokeWidth)
         sizeLabel.stringValue = "Size · " + String(format: "%.0f", widthControl.doubleValue.rounded())
         // Modern has no visible Size text; the slider carries the value in its tooltip (VoiceOver reads its accessibilityValue).
-        if modernChrome != nil { widthControl.toolTip = "Size " + String(format: "%.0f", widthControl.doubleValue.rounded()) }
+        widthControl.toolTip = "Size " + String(format: "%.0f", widthControl.doubleValue.rounded())
         let indicatorColor = canvas.strokeColor
-        let swatchSize = modernChrome == nil ? NSSize(width: 22, height: 18) : NSSize(width: 28, height: 22)
+        let swatchSize = NSSize(width: 28, height: 22)
         paletteButton.image = NSImage(size: swatchSize, flipped: false) { rect in
             NSColor.white.setFill(); rect.fill()
             indicatorColor.setFill(); rect.insetBy(dx: 1, dy: 1).fill()
@@ -1101,7 +907,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         colorOpenedByHover = hover
         let view = BezelHoverPaletteView(frame: NSRect(x: 0, y: 0, width: 246, height: 140))
         view.onHover = { [weak self] inside in self?.drawingColorHover(inside, palette: true) }
-        if modernChrome == nil { view.appearance = NSAppearance(named: .aqua) }
         let title = label("Drawing colors"); title.frame = NSRect(x: 12, y: 108, width: 222, height: 25); view.addSubview(title)
         presetColorButtons.removeAll()
         for (index, preset) in OriginalDrawingControls.presets.enumerated() {
@@ -1117,7 +922,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         custom.frame = NSRect(x: 12, y: 2, width: 222, height: 30); custom.tag = 110; view.addSubview(custom)
         let controller = NSViewController(); controller.view = view
         let popover = NSPopover(); popover.behavior = .transient; popover.contentViewController = controller
-        if modernChrome == nil { popover.appearance = NSAppearance(named: .aqua) }
         colorPopover = popover; syncDrawingControls()
         popover.show(relativeTo: paletteButton.bounds, of: paletteButton, preferredEdge: .minX)
         writeLayoutEvidence()
@@ -1216,20 +1020,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         else { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
         updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
-        if modernChrome != nil { return FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).format }
-        let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
-        return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
+        FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).format
     }
     var dragQuality: Double {
-        if modernChrome != nil { return FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).quality }
-        let values = [1.0, 1.0, 0.8, 0.6, 0.3, 0.1]
-        return values.indices.contains(dragFormatControl.indexOfSelectedItem) ? values[dragFormatControl.indexOfSelectedItem] : 0.6
+        FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).quality
     }
     @objc func changeDragOptions(_ sender: Any?) {
-        if modernChrome != nil {
-            let current = UserDefaults.standard.integer(forKey: FormatToggle.defaultsKey)
-            UserDefaults.standard.set(FormatToggle.storedChoice(forSegment: dragFormatToggle.selectedSegment, current: current), forKey: FormatToggle.defaultsKey)
-        } else { UserDefaults.standard.set(dragFormatControl.indexOfSelectedItem, forKey: "DragFormatChoice") }
+        let current = UserDefaults.standard.integer(forKey: FormatToggle.defaultsKey)
+        UserDefaults.standard.set(FormatToggle.storedChoice(forSegment: dragFormatToggle.selectedSegment, current: current), forKey: FormatToggle.defaultsKey)
         UserDefaults.standard.set(dragOriginalControl.state == .on, forKey: "DragOriginalSize")
         scheduleDragPreview()
     }
@@ -1490,8 +1288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard let data = view.imageData(format: format, jpegQuality: historyJPEGQuality) else { throw HistoryStore.Failure.missing }
         return data
     }
-    /// Modern writes every JPG at the toggle's fixed quality; Classic keeps its 0.7 default.
-    var historyJPEGQuality: Double { modernChrome != nil ? FormatToggle.jpgQuality : 0.7 }
+    /// Every JPG is written at the toggle's fixed quality.
+    var historyJPEGQuality: Double { FormatToggle.jpgQuality }
     func copyHistory(_ ids: [UUID]) {
         do {
             guard let id = ids.first else { return }
@@ -1565,11 +1363,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return encoded
     }
     func exportPanelAccessory() -> ExportAccessory {
-        let modern = modernChrome != nil
-        let options = ExportAccessory(format: modern ? dragFormat : UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
+        let options = ExportAccessory(format: dragFormat,
             originalSize: UserDefaults.standard.bool(forKey: "ExportOriginalSize"),
             jpegQuality: UserDefaults.standard.object(forKey: "ExportQuality") as? Double ?? 0.7)
-        if modern { options.fixedJPEGQuality = FormatToggle.jpgQuality }
+        options.fixedJPEGQuality = FormatToggle.jpgQuality
         return options
     }
     func exportPanelData(_ options: ExportAccessory) throws -> Data {
@@ -1706,7 +1503,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let form = GeneralPreferencesForm(state: generalPreferences.state)
             form.onChange = { [weak self] in self?.applyGeneralPreferences($0) }
             form.onDone = { [weak self] in self?.closePreferences() }
-            form.onRelaunch = { [weak self] in self?.relaunch() }
             form.onShortcuts = { [weak self] in
                 guard let self, !self.terminationStarted else { return }
                 self.hotkeys.showSettings(attachedTo: self.preferencesWindow)
@@ -1730,15 +1526,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.arrowHeadPreference = UserDefaults.standard.integer(forKey: OriginalArrowGeometry.preferenceKey)
         preferencesForm?.synchronize(saved)
         if saved.statusMenu != previous.statusMenu { applyPresencePolicy() }
-        if !saved.playSounds { soundEffects.stop() }
         helpBevel?.enabled = saved.showKeyboardTips
-    }
-    /// Quits through the normal Save/Discard decision; the fresh instance starts only once this one has released its global shortcuts.
-    func relaunch() {
-        guard !terminationStarted, allowDiscard(discardingForTermination: true) else { return }
-        saveRecovery()
-        pendingRelaunch = Bundle.main.bundleURL
-        NSApp.terminate(nil)
     }
     func closePreferences() {
         guard let panel = preferencesWindow, panel.attachedSheet == nil else { return }
@@ -1755,9 +1543,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func shortcutSettings() { hotkeys.showSettings(attachedTo: window) }
     @objc func sharingSettings() { publishing.showSettings(relativeTo: window) }
-    /// Modern uploads in the footer toggle's format; Classic keeps uploading PNG.
+    /// Uploads use the footer toggle's format.
     var uploadEncoding: (format: String, quality: Double, fileExtension: String) {
-        guard modernChrome != nil else { return ("png", 0.7, "png") }
         return (dragFormat, dragQuality, dragFormat == "jpeg" ? "jpg" : "png")
     }
     func uploadPayload() -> (Data, String)? {
@@ -1844,7 +1631,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
             preferencesWindow?.orderOut(nil)
             followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; adoptRasterViewport(); nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
-            playOriginalSound("snap")
             afterInstalling?()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
@@ -1913,16 +1699,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         canvas.framePreview = true
         snapButton.cancelOperation(nil)
         snapButton.title = "Snap Frame"
-        if modernChrome == nil { snapButton.image = recoveredImage("SnapSnap"); snapButton.imageScaling = .scaleProportionallyDown }
         (snapButton as? OriginalActionButton)?.alternateAction = nil
         snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
         cancelFrameButton.isHidden = false
         setModernFrameMode(true)
         let fullStatus = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
-        if modernChrome != nil {
-            status.stringValue = keepingAnnotations ? "Frame: Snap keeps your drawing" : "Frame: position the window, then Snap"
-            status.toolTip = fullStatus
-        } else { status.stringValue = fullStatus }
+        status.stringValue = keepingAnnotations ? "Frame: Snap keeps your drawing" : "Frame: position the window, then Snap"
+        status.toolTip = fullStatus
     }
     @objc func cancelFrame() {
         guard !frameCaptureInProgress else { return }
@@ -1941,7 +1724,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.backgroundColor = frameWindowBackground
         canvas.enclosingScrollView?.drawsBackground = frameScrollDrewBackground
         snapButton.title = "Snap"
-        if modernChrome == nil { snapButton.image = recoveredImage("SnapCrosshair"); snapButton.imageScaling = .scaleNone }
         (snapButton as? OriginalActionButton)?.alternateAction = #selector(fullscreenSnap)
         snapButton.toolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
         cancelFrameButton.isHidden = true
@@ -2196,23 +1978,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             dirty = false; NSApp.terminate(nil)
         }
     }
-    /// Clicks the real Preferences Relaunch button; tools/test-native-startup.py checks that a new process replaces this one.
-    func runRelaunchSmoke() {
-        showPreferences()
-        func find(_ identifier: String, in view: NSView) -> NSView? {
-            if view.identifier?.rawValue == identifier { return view }
-            let tabbed = (view as? NSTabView)?.tabViewItems.compactMap(\.view) ?? []
-            for child in view.subviews + tabbed { if let match = find(identifier, in: child) { return match } }
-            return nil
-        }
-        dirty = false
-        guard let form = preferencesForm, let relaunch = find("appearanceRelaunch", in: form) as? NSButton else {
-            let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? NSTemporaryDirectory())
-            try? Data("FAILED: Preferences has no Relaunch button\n".utf8).write(to: dir.appendingPathComponent("relaunch-smoke-result.txt"))
-            NSApp.terminate(nil); return
-        }
-        relaunch.performClick(nil)
-    }
     func writeLayoutEvidence() {
         let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? support.path
         window.contentView?.layoutSubtreeIfNeeded()
@@ -2229,7 +1994,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                   "frames": windowZoom?.frameCount ?? 0,
                                   "restoring": windowZoom?.direction == .restore]
         evidence["visibilityZoomOrigin"] = NSStringFromRect(visibilityZoomOrigin ?? .zero)
-        evidence["appearance"] = ["style": Appearance.current.rawValue, "modernChrome": modernChrome != nil]
+        evidence["appearance"] = ["modernChrome": modernChrome != nil]
         evidence["toolButtons"] = SketchTool.allCases.compactMap { tool -> [String: Any]? in
             guard let button = toolButtons[tool] else { return nil }
             return ["tool": tool.rawValue, "fontSize": button.font?.pointSize ?? 0,
@@ -2262,8 +2027,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                            "customRGBA": [custom.red,custom.green,custom.blue,custom.alpha],
                                            "popoverShown": colorPopover?.isShown ?? false, "sizeUndoGrouping": sizeUndoGrouping,
                                            "hoverOpened": colorOpenedByHover, "controlHovered": colorControlHovered, "paletteHovered": colorPaletteHovered]
-            evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize),
-                                       "recoveredArtwork": (content as? FrameChromeView)?.usesRecoveredBezel ?? false]
+            evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize)]
             if let header = (modernChrome ?? content).subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
                let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) {
                 let frame = brand.convert(brand.bounds, to: content)
@@ -2286,44 +2050,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 }
 
-/// Starts the fresh instance for Relaunch. The caller is quitting, and a process that exits before LaunchServices
-/// accepts the request can take it along, so this returns only once the request is acknowledged or `timeout` passes.
-enum RelaunchLauncher {
-    typealias Completion = @Sendable (NSRunningApplication?, Error?) -> Void
-    typealias Opener = (URL, NSWorkspace.OpenConfiguration, @escaping Completion) -> Void
-    private final class Acknowledgement: @unchecked Sendable {
-        let signal = DispatchSemaphore(value: 0)
-        var error: Error?
-    }
-    static let launchServices: Opener = { url, configuration, completion in
-        NSWorkspace.shared.openApplication(at: url, configuration: configuration, completionHandler: completion)
-    }
-    /// Only where the new instance keeps its data and evidence survives a relaunch. SKITCH_APPEARANCE would override the
-    /// choice just made in Preferences, which is the whole reason to relaunch, and SKITCH_FIXTURE would reopen the fixture
-    /// over the recovered drawing.
-    static let inheritedKeys: Set<String> = ["SKITCH_APP_SUPPORT", "SKITCH_EVIDENCE_DIR"]
-    static func inheritedEnvironment(_ environment: [String: String]) -> [String: String] {
-        environment.filter { inheritedKeys.contains($0.key) }
-    }
-    @MainActor
-    @discardableResult
-    static func launch(_ url: URL, environment: [String: String] = ProcessInfo.processInfo.environment,
-                       timeout: TimeInterval = 5, open: Opener = launchServices) -> Bool {
-        let configuration = NSWorkspace.OpenConfiguration()
-        configuration.createsNewApplicationInstance = true
-        configuration.environment = inheritedEnvironment(environment)
-        let acknowledgement = Acknowledgement()
-        open(url, configuration) { _, error in acknowledgement.error = error; acknowledgement.signal.signal() }
-        let deadline = Date(timeIntervalSinceNow: timeout)
-        // Waiting in short slices while draining the main run loop also covers a completion delivered on the main queue.
-        while acknowledgement.signal.wait(timeout: .now() + .milliseconds(10)) == .timedOut {
-            guard Date() < deadline else { return false }
-            RunLoop.current.run(mode: .default, before: Date())
-        }
-        return acknowledgement.error == nil
-    }
-}
-
 @main
 @MainActor
 enum OpenSkitchMain {
@@ -2331,9 +2057,6 @@ enum OpenSkitchMain {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let delegate = AppDelegate()
-        delegate.relaunchRequest = { url in
-            if !RelaunchLauncher.launch(url) { NSLog("OpenSkitch could not start the relaunched instance at %@", url.path) }
-        }
         app.delegate = delegate
         withExtendedLifetime(delegate) { app.run() }
     }

@@ -8,7 +8,7 @@ SNAPSHOT=$(mktemp -d "$ROOT/build/source-snapshot.XXXXXX")
 cp "$ROOT"/Sources/*.swift "$SNAPSHOT/"
 cp "$ROOT/Info.plist" "$SNAPSHOT/Info.plist"
 for ARCH in arm64; do
-  xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
+  xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx26.0" -framework AppKit -framework WebKit -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
 done
 cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
 cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"

@@ -3,17 +3,15 @@ import AppKit
 extension AppDelegate {
     /// Frame mode already shows and hides Cancel in AppDelegate; the chrome mirrors it into the glass layer.
     func setModernFrameMode(_ on: Bool) {
-        if #available(macOS 26, *) {
-            let chrome = modernChrome as? ModernEditorChrome
-            chrome?.frameMode = on
-            chrome?.syncSnapPresentation()
-            if !on { status.toolTip = nil }
-        }
+        let chrome = modernChrome as? ModernEditorChrome
+        chrome?.frameMode = on
+        chrome?.syncSnapPresentation()
+        if !on { status.toolTip = nil }
     }
 
     /// The Drag Me thumbnail doubles as the canvas bleed under the rails.
     func feedCanvasBleed() {
-        if #available(macOS 26, *) { (modernChrome as? ModernEditorChrome)?.updateCanvasBleed(dragExportView?.overview) }
+        (modernChrome as? ModernEditorChrome)?.updateCanvasBleed(dragExportView?.overview)
     }
 
     /// Modern has no name field: the window title is the document name.
@@ -22,27 +20,23 @@ extension AppDelegate {
         window.title = trimmed.isEmpty ? "OpenSkitch" : trimmed
     }
 
-    /// What this process's window is built from, so tools/test-native-startup.py can tell a pinned appearance
-    /// that really produced its chrome from one that silently fell back.
+    /// What this process's window is built from, so tools/test-native-startup.py can tell the glass chrome really built.
     func appearanceEvidence() -> [String: Any] {
         var glassSurfaces = 0
-        if #available(macOS 26, *) {
-            func count(_ view: NSView) {
-                if view is NSGlassEffectView { glassSurfaces += 1 }
-                view.subviews.forEach(count)
-            }
-            if let content = window.contentView { count(content) }
+        func count(_ view: NSView) {
+            if view is NSGlassEffectView { glassSurfaces += 1 }
+            view.subviews.forEach(count)
         }
-        return ["style": Appearance.current.rawValue, "modernChrome": modernChrome != nil,
+        if let content = window.contentView { count(content) }
+        return ["modernChrome": modernChrome != nil,
                 "toolButtonClass": toolButtons[.brush].map { String(describing: type(of: $0)) } ?? "none",
                 "glassSurfaces": glassSurfaces]
     }
 }
 
-@available(macOS 26, *)
 extension AppDelegate {
     /// The Modern counterpart of buildWindow(): the same controls and behaviors, laid out by ModernEditorChrome.
-    /// Classic's size constraints are not copied; the chrome sizes the shared controls and owns the canvas border.
+    /// The chrome sizes the shared controls and owns the canvas border.
     func buildModernWindowContent() {
         FontAwesomeFont.registerBundledFonts()
         window.minSize.width = max(window.minSize.width, ModernEditorChrome.minimumWindowWidth)

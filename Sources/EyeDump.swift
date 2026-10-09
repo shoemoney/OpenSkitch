@@ -21,7 +21,7 @@ extension AppDelegate {
             pump()
             target.contentView?.layoutSubtreeIfNeeded()
             let options: CGWindowImageOption = [.boundsIgnoreFraming, .bestResolution]
-            if let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(target.windowNumber), options),
+            if let image = windowListImage(.null, .optionIncludingWindow, CGWindowID(target.windowNumber), options),
                image.width > 1, image.height > 1,
                let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
                 try? data.write(to: dir.appendingPathComponent(name + ".png")); return

@@ -21,7 +21,7 @@
 	<key>CFBundleIconName</key>
 	<string>OpenSkitch</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
+	<string>26.0</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSScreenCaptureUsageDescription</key>

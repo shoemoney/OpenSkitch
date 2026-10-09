@@ -6,23 +6,19 @@ struct GeneralPreferencesState: Equatable {
     var drawingPrecision: StrokeSmoothing
     var arrowHead: Int
     var includeSkitch: Bool
-    var playSounds: Bool
     var statusMenu: Int
     var showToolTips: Bool
     var showKeyboardTips: Bool
-    var appearance: AppearanceStyle
 
     init(drawingPrecision: StrokeSmoothing, arrowHead: Int, includeSkitch: Bool,
-         playSounds: Bool, statusMenu: Int, showToolTips: Bool = false,
-         showKeyboardTips: Bool = false, appearance: AppearanceStyle = .classic) {
+         statusMenu: Int, showToolTips: Bool = false,
+         showKeyboardTips: Bool = false) {
         self.drawingPrecision = drawingPrecision
         self.arrowHead = arrowHead
         self.includeSkitch = includeSkitch
-        self.playSounds = playSounds
         self.statusMenu = statusMenu
         self.showToolTips = showToolTips
         self.showKeyboardTips = showKeyboardTips
-        self.appearance = appearance
     }
 }
 
@@ -33,26 +29,19 @@ final class GeneralPreferencesForm: NSView {
     var onDone: (() -> Void)?
     var onShortcuts: (() -> Void)?
     var onSharing: (() -> Void)?
-    var onRelaunch: (() -> Void)?
 
-    private let modernAvailable: Bool
     private var state: GeneralPreferencesState
     private var precisionButtons: [NSButton] = []
     private var arrowButtons: [NSButton] = []
     private var visibilityButtons: [NSButton] = []
-    private var appearanceButtons: [NSButton] = []
     private let snap = NSButton(checkboxWithTitle: "Show Skitch window in fullscreen and crosshairs Snap", target: nil, action: nil)
-    private let sounds = NSButton(checkboxWithTitle: "Play sounds", target: nil, action: nil)
     private let toolTips = NSButton(checkboxWithTitle: "Show tool tip overlays", target: nil, action: nil)
     private let keyboardTips = NSButton(checkboxWithTitle: "Show keyboard tip overlay", target: nil, action: nil)
-    private let appearanceNote = NSTextField(wrappingLabelWithString: "Takes effect the next time OpenSkitch opens.")
 
     override var intrinsicContentSize: NSSize { NSSize(width: 780, height: 570) }
 
-    /// The Appearance row only exists where Modern can run; elsewhere the form keeps Classic.
-    init(state: GeneralPreferencesState, modernAvailable: Bool = AppearanceResolver().supportsModern) {
+    init(state: GeneralPreferencesState) {
         self.state = state
-        self.modernAvailable = modernAvailable
         super.init(frame: NSRect(x: 0, y: 0, width: 780, height: 570))
         identifier = NSUserInterfaceItemIdentifier("generalPreferences")
         widthAnchor.constraint(greaterThanOrEqualToConstant: 650).isActive = true
@@ -65,21 +54,6 @@ final class GeneralPreferencesForm: NSView {
         visibilityButtons = [radio("Dock", tag: 2, action: #selector(changeVisibility(_:))),
                              radio("Menu bar", tag: 1, action: #selector(changeVisibility(_:))),
                              radio("Both", tag: 0, action: #selector(changeVisibility(_:)))]
-        appearanceButtons = [radio("Modern", tag: 1, action: #selector(changeAppearance(_:))),
-                             radio("Classic", tag: 0, action: #selector(changeAppearance(_:)))]
-        appearanceNote.identifier = NSUserInterfaceItemIdentifier("appearanceNote")
-        appearanceNote.font = .systemFont(ofSize: 18)
-        appearanceNote.textColor = .labelColor
-        appearanceNote.setContentCompressionResistancePriority(.required, for: .vertical)
-        for (choice, name) in zip(appearanceButtons, ["Modern", "Classic"]) {
-            choice.identifier = NSUserInterfaceItemIdentifier("appearance" + name)
-            choice.setAccessibilityLabel(name + " appearance")
-            choice.setAccessibilityHelp(appearanceNote.stringValue)
-        }
-        let relaunch = button("Relaunch OpenSkitch", action: #selector(requestRelaunch))
-        relaunch.identifier = NSUserInterfaceItemIdentifier("appearanceRelaunch")
-        let appearanceChoices = vertical([horizontal(appearanceButtons), appearanceNote, relaunch], spacing: 4)
-        appearanceChoices.isHidden = !modernAvailable
         let help = NSTextField(wrappingLabelWithString: "Holding Option reverses the setting.")
         help.font = .systemFont(ofSize: 18)
         help.textColor = .labelColor
@@ -92,8 +66,6 @@ final class GeneralPreferencesForm: NSView {
         snap.cell?.lineBreakMode = .byWordWrapping
         // Two comfortable lines at the minimum width, without reducing the font.
         snap.heightAnchor.constraint(equalToConstant: 60).isActive = true
-        configure(sounds, action: #selector(changeSounds(_:)))
-        sounds.identifier = NSUserInterfaceItemIdentifier("playSounds")
         configure(toolTips, action: #selector(changeToolTips(_:)))
         toolTips.identifier = NSUserInterfaceItemIdentifier("showToolTips")
         configure(keyboardTips, action: #selector(changeKeyboardTips(_:)))
@@ -104,8 +76,7 @@ final class GeneralPreferencesForm: NSView {
         tabs.identifier = NSUserInterfaceItemIdentifier("preferencesTabs")
         tabs.font = .systemFont(ofSize: 20)
         tabs.translatesAutoresizingMaskIntoConstraints = false
-        var general: [NSView] = [sounds, toolTips, keyboardTips, row("Show Skitch in:", choices: horizontal(visibilityButtons))]
-        if modernAvailable { general.append(row("Appearance:", choices: appearanceChoices)) }
+        let general: [NSView] = [toolTips, keyboardTips, row("Show Skitch in:", choices: horizontal(visibilityButtons))]
         // Recovered MainMenu.nib ownership, rather than the older help image.
         let sections: [(String, [NSView])] = [
             ("General", general),
@@ -115,8 +86,7 @@ final class GeneralPreferencesForm: NSView {
         ]
         for (title, rows) in sections {
             let host = NSView()
-            // The extra row would overflow General at the 500 pt minimum height with the usual 20 pt gaps.
-            let content = vertical(rows, spacing: title == "General" && modernAvailable ? 12 : 20)
+            let content = vertical(rows, spacing: 20)
             host.addSubview(content)
             NSLayoutConstraint.activate([
                 content.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 20),
@@ -161,16 +131,13 @@ final class GeneralPreferencesForm: NSView {
         var normalized = state
         if ![1, 2].contains(normalized.arrowHead) { normalized.arrowHead = 2 }
         if ![0, 1, 2].contains(normalized.statusMenu) { normalized.statusMenu = 0 }
-        if !modernAvailable { normalized.appearance = .classic }
         self.state = normalized
         let precision: Int
         switch normalized.drawingPrecision { case .precise: precision = 0; case .medium: precision = 1; case .loose: precision = 2 }
         select(precisionButtons, tag: precision)
         select(arrowButtons, tag: normalized.arrowHead)
         select(visibilityButtons, tag: normalized.statusMenu)
-        select(appearanceButtons, tag: normalized.appearance == .modern ? 1 : 0)
         snap.state = normalized.includeSkitch ? .on : .off
-        sounds.state = normalized.playSounds ? .on : .off
         toolTips.state = normalized.showToolTips ? .on : .off
         keyboardTips.state = normalized.showKeyboardTips ? .on : .off
     }
@@ -247,11 +214,8 @@ final class GeneralPreferencesForm: NSView {
     @objc private func changeArrow(_ sender: NSButton) { state.arrowHead = sender.tag; publish() }
     @objc private func changeVisibility(_ sender: NSButton) { state.statusMenu = sender.tag; publish() }
     @objc private func changeSnap(_ sender: NSButton) { state.includeSkitch = sender.state == .on; publish() }
-    @objc private func changeSounds(_ sender: NSButton) { state.playSounds = sender.state == .on; publish() }
     @objc private func changeToolTips(_ sender: NSButton) { state.showToolTips = sender.state == .on; publish() }
     @objc private func changeKeyboardTips(_ sender: NSButton) { state.showKeyboardTips = sender.state == .on; publish() }
-    @objc private func changeAppearance(_ sender: NSButton) { state.appearance = sender.tag == 1 ? .modern : .classic; publish() }
-    @objc private func requestRelaunch() { onRelaunch?() }
     @objc private func requestDone() { onDone?() }
     @objc private func requestShortcuts() { onShortcuts?() }
     @objc private func requestSharing() { onSharing?() }

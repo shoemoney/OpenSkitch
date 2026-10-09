@@ -32,7 +32,6 @@ enum MenuSymbols {
     /// Test seam for a symbol that is missing on the host.
     static var symbolImage: (String) -> NSImage? = { NSImage(systemSymbolName: $0, accessibilityDescription: nil) }
 
-    @available(macOS 26, *)
     static func apply(to menu: NSMenu) {
         for item in menu.items where !item.isSeparatorItem {
             if item.image == nil, let action = item.action, let name = map[action], let image = symbolImage(name) {
