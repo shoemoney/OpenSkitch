@@ -1,5 +1,13 @@
 import AppKit
 
+/// `CGWindowListCreateImage` is obsoleted for macOS 15+ targets in the SDK but still present at runtime; resolved
+/// by name so the 26.0 target builds. A ScreenCaptureKit migration would replace this.
+private func legacyWindowListImage(_ rect: CGRect, _ list: CGWindowListOption, _ window: CGWindowID, _ options: CGWindowImageOption) -> CGImage? {
+    typealias Function = @convention(c) (CGRect, CGWindowListOption, CGWindowID, CGWindowImageOption) -> Unmanaged<CGImage>?
+    guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil }
+    return unsafeBitCast(symbol, to: Function.self)(rect, list, window, options)?.takeRetainedValue()
+}
+
 /// `--eye-dump <outdir>`: saves PNGs of the app's own windows for repeatable visual review, then quits.
 extension AppDelegate {
     /// The dump draws on the live canvas and quits clean, which would delete the real recovery file,
@@ -21,7 +29,7 @@ extension AppDelegate {
             pump()
             target.contentView?.layoutSubtreeIfNeeded()
             let options: CGWindowImageOption = [.boundsIgnoreFraming, .bestResolution]
-            if let image = CGWindowListCreateImage(.null, .optionIncludingWindow, CGWindowID(target.windowNumber), options),
+            if let image = legacyWindowListImage(.null, .optionIncludingWindow, CGWindowID(target.windowNumber), options),
                image.width > 1, image.height > 1,
                let data = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) {
                 try? data.write(to: dir.appendingPathComponent(name + ".png")); return
