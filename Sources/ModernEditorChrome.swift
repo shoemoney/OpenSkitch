@@ -240,7 +240,7 @@ final class ModernEditorChrome: NSView {
         let logo = NSImageView()
         logo.image = controls.brandLogo
         logo.imageScaling = .scaleProportionallyUpOrDown
-        logo.setAccessibilityLabel("ShoeMoney logo")
+        logo.setAccessibilityLabel("OpenSkitch logo")
         let name = NSTextField(labelWithString: "OpenSkitch")
         name.font = .systemFont(ofSize: Metrics.labelPointSize, weight: .semibold)
         name.setContentCompressionResistancePriority(.required, for: .horizontal)

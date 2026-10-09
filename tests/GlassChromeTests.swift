@@ -797,7 +797,7 @@ private enum GlassChromeTests {
         expect(chrome.header.identifier?.rawValue == "OpenSkitchHeader", "\(label): header identifier")
         let brand = chrome.header.subviews.first { $0.identifier?.rawValue == "OpenSkitchBrand" } as? NSStackView
         let logo = brand?.arrangedSubviews.first as? NSImageView, name = brand?.arrangedSubviews.last as? NSTextField
-        expect(logo?.accessibilityLabel() == "ShoeMoney logo" && logo?.image === rig.controls.brandLogo, "\(label): logo keeps the classic label")
+        expect(logo?.accessibilityLabel() == "OpenSkitch logo" && logo?.image === rig.controls.brandLogo, "\(label): logo keeps the classic label")
         expect(name?.stringValue == "OpenSkitch" && name?.font?.pointSize == 20, "\(label): brand name is 20 pt")
         expect(abs((logo?.frame.width ?? 0) - 32) < 0.5 && abs((logo?.frame.height ?? 0) - 32) < 0.5, "\(label): logo is 32 pt")
         expect((name?.font?.fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any])?[.weight] as? CGFloat == NSFont.Weight.semibold.rawValue, "\(label): brand name is semibold")

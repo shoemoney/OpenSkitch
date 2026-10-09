@@ -700,7 +700,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let photos = button("Photos", #selector(showPhotos))
         let companyLogo = NSImageView(); companyLogo.image = recoveredImage("OpenSkitch")
         companyLogo.imageScaling = .scaleProportionallyUpOrDown
-        companyLogo.setAccessibilityLabel("ShoeMoney logo")
+        companyLogo.setAccessibilityLabel("OpenSkitch logo")
         companyLogo.widthAnchor.constraint(equalToConstant: 32).isActive = true
         companyLogo.heightAnchor.constraint(equalToConstant: 32).isActive = true
         let companyName = label("OpenSkitch"); companyName.font = .systemFont(ofSize: 20, weight: .semibold)
