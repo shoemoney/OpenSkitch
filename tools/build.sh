@@ -3,13 +3,17 @@ set -eu
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 SDK=$(xcrun --show-sdk-path)
 APP="$ROOT/build/OpenSkitch.app"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$ROOT/build/objects"
+mkdir -p "$ROOT/build/objects"
 SNAPSHOT=$(mktemp -d "$ROOT/build/source-snapshot.XXXXXX")
 cp "$ROOT"/Sources/*.swift "$SNAPSHOT/"
 cp "$ROOT/Info.plist" "$SNAPSHOT/Info.plist"
 for ARCH in arm64; do
   xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx26.0" -framework AppKit -framework WebKit -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
 done
+# Start every bundle empty once the binary compiled: files left by older builds
+# (for example removed artwork) must never survive into a new one.
+rm -rf "$APP"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
 # The Icon Composer document compiles to a Liquid Glass Assets.car plus a
 # flattened OpenSkitch.icns fallback for Xcodes that cannot read .icon.
