@@ -13,3 +13,4 @@ package-lock.json
 fortawesome-fontawesome-pro-*.tgz
 .claude/worktrees/
 .todo-worktrees/
+__pycache__/

@@ -13,14 +13,13 @@ import json
 import os
 import subprocess
 import tempfile
-import xml.etree.ElementTree as ET
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64", "both"], default="arm64")
 parser.add_argument("--timeout", type=float, default=30)
 args = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
-binary = root / "build/OpenSkitch.app/Contents/MacOS/OpenSkitch"
+binary = root / "build/OpenSnap.app/Contents/MacOS/OpenSnap"
 manifest = json.loads((root / "build/build-manifest.json").read_text())
 digest = hashlib.sha256(binary.read_bytes()).hexdigest()
 assert digest == manifest["binary_sha256"], "Binary differs from its build manifest."
@@ -36,11 +35,11 @@ for label, arch in runs.items():
     folder = evidence / label
     folder.mkdir(parents=True, exist_ok=True)
     support = tempfile.mkdtemp(prefix="support-", dir=folder)
-    env = os.environ | {"SKITCH_APP_SUPPORT": support,
+    env = os.environ | {"OPENSNAP_APP_SUPPORT": support,
                         "CFFIXED_USER_HOME": tempfile.mkdtemp(prefix="home-", dir=folder),
-                        "SKITCH_EVIDENCE_DIR": str(folder)}
+                        "OPENSNAP_EVIDENCE_DIR": str(folder)}
     # Do not allow evidence left by an earlier invocation to count as a pass.
-    for name in ["smoke-result.txt", "smoke.png", "smoke.skitch", "smoke.skitchredux", "smoke-appearance.json"]:
+    for name in ["smoke-result.txt", "smoke.png", "smoke.opensnap", "smoke-appearance.json"]:
         (folder / name).unlink(missing_ok=True)
     result = {"passed": False}
     with (folder / "stderr.log").open("w") as log:
@@ -57,9 +56,9 @@ for label, arch in runs.items():
         text = (folder / "smoke-result.txt").read_text().strip()
         result["result"] = text
         assert result.get("exit_code") == 0, result.get("error", "Native app exited unsuccessfully.")
-        assert text == "native startup, original-format editable save/load, PNG export succeeded"
-        native = (folder / "smoke.skitch").read_bytes()
-        assert ET.fromstring(native).tag == "{http://www.w3.org/2000/svg}svg"
+        assert text == "native startup, .opensnap editable save/load, PNG export succeeded"
+        native = (folder / "smoke.opensnap").read_bytes()
+        assert json.loads(native)["format"] == "com.shoemoney.opensnap.document"
         png = (folder / "smoke.png").read_bytes()
         assert png.startswith(b"\x89PNG\r\n\x1a\n")
         # A window built from anything but the glass chrome must not pass.

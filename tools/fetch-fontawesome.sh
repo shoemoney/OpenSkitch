@@ -32,7 +32,7 @@ TOKEN=${FONTAWESOME_TOKEN:-}
 case "$TOKEN" in *[!A-Za-z0-9._-]*) fail "the Font Awesome Pro token has unexpected characters" 3 ;; esac
 
 # The token only ever exists inside this npmrc, which lives outside the working tree.
-SECRETS=$(mktemp -d "${TMPDIR:-/tmp}/openskitch-fa.XXXXXX")
+SECRETS=$(mktemp -d "${TMPDIR:-/tmp}/opensnap-fa.XXXXXX")
 mkdir -p "$ROOT/build"
 WORK=$(mktemp -d "$ROOT/build/fontawesome.XXXXXX")
 trap 'rm -rf "$SECRETS" "$WORK"' EXIT
