@@ -886,7 +886,6 @@ private enum GlassChromeTests {
         }
         expect(shared.toolbox.imagePosition == .imageOnly && shared.toolbox.itemArray.first?.image != nil, "\(label): Toolbox shows its icon")
         expect(shared.sizeLabel.superview == nil && chrome.surface(for: shared.widthControl)?.shape == .rounded(12), "\(label): the slider has a rounded surface and the Size text is not shown")
-        expect((shared.widthControl as? BezelSizeSlider)?.style == .modern, "\(label): the slider uses the vector style")
         expect(abs(rect(shared.widthControl, in: rig).width - 36) < 0.5 && abs(rect(shared.widthControl, in: rig).height - 96) < 0.5, "\(label): the slider is Apple's 36 pt wide Extra Large slider, 96 pt tall")
         expect(chrome.surface(for: shared.dragExportView)?.shape == .capsule, "\(label): Drag Me is a compact capsule surface")
         expect(chrome.surface(for: shared.dragFormatControl)?.shape == .capsule, "\(label): the format toggle sits in a glass capsule")

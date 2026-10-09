@@ -164,7 +164,9 @@ else:
     safety_runs.append("modern")
 for style in safety_runs:
     print("== app-safety", style, flush=True)
-    subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root, check=True)
+    if subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root).returncode != 0:
+        check_real_store(real_store_before)
+        raise SystemExit(f"FAIL app-safety {style}")
 check_real_store(real_store_before)
 if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")

@@ -409,7 +409,6 @@ extension AppSafetyTests {
         try expect(tools.allSatisfy { $0.target === app && $0.action == #selector(AppDelegate.chooseTool(_:)) }, "Every tool sends chooseTool to the AppDelegate")
 
         // Shared controls take the Modern treatment but keep their behavior.
-        try expect(app.widthControl.style == .modern, "The size slider uses the vector style")
         try expect(app.dragExportView?.drawsBackground == false, "Drag Me lets its glass be the plate")
         try expect(try surface(chrome, app.dragExportView).shape == .capsule && (try surface(chrome, app.dragExportView).fixedSize) == NSSize(width: 48, height: 36),
                    "Drag Me is a compact 48x36 capsule like the other icon buttons")

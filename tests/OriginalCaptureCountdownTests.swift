@@ -149,7 +149,7 @@ enum OriginalCaptureCountdownTests {
         expect(countdown.isRunning && h.clock.activeCount == 1 && h.clock.entries.count == 1, "One owned timer")
         expect(h.clock.intervals == [0.1], "Recovered interval")
         let panel = h.panels[0]
-        expect(panel.frame == NSRect(x: 331, y: 180, width: 138, height: 140), "Centered original dimensions")
+        expect(panel.frame == NSRect(x: 300, y: 150, width: 200, height: 200), "Centered drawn numeral")
         expect(panel.frontCount == 1 && panel.focusCount == 0 && !panel.canBecomeKey && !panel.canBecomeMain, "Standalone presentation never focuses")
         expect(panel.ignoresMouseEvents && !panel.isOpaque && panel.backgroundColor == .clear, "Transparent mouse pass-through")
         expect(!panel.canHide && !panel.hidesOnDeactivate, "App hiding does not hide owned countdown")
