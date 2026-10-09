@@ -132,13 +132,13 @@ private final class SketchTextEditor: NSTextView {
         menu.font = .systemFont(ofSize: 20)
         guard delegate is CanvasView else { return menu }
         menu.addItem(.separator())
-        let item = NSMenuItem(title: "Skitch Text Style…", action: #selector(showTextStyle), keyEquivalent: "")
+        let item = NSMenuItem(title: "Text Style…", action: #selector(showTextStyle), keyEquivalent: "")
         item.target = self; menu.addItem(item)
         return menu
     }
     @objc private func showTextStyle() { (delegate as? CanvasView)?.onTextStyleRequested?() }
     override func keyDown(with event: NSEvent) {
-        // SkitchTextFieldEditor keyDown: (0x1cae8). The original 0x200000
+        // OriginalTextFieldEditor keyDown: (0x1cae8). The original 0x200000
         // flag is numericPad, not Command; keypad Enter carries it normally.
         let flags = event.modifierFlags
         let finish = event.keyCode == 53 ||
@@ -151,7 +151,7 @@ private final class SketchTextEditor: NSTextView {
     }
 }
 
-/// Recovered SkitchTextGrip geometry and drag contract. The exposed left pill
+/// Recovered OriginalTextGrip geometry and drag contract. The exposed left pill
 /// sits behind the field editor, so its contents retain normal native text input.
 private final class SketchTextGrip: NSView {
     var onMove: ((CGSize) -> Void)?
@@ -176,7 +176,7 @@ private final class SketchTextGrip: NSView {
     override var canBecomeKeyView: Bool { false }
     static func attachedFrame(_ rect: CGRect) -> CGRect {
         // Renderer_frameRectForTextRect: x-11, y-3, w+15, h+6,
-        // rounded outwards, then SkitchTextGrip adds five points on each side.
+        // rounded outwards, then OriginalTextGrip adds five points on each side.
         CGRect(x: rect.minX - 11, y: rect.minY - 3,
                width: rect.width + 15, height: rect.height + 6).integral.insetBy(dx: -5, dy: -5)
     }
@@ -411,7 +411,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
     private var textBeforeEditing: EditorState?
     private var isFinishingText = false
     private var pasteOffset: CGFloat = 0
-    private static let pasteboardType = NSPasteboard.PasteboardType("com.skitch-redux.editable-selection")
+    private static let pasteboardType = NSPasteboard.PasteboardType("com.shoemoney.opensnap.editable-selection")
     private enum DragMode { case none, create, move, resize, marquee, crop, erase, pan, sampleColor }
     /// The raster cache in SketchDocument is the visible viewport. Preserve the full
     /// source separately so panning away/back (even after save/reopen) loses no pixels.
@@ -872,7 +872,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
 
     func restoreDefaultTextStyle() {
         fontName = "Helvetica-Bold"; outlined = true; shadowed = true
-        convertSelectedTextFonts({ NSFont(name: "Helvetica-Bold", size: $0.pointSize) }, outline: true, shadow: true, name: "Default Skitch Style")
+        convertSelectedTextFonts({ NSFont(name: "Helvetica-Bold", size: $0.pointSize) }, outline: true, shadow: true, name: "Default Text Style")
     }
 
     func applyTextEffectsToSelection(outline: Bool? = nil, shadow: Bool? = nil) {
@@ -984,8 +984,10 @@ final class CanvasView: NSView, NSTextViewDelegate {
     }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
         let board = sender.draggingPasteboard
-        if let url = droppedFileURL(from: board), isDocumentURL(url) {
-            return onOpenDocument == nil ? [] : .copy
+        if let url = droppedFileURL(from: board) {
+            if isDocumentURL(url) { return onOpenDocument == nil ? [] : .copy }
+            // Only pictures are accepted from the file system: every other file type is refused up front.
+            return SketchDocument.isPictureFile(url) ? .copy : []
         }
         return board.availableType(from: [.fileURL, .png, .tiff, Self.pasteboardType]) == nil ? [] : .copy
     }
@@ -994,7 +996,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         (board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?.first
     }
     private func isDocumentURL(_ url: URL) -> Bool {
-        [SketchDocument.fileExtension, "skitch"].contains(url.pathExtension.lowercased())
+        url.pathExtension.lowercased() == SketchDocument.fileExtension
     }
     override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
         let board = sender.draggingPasteboard
@@ -1006,7 +1008,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
                 open(url)
                 return true
             }
-            guard let image = NSImage(contentsOf: url), SketchDocument.validSize(image.size) else { return false }
+            guard SketchDocument.isPictureFile(url), let image = NSImage(contentsOf: url), SketchDocument.validSize(image.size) else { return false }
             let before = document
             setBackground(image)
             return document != before
@@ -1175,7 +1177,7 @@ final class CanvasView: NSView, NSTextViewDelegate {
         return try encoder.encode(CanvasFile(document: value, background: panBackground))
     }
     /// Validate a native-file canvas supplement before writing/opening it. The
-    /// returned document can be compared to SkitchFile.document; retain the input
+    /// returned document can be compared to OpenSnapFile.document; retain the input
     /// bytes, since re-encoding this model alone would drop hidden pan source pixels.
     static func validatedDocumentData(_ data: Data) throws -> SketchDocument {
         try decodeValidatedCanvasFile(data).document
@@ -1833,9 +1835,9 @@ final class CanvasView: NSView, NSTextViewDelegate {
         guard !event.modifierFlags.contains(.control), let element = hitElement(documentPoint(event)), element.kind == .text else { return nil }
         finishTextEditing(); selection = [element.id]; needsDisplay = true
         let menu = NSMenu(title: "Text"); menu.font = .systemFont(ofSize: 20)
-        let style = NSMenuItem(title: "Skitch Text Style…", action: #selector(requestTextStyle), keyEquivalent: "")
+        let style = NSMenuItem(title: "Text Style…", action: #selector(requestTextStyle), keyEquivalent: "")
         style.target = self; menu.addItem(style)
-        let defaults = NSMenuItem(title: "Default Skitch Style", action: #selector(defaultTextStyle), keyEquivalent: "")
+        let defaults = NSMenuItem(title: "Default Text Style", action: #selector(defaultTextStyle), keyEquivalent: "")
         defaults.target = self; menu.addItem(defaults)
         return menu
     }

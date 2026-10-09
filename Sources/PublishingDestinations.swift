@@ -67,7 +67,7 @@ protocol PublishingSecretStore {
 }
 
 struct PublishingKeychain: PublishingSecretStore {
-    private static let service = "SkitchRedux.CustomPublishing"
+    private static let service = "OpenSnap.Publishing"
     private func query(_ id: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: Self.service,
          kSecAttrAccount as String: id, kSecAttrSynchronizable as String: false]
@@ -122,16 +122,16 @@ final class PublishingDestinationStore {
     /// The folder for a support directory: <support>/Publishing.
     static func directory(support: URL) -> URL { support.appendingPathComponent("Publishing", isDirectory: true) }
 
-    /// The store the app uses. With SKITCH_APP_SUPPORT set (tests, harnesses, eye-dump) it lives inside
+    /// The store the app uses. With OPENSNAP_APP_SUPPORT set (tests, harnesses, eye-dump) it lives inside
     /// that isolated folder and secrets stay in memory, so nothing can reach the real folder or Keychain.
     /// Without it, the real Application Support folder and the login Keychain.
     static func forEnvironment(_ environment: [String: String]) -> PublishingDestinationStore {
-        if let isolated = environment["SKITCH_APP_SUPPORT"], !isolated.isEmpty {
+        if let isolated = environment["OPENSNAP_APP_SUPPORT"], !isolated.isEmpty {
             return PublishingDestinationStore(directory: directory(support: URL(fileURLWithPath: isolated, isDirectory: true)),
                                               secrets: PublishingMemorySecrets())
         }
         let real = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("SkitchRedux", isDirectory: true)
+            .appendingPathComponent("OpenSnap", isDirectory: true)
         return PublishingDestinationStore(directory: directory(support: real), secrets: PublishingKeychain())
     }
 

@@ -14,9 +14,9 @@ final class HistoryStore {
         let size: CGSize
         let text: String
         let isEmpty: Bool
-        init(canvasData: Data, metadata: LegacyBridge.Metadata, preview: Data?) throws {
+        init(canvasData: Data, drawingDefaults: DrawingDefaults, preview: Data?) throws {
             let document = try CanvasView.validatedDocumentData(canvasData)
-            native = try SkitchFile(document: document, metadata: metadata, canvasData: canvasData).encoded()
+            native = try OpenSnapFile(document: document, drawingDefaults: drawingDefaults, canvasData: canvasData).encoded()
             self.preview = preview; size = document.outputSize
             isEmpty = document.elements.isEmpty && document.backgroundPNG == nil &&
                 (document.backgroundColor == .white || document.backgroundColor.alpha == 0)
@@ -53,9 +53,9 @@ final class HistoryStore {
         var errorDescription: String? {
             switch self {
             case .corruptIndex: return "The History index could not be read safely. Your archived drawings were preserved."
-            case .missing: return "This History drawing is missing or has changed outside Skitch."
+            case .missing: return "This History drawing is missing or has changed outside OpenSnap."
             case .unsafePath: return "History refused a file path outside its own archive."
-            case .unsupportedVersion: return "This History was written by a newer version of OpenSkitch."
+            case .unsupportedVersion: return "This History was written by a newer version of OpenSnap."
             }
         }
     }
@@ -78,7 +78,7 @@ final class HistoryStore {
             guard Set(index.entries.map(\.nativeFile)).count == index.entries.count else { throw Failure.corruptIndex }
             for entry in index.entries {
                 guard Self.safeLeaf(entry.nativeFile), entry.previewFile.map(Self.safeLeaf) ?? true,
-                      ["skitch", "skitchredux"].contains(URL(fileURLWithPath: entry.nativeFile).pathExtension.lowercased()),
+                      URL(fileURLWithPath: entry.nativeFile).pathExtension.lowercased() == OpenSnapFile.fileExtension,
                       entry.previewFile.map({ ["png", "jpg", "jpeg"].contains(URL(fileURLWithPath: $0).pathExtension.lowercased()) }) ?? true,
                       SketchDocument.validSize(entry.size), entry.date.timeIntervalSince1970.isFinite,
                       entry.updated.timeIntervalSince1970.isFinite else { throw Failure.corruptIndex }
@@ -109,9 +109,9 @@ final class HistoryStore {
         let known = Set(index.entries.map(\.nativeFile)).union(index.ignoredLooseFiles)
         var next = index
         for url in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
-            guard ["skitch", "skitchredux"].contains(url.pathExtension.lowercased()), !known.contains(url.lastPathComponent),
-                  !url.lastPathComponent.hasPrefix("redux-"), (try? ownedURL(url.lastPathComponent)) != nil,
-                  let file = try? SkitchFile.read(url) else { continue }
+            guard url.pathExtension.lowercased() == OpenSnapFile.fileExtension, !known.contains(url.lastPathComponent),
+                  !url.lastPathComponent.hasPrefix("snap-"), (try? ownedURL(url.lastPathComponent)) != nil,
+                  let file = try? OpenSnapFile.read(url) else { continue }
             let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
             let prefix = url.lastPathComponent.split(separator: "-").first.flatMap { TimeInterval($0) }
             let date = prefix.map(Date.init(timeIntervalSince1970:)) ?? values?.creationDate ?? values?.contentModificationDate ?? Date()
@@ -125,40 +125,6 @@ final class HistoryStore {
         if next.entries != index.entries { try commit(next) }
     }
     private static func hash(_ data: Data) -> String { SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined() }
-    struct ImportReport { var imported = 0; var skipped = 0 }
-    /// Copy only .skitch drawings from the explicitly supplied legacy archive
-    /// directory. Stored legacy paths never grant access to arbitrary files.
-    /// Original index, pictures, and previews remain untouched.
-    func importLegacy(indexData: Data, archiveDirectory: URL) throws -> ImportReport {
-        let records = try LegacyHistoryImporter.decode(indexData)
-        let root = archiveDirectory.resolvingSymlinksInPath().standardizedFileURL
-        var report = ImportReport()
-        let existing = Set(index.entries.compactMap(\.legacySource)).union(index.ignoredLegacySources ?? [])
-        var seen = existing
-        for record in records {
-            let name = URL(fileURLWithPath: record.localPath).lastPathComponent
-            guard Self.safeLeaf(name), URL(fileURLWithPath: name).pathExtension.lowercased() == "skitch" else { report.skipped += 1; continue }
-            let source = root.appendingPathComponent(name)
-            let key = Self.hash(Data((root.path + "/" + name).utf8))
-            guard seen.insert(key).inserted else { continue }
-            guard source.resolvingSymlinksInPath().deletingLastPathComponent().path == root.path,
-                  (try? source.resourceValues(forKeys: [.isSymbolicLinkKey]).isSymbolicLink) != true,
-                  let file = try? SkitchFile.read(source) else { report.skipped += 1; continue }
-            let raw = try file.canvasData
-            let view = CanvasView(frame: .zero); try view.loadDocument(data: raw)
-            let snapshot = try Snapshot(canvasData: raw, metadata: file.metadata, preview: view.imageData(format: "png"))
-            let action: Action = record.local ? (record.saved ? .archived : .exported) : .shared
-            let url = record.remoteURL.flatMap(URL.init(string:))
-            let date = record.date ?? (try? source.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? Date()
-            let entry = Entry(id: UUID(), name: source.deletingPathExtension().lastPathComponent, date: date, updated: date,
-                size: snapshot.size, text: record.text.isEmpty ? snapshot.text : record.text, action: action,
-                destination: record.remoteURL ?? record.remotePath, remoteURL: action == .shared ? url : nil,
-                nativeFile: "", digest: Self.hash(snapshot.native), legacySource: key,
-                legacyRemotePath: record.remotePath, legacyAccountID: record.accountID)
-            try writeRevision(snapshot, entry: entry, inserting: true); report.imported += 1
-        }
-        return report
-    }
     @discardableResult
     func archive(_ snapshot: Snapshot, name: String, action: Action, destination: String? = nil,
                  remoteURL: URL? = nil, remoteBinding: [String: String]? = nil, date: Date = Date()) throws -> UUID {
@@ -179,10 +145,10 @@ final class HistoryStore {
     }
     private func writeRevision(_ snapshot: Snapshot, entry original: Entry, inserting: Bool) throws {
         // Validate before touching any existing index or files.
-        _ = try SkitchFile.decode(snapshot.native)
+        _ = try OpenSnapFile.decode(snapshot.native)
         var entry = original
-        let stem = "redux-\(entry.id.uuidString)-\(UUID().uuidString)"
-        entry.nativeFile = stem + ".skitch"; entry.previewFile = snapshot.preview == nil ? nil : stem + ".png"
+        let stem = "snap-\(entry.id.uuidString)-\(UUID().uuidString)"
+        entry.nativeFile = stem + "." + OpenSnapFile.fileExtension; entry.previewFile = snapshot.preview == nil ? nil : stem + ".png"
         let nativeURL = try ownedURL(entry.nativeFile)
         let previewURL = try entry.previewFile.map(ownedURL)
         let old = index.entries.first { $0.id == entry.id }
@@ -206,12 +172,12 @@ final class HistoryStore {
         if let old, !old.imported { try? cleanupFiles(old) }
     }
     func entry(_ id: UUID) -> Entry? { index.entries.first { $0.id == id } }
-    func read(_ id: UUID) throws -> SkitchFile {
+    func read(_ id: UUID) throws -> OpenSnapFile {
         guard let entry = entry(id) else { throw Failure.missing }
         let data: Data
         do { data = try Data(contentsOf: ownedURL(entry.nativeFile)) } catch { throw Failure.missing }
         if let digest = entry.digest, Self.hash(data) != digest { throw Failure.missing }
-        return try SkitchFile.decode(data)
+        return try OpenSnapFile.decode(data)
     }
     func missing(_ id: UUID) -> Bool {
         guard let entry = entry(id), let url = try? ownedURL(entry.nativeFile),
@@ -270,7 +236,7 @@ final class HistoryStore {
                 catch { unrecovered.append(item.trashed.path) }
             }
             if !unrecovered.isEmpty {
-                throw NSError(domain: "SkitchHistory", code: 2, userInfo: [NSLocalizedDescriptionKey:
+                throw NSError(domain: "OpenSnap.History", code: 2, userInfo: [NSLocalizedDescriptionKey:
                     "History removal failed and some files could not be restored. The index was kept. Recover these copies from Trash: " + unrecovered.joined(separator: ", ")])
             }
             throw error

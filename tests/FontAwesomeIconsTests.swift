@@ -1,5 +1,5 @@
 // Offscreen rendering and process-scoped font registration only; no windows, no desktop input.
-// Set OPENSKITCH_FA_FONT_DIR to a folder holding FontAwesome7Pro-{Regular,Solid}-subset.ttf to exercise the glyph branch.
+// Set OPENSNAP_FA_FONT_DIR to a folder holding FontAwesome7Pro-{Regular,Solid}-subset.ttf to exercise the glyph branch.
 // xcrun swiftc -swift-version 5 -strict-concurrency=complete -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D FONTAWESOME_ICONS_TESTS Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift tests/FontAwesomeIconsTests.swift -o build/fontawesome-icons-tests
 // build/fontawesome-icons-tests
@@ -24,10 +24,10 @@ private enum FontAwesomeIconsTests {
         table()
         withoutFonts()
         symbolFallback()
-        if let directory = ProcessInfo.processInfo.environment["OPENSKITCH_FA_FONT_DIR"], !directory.isEmpty {
+        if let directory = ProcessInfo.processInfo.environment["OPENSNAP_FA_FONT_DIR"], !directory.isEmpty {
             withFonts(URL(fileURLWithPath: directory, isDirectory: true))
         } else {
-            skipped.append("glyph branch (OPENSKITCH_FA_FONT_DIR unset)")
+            skipped.append("glyph branch (OPENSNAP_FA_FONT_DIR unset)")
         }
         let note = skipped.isEmpty ? "" : "; SKIPPED: " + skipped.joined(separator: ", ")
         print("FontAwesomeIconsTests: \(checks) checks passed (offscreen; no desktop input)\(note)")
@@ -170,7 +170,7 @@ private enum FontAwesomeIconsTests {
     private static func withFonts(_ directory: URL) {
         let regular = directory.appendingPathComponent("\(FAFamily.regular.resourceName).ttf")
         let solid = directory.appendingPathComponent("\(FAFamily.solid.resourceName).ttf")
-        expect(FileManager.default.fileExists(atPath: regular.path) && FileManager.default.fileExists(atPath: solid.path), "Subset fonts exist in OPENSKITCH_FA_FONT_DIR")
+        expect(FileManager.default.fileExists(atPath: regular.path) && FileManager.default.fileExists(atPath: solid.path), "Subset fonts exist in OPENSNAP_FA_FONT_DIR")
 
         expect(!FontAwesomeFont.register(url: regular, family: .solid) && !FontAwesomeFont.isAvailable(.solid), "A font file under the wrong family is rejected")
         expect(FontAwesomeFont.register(url: regular, family: .regular) && FontAwesomeFont.isAvailable(.regular), "Regular subset registers")

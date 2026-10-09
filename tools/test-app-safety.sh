@@ -22,7 +22,7 @@ while [ "$#" -gt 0 ]; do
 done
 case "$ARCH" in arm64|x86_64) ;; *) echo "Unsupported architecture: $ARCH" >&2; exit 2 ;; esac
 if [ -z "$EVIDENCE" ]; then
-    EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/skitch-app-safety.XXXXXX")
+    EVIDENCE=$(mktemp -d "${TMPDIR:-/tmp}/opensnap-app-safety.XXXXXX")
 else
     mkdir "$EVIDENCE"
 fi
@@ -44,6 +44,8 @@ if (root / 'tests/AppSafetyWebpostCases.swift').exists():
     paths.append(root / 'tests/AppSafetyWebpostCases.swift')
 if (root / 'tests/AppSafetyModernCases.swift').exists():
     paths.append(root / 'tests/AppSafetyModernCases.swift')
+if (root / 'tests/AppSafetyRetiredFormatCases.swift').exists():
+    paths.append(root / 'tests/AppSafetyRetiredFormatCases.swift')
 inputs = [(p.name, app_source if p.name == 'App.swift' else p) for p in paths]
 for attempt in range(3):
     snapshot = {name: (p, p.read_bytes()) for name, p in inputs}
@@ -61,7 +63,7 @@ for name, (path, data) in snapshot.items():
     target = sources / name
     if name == 'App.swift':
         text = data.decode()
-        entry = re.search(r'^@main\s+@MainActor\s+enum\s+OpenSkitchMain\b', text, re.M)
+        entry = re.search(r'^@main\s+@MainActor\s+enum\s+OpenSnapMain\b', text, re.M)
         if not entry:
             raise SystemExit('Cannot safely locate and remove the production @main entry.')
         text = text[:entry.start()]
@@ -129,11 +131,11 @@ if ! xcrun swiftc -swift-version 5 -O -D APP_SAFETY_TESTS -sdk "$SDK" \
     cat "$EVIDENCE/compile.log" >&2
     exit 1
 fi
-# Defence in depth: even a code path that ignores SKITCH_APP_SUPPORT lands in this throwaway home, never the owner's.
+# Defence in depth: even a code path that ignores OPENSNAP_APP_SUPPORT lands in this throwaway home, never the owner's.
 mkdir -p "$EVIDENCE/home"
 set +e
-env -u SKITCH_FIXTURE SKITCH_APP_SUPPORT="$EVIDENCE/support" CFFIXED_USER_HOME="$EVIDENCE/home" \
-    SKITCH_EVIDENCE_DIR="$EVIDENCE/layout" APP_SAFETY_EVIDENCE="$EVIDENCE" APP_SAFETY_ARCH="$ARCH" \
+env -u OPENSNAP_FIXTURE OPENSNAP_APP_SUPPORT="$EVIDENCE/support" CFFIXED_USER_HOME="$EVIDENCE/home" \
+    OPENSNAP_EVIDENCE_DIR="$EVIDENCE/layout" APP_SAFETY_EVIDENCE="$EVIDENCE" APP_SAFETY_ARCH="$ARCH" \
     /usr/bin/arch "-$ARCH" "$EVIDENCE/$BIN" >"$EVIDENCE/run.log" 2>&1
 RESULT=$?
 set -e
@@ -145,11 +147,11 @@ if [ "$RESULT" -eq 0 ]; then
 import json, os, pathlib, subprocess, sys
 evidence, arch, binary = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
 env = os.environ.copy()
-env.pop('SKITCH_FIXTURE', None)
+env.pop('OPENSNAP_FIXTURE', None)
 (evidence / 'native-home').mkdir(exist_ok=True)
-env.update(SKITCH_APP_SUPPORT=str(evidence / 'native-support'),
+env.update(OPENSNAP_APP_SUPPORT=str(evidence / 'native-support'),
            CFFIXED_USER_HOME=str(evidence / 'native-home'),
-           SKITCH_EVIDENCE_DIR=str(evidence / 'native-layout'),
+           OPENSNAP_EVIDENCE_DIR=str(evidence / 'native-layout'),
            APP_SAFETY_EVIDENCE=str(evidence), APP_SAFETY_ARCH=arch)
 (evidence / 'native-layout').mkdir()
 with (evidence / 'native-termination.log').open('w') as log:

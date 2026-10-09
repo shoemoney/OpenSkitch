@@ -2,8 +2,8 @@
 // no AppKit controls/windows, save panel, desktop input, permissions, or encoding.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D EXPORT_ACCESSORY_TESTS Sources/ExportAccessory.swift tests/ExportAccessoryTests.swift \
-//   -o /tmp/skitch-export-accessory-tests
-// rtk proxy /tmp/skitch-export-accessory-tests
+//   -o /tmp/opensnap-export-accessory-tests
+// rtk proxy /tmp/opensnap-export-accessory-tests
 #if EXPORT_ACCESSORY_TESTS
 import Foundation
 import CoreGraphics
@@ -25,8 +25,8 @@ private enum ExportAccessoryTests {
                    "File-export defaults")
         try expect(!options.jpegControlsEnabled, "PNG disables JPEG controls")
         try expect(options.qualityLabel == "JPEG quality: 70%", "Readable default quality label")
-        let formats = ["png", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
-        let titles = ["PNG", "JPEG", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"]
+        let formats = ["png", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "opensnap"]
+        let titles = ["PNG", "JPEG", "TIFF", "GIF", "BMP", "PDF", "SVG", "OpenSnap"]
         try expect(ExportAccessoryFormat.allCases.map(\.rawValue) == formats, "All eight formats in order")
         try expect(ExportAccessoryFormat.allCases.map(\.title) == titles, "Format popup labels")
         for format in formats {

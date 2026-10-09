@@ -24,7 +24,7 @@ struct OriginalCaptureWindowRecord: Equatable, Sendable {
 }
 
 private func pickerFailure(_ code: Int, _ message: String) -> NSError {
-    NSError(domain: "OpenSkitch.CapturePicker", code: code,
+    NSError(domain: "OpenSnap.CapturePicker", code: code,
             userInfo: [NSLocalizedDescriptionKey: message])
 }
 

@@ -103,7 +103,7 @@ final class PhotoBrowserTemporaryImport {
             throw PhotoBrowserFailure("The selected item is not a supported, readable photo.")
         }
         let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("SkitchPhoto-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("OpenSnapPhoto-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
                                                attributes: [.posixPermissions: 0o700])
         do {

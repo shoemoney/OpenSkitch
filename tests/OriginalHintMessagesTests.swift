@@ -1,5 +1,5 @@
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D ORIGINAL_HINT_MESSAGES_TESTS \
-//   Sources/LegacySkitch.swift Sources/DocumentModel.swift Sources/OriginalHintMessages.swift \
+//   Sources/SVGPath.swift Sources/DocumentModel.swift Sources/OriginalHintMessages.swift \
 //   tests/OriginalHintMessagesTests.swift -o /tmp/opensnap-hint-messages-tests
 // /tmp/opensnap-hint-messages-tests
 #if ORIGINAL_HINT_MESSAGES_TESTS

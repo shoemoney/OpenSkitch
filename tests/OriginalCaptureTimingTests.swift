@@ -1,7 +1,7 @@
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete \
 //   -D ORIGINAL_CAPTURE_TIMING_TESTS Sources/OriginalCaptureTiming.swift \
-//   tests/OriginalCaptureTimingTests.swift -o /tmp/openskitch-original-capture-timing-tests
-// rtk proxy /tmp/openskitch-original-capture-timing-tests
+//   tests/OriginalCaptureTimingTests.swift -o /tmp/opensnap-original-capture-timing-tests
+// rtk proxy /tmp/opensnap-original-capture-timing-tests
 #if ORIGINAL_CAPTURE_TIMING_TESTS
 import AppKit
 

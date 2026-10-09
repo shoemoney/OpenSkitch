@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Split Resources/OpenSkitch.png into Liquid Glass icon layer masks.
+"""Split Resources/OpenSnap.png into Liquid Glass icon layer masks.
 
 Icon Composer layers are recoloured by icon.json fills, so each layer is a
 white mask: the blue dollar and the dark shield. The logo's baked gloss,
@@ -10,8 +10,8 @@ from pathlib import Path
 from PIL import Image, ImageFilter
 
 root = Path(__file__).resolve().parent.parent
-source = Image.open(root / "Resources/OpenSkitch.png").convert("RGBA")
-assets = root / "Resources/OpenSkitch.icon/Assets"
+source = Image.open(root / "Resources/OpenSnap.png").convert("RGBA")
+assets = root / "Resources/OpenSnap.icon/Assets"
 assets.mkdir(parents=True, exist_ok=True)
 
 def mask(keep, opacity):

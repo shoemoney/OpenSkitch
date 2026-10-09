@@ -1,11 +1,5 @@
-// Executable regression tests; no app windows, capture, network, or credentials.
-// From the repository root, with the sources tools/test.py compiles for this suite:
-// xcrun swiftc -D SVG_EXPORT_TESTS -swift-version 5 -target arm64-apple-macosx13.0 \
-//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,SVGExport}.swift \
-//   tests/SVGExportTests.swift -o /tmp/skitch-svg-tests
-// /tmp/skitch-svg-tests --fixture original/Skitch.app/Contents/Resources/firstlaunch.skitch
-// (--fixture defaults to that path under the repository root and accepts any other .skitch file.)
-// Repeat compilation with x86_64-apple-macosx13.0 to check the other architecture.
+// Executable regression tests; no app windows, capture, network, or credentials. Run via tools/test.py, which
+// compiles the sources this suite needs (see its row there).
 // Known exporter regressions deliberately fail; they are not treated as expected passes.
 
 #if SVG_EXPORT_TESTS
@@ -29,7 +23,7 @@ fileprivate final class SVGTestNode {
     func named(_ name: String) -> [SVGTestNode] { children.filter { $0.name == name } }
 }
 
-/// Independent XML tree reader: never uses LegacySkitch to validate generic SVG.
+/// Independent XML tree reader: the exporter is never checked with its own code.
 fileprivate final class SVGTestXML: NSObject, XMLParserDelegate {
     var root: SVGTestNode?
     var stack: [SVGTestNode] = []
@@ -60,7 +54,7 @@ fileprivate enum SVGExportTests {
         let description: String
         init(_ description: String) { self.description = description }
     }
-    /// A case that cannot run here (git-ignored original/ archive absent); reported as SKIP, never as a failure.
+    /// A case that cannot run in this environment; reported as SKIP, never as a failure.
     struct Skip: Error, CustomStringConvertible {
         let description: String
         init(_ description: String) { self.description = description }
@@ -239,21 +233,6 @@ fileprivate enum SVGExportTests {
         try expect(NSImage(data: data) != nil, "Exported PNG is undecodable")
         return data
     }
-    static var fixtureURL: URL {
-        if let index = CommandLine.arguments.firstIndex(of: "--fixture"), index + 1 < CommandLine.arguments.count {
-            return URL(fileURLWithPath: CommandLine.arguments[index + 1])
-        }
-        // Resolve relative to this test source, not the caller's working directory.
-        return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
-            .appendingPathComponent("original/Skitch.app/Contents/Resources/firstlaunch.skitch")
-    }
-    static func originalFixture() throws -> (LegacySkitchDocument, SketchDocument, Data, SVGTestNode) {
-        guard FileManager.default.fileExists(atPath: fixtureURL.path) else { throw Skip("original fixture \(fixtureURL.path) not present (original/ is git-ignored)") }
-        let original = try LegacySkitch.read(fixtureURL)
-        let modern = try LegacyBridge.convert(original)
-        let bytes = try SVGExport.encode(modern)
-        return (original, modern, bytes, try SVGTestXML.read(bytes).root!)
-    }
 
     static func main() {
         var passed = 0, skipped = 0, failures: [String] = []
@@ -270,10 +249,10 @@ fileprivate enum SVGExportTests {
                            "SVG independently scales axes without changing the editing document")
                 try compareCommands(commands(root.named("path")[0]), original.elements[0].pathCommands)
             }),
-            ("XML declaration, native marker, namespaces and document dimensions", {
+            ("XML declaration, namespaces and document dimensions", {
                 let (data, root) = try exported()
                 try expect(String(decoding: data, as: UTF8.self).hasPrefix("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"), "Missing UTF-8 declaration")
-                try expect(try SVGTestXML.read(data).comments == [" Skitch 1.0 "], "Missing exact original marker")
+                try expect(try SVGTestXML.read(data).comments.isEmpty, "Unexpected XML comment")
                 try expect(root.attributes["xmlns"] == "http://www.w3.org/2000/svg" && root.attributes["xmlns:xlink"] == "http://www.w3.org/1999/xlink", "SVG namespaces")
                 try expect(try number(root, "width") == 240 && number(root, "height") == 160, "Canvas dimensions changed")
                 try expect(root.children.count == 1 && root.children[0].name == "rect", "Empty document background")
@@ -327,8 +306,8 @@ fileprivate enum SVGExportTests {
                 var element = text(); element.outlined = true; element.shadowed = true; element.fontSize = 32
                 let (_, root) = try exported([element]), node = root.named("g")[0], lines = node.named("text")
                 try expect(node.attributes["font-family"] == element.fontName, "Font family changed")
-                try expect(try number(node, "skitchFontSize") == 32 && number(node, "skitchTextX") == 25 && number(node, "skitchTextY") == 30, "Editor typography/anchor lost")
-                try expect(node.attributes["skitchHasOutline"] == "1" && node.attributes["skitchHasShadow"] == "1", "Text flags lost")
+                try expect(try number(node, "font-size") == 32 && number(lines[0], "x") == 25, "Editor typography/anchor lost")
+                try expect(node.attributes["stroke"] != nil && node.attributes["style"]?.contains("filter") == true, "Text outline and shadow lost")
                 let font = NSFont(name: element.fontName, size: element.fontSize)!
                 let lineHeight = NSLayoutManager().defaultLineHeight(for: font)
                 try expect(lines.count == 2 && approximately(try number(lines[1], "y") - number(lines[0], "y"), lineHeight), "SVG spacing differs from native AppKit text layout")
@@ -357,9 +336,9 @@ fileprivate enum SVGExportTests {
                 let matrix = SketchTransform(a: 0, b: 1, c: -1, d: 0, tx: 100, ty: 30)
                 first.transform = matrix; second.transform = matrix; caption.transform = matrix
                 let (_, root) = try exported([first, second, caption, nativePath(group: other), nativePath()])
-                let paths = root.named("path"), shared = paths[0].attributes["skitchGroup"]
-                try expect(shared != "0" && shared != nil && paths[1].attributes["skitchGroup"] == shared && root.named("g")[0].attributes["skitchGroup"] == shared, "Group identity broke across classes")
-                try expect(paths[2].attributes["skitchGroup"] != shared && paths[3].attributes["skitchGroup"] == "0", "Distinct/ungrouped identities changed")
+                let paths = root.named("path"), shared = paths[0].attributes["data-group"]
+                try expect(shared == id.uuidString && paths[1].attributes["data-group"] == shared && root.named("g")[0].attributes["data-group"] == shared, "Group identity broke across classes")
+                try expect(paths[2].attributes["data-group"] == other.uuidString && paths[3].attributes["data-group"] == nil, "Distinct/ungrouped identities changed")
                 let t = try self.matrix(root.named("g")[0])
                 try expect(point(CGPoint(x: 25, y: 30).applying(t), equals: CGPoint(x: 70, y: 55)), "Text group transform changed")
             }),
@@ -378,38 +357,30 @@ fileprivate enum SVGExportTests {
                 let id = UUID(); var raster = SketchElement(kind: .raster)
                 raster.rect = CGRect(x: 1, y: 2, width: 20, height: 30); raster.imagePNG = try png(); raster.groupID = id
                 let (_, root) = try exported([nativePath(group: id), raster])
-                try expect(root.named("image")[0].attributes["skitchGroup"] == root.named("path")[0].attributes["skitchGroup"], "Raster skitchGroup is missing")
+                try expect(root.named("image")[0].attributes["data-group"] == id.uuidString && root.named("path")[0].attributes["data-group"] == id.uuidString, "Raster group is missing")
             }),
             ("SVG alpha is explicit for both paint and background", {
                 var path = nativePath(); path.color.alpha = 0.25
                 let (_, root) = try exported([path], background: SketchColor(NSColor(deviceRed: 0, green: 0, blue: 0, alpha: 0.5)))
                 try expect(try fillAlpha(root.named("path")[0]) == 0.25 && fillAlpha(root.named("rect")[0]) == 0.5, "SVG alpha missing")
             }),
-            ("Native Skitch alpha survives export and import", {
-                var path = nativePath(); path.color.alpha = 0.25
-                let (bytes, _) = try exported([path], background: SketchColor(NSColor(deviceRed: 0, green: 0, blue: 0, alpha: 0.5)))
-                let imported = try LegacySkitch.decode(bytes)
-                try expect(imported.backgroundColor.alpha == 0.5 && imported.paths[0].color.alpha == 0.25,
-                    "Original reader uses opacity; exporter writes only fill-opacity, so alpha becomes 1")
-            }),
             ("Filled path with fractional alpha is not painted twice", {
                 var element = nativePath(); element.strokeWidth = 12; element.color.alpha = 0.5
                 let (_, root) = try exported([element])
                 try expect(root.named("path").count == 1, "Overlapping extra stroke changes 0.5-alpha path edges to 0.75 alpha")
             }),
-            ("Shadow is a visible SVG effect, not only private metadata", {
+            ("Shadow is a visible SVG effect", {
                 var path = nativePath(); path.shadowed = true
                 let (_, root) = try exported([path]), node = root.named("path")[0]
-                try expect(node.attributes["skitchHasShadow"] == "1", "Shadow flag lost")
                 try expect(node.attributes["filter"] != nil || node.attributes["style"]?.contains("filter") == true,
-                    "SVG has no shadow filter/effect; generic viewers ignore skitchHasShadow")
+                    "SVG has no shadow filter/effect; generic viewers would show no shadow")
             }),
             ("Text outline is a visible SVG effect", {
                 var element = text(); element.outlined = true
                 let (_, root) = try exported([element]), group = root.named("g")[0]
                 let nodes = [group] + group.named("text")
                 try expect(nodes.contains { $0.attributes["stroke"] != nil || $0.attributes["style"]?.contains("stroke") == true || $0.attributes["filter"] != nil },
-                    "SVG contains no stroke/filter for outlined text; private flag alone has no visual effect")
+                    "SVG contains no stroke/filter for outlined text")
             }),
             ("Portable SVG font family and weight retain the bold face", {
                 let (_, root) = try exported([text()]), node = root.named("g")[0]
@@ -446,19 +417,18 @@ fileprivate enum SVGExportTests {
                 let background = SketchColor(NSColor(deviceRed: 0.1, green: 0.1, blue: 0.1, alpha: 1))
                 let result = try renderedDifference(exported([plain], background: background).0, exported([outlined], background: background).0)
                 print("WEBKIT text outline: \(result.changed) changed pixels")
-                try expect(result.ink > 100 && result.changed > 32, "Text outline metadata/attributes have no ordinary SVG pixel effect")
+                try expect(result.ink > 100 && result.changed > 32, "Text outline has no ordinary SVG pixel effect")
             }),
             ("Recovered bright text outline and separate text shadow paint in WebKit", {
                 var plain = text("Bright"); plain.fontSize = 40; plain.color = SketchColor(.yellow)
                 var styled = plain; styled.outlined = true; styled.shadowed = true
                 let (data, root) = try exported([styled]), group = root.named("g")[0]
                 try expect(group.attributes["stroke"] == "black" && approximately(try number(group, "stroke-width"), 8), "Bright text needs the recovered black outline and capped thickness")
-                try expect(group.attributes["style"]?.contains("url(#skitch-redux-text-shadow)") == true, "Text must use its own original shadow, independent of vector shadows")
+                try expect(group.attributes["style"]?.contains("url(#opensnap-text-shadow)") == true, "Text must use its own original shadow, independent of vector shadows")
                 let xml = String(decoding: data, as: UTF8.self)
                 try expect(xml.contains("dx=\"0\" dy=\"1\" stdDeviation=\"3\"") && xml.contains("flood-opacity=\"0.8\""), "Original text shadow metrics absent from SVG")
                 let result = try renderedDifference(exported([plain]).0, data)
                 try expect(result.changed > 100, "Independent SVG renderer must visibly paint the recovered bright-text effects")
-                _ = try LegacySkitch.decode(data)
             }),
             ("WebKit SVG text placement and wrapping match native rendered ink", {
                 var element = text("Native text wraps across lines with spacing.")
@@ -473,29 +443,14 @@ fileprivate enum SVGExportTests {
                 // moves most glyph ink and exceeds this meaningful silhouette bound.
                 try expect(result.ink > 500 && result.maskMismatch < max(50, result.ink / 5), "SVG text placement/wrapping differs substantially from native rendering")
             }),
-            ("Original fixture export retains every vector and text line", {
-                let (original, _, bytes, root) = try originalFixture()
-                try expect(root.named("path").count == original.paths.count && root.named("g").count == original.texts.count && root.named("image").isEmpty, "Fixture was flattened or lost objects")
-                try expect(try number(root, "width") == original.size.width && number(root, "height") == original.size.height, "Fixture dimensions changed")
-                for (path, expected) in zip(root.named("path"), original.paths) { try compareCommands(commands(path), expected.commands) }
-                try expect(root.named("g")[0].named("text").map(\.text) == ["Snap", "your", "screen"], "Fixture text changed")
-                try expect(try SVGTestXML.read(bytes).comments == [" Skitch 1.0 "], "Fixture export marker changed")
-            }),
-            ("Original fixture export is readable by native document importer", {
-                let (original, _, bytes, _) = try originalFixture()
-                let imported: LegacySkitchDocument
-                do { imported = try LegacySkitch.decode(bytes) }
-                catch { throw Failure("Exported original fixture is rejected by LegacySkitch: \(error.localizedDescription)") }
-                try expect(imported.paths.count == original.paths.count && imported.texts.map(\.content) == original.texts.map(\.content), "Native fixture round-trip loses content")
-            }),
-            ("Native Skitch path grammar uses M/C/z, including new stroked shapes", {
+            ("Exported paths use only M/C/z, including new stroked shapes", {
                 var line = SketchElement(kind: .line); line.points = [CGPoint(x: 10, y: 20), CGPoint(x: 80, y: 20)]; line.strokeWidth = 5
                 let (_, root) = try exported([line])
                 for path in root.named("path") {
                     let parsed = try commands(path)
                     try expect(parsed.allSatisfy {
                         switch $0 { case .move, .cubic, .close: return true; default: return false }
-                    }, "Export emits L/Q commands that recovered original SubPathSegment::deSerialize does not accept (0x001c8400)")
+                    }, "Export emits L/Q commands")
                 }
             }),
             ("Invalid model data is rejected before writing XML", {

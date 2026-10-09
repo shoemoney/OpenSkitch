@@ -61,7 +61,7 @@ private enum OriginalActionButtonTests {
         let cell = TrackingCell(textCell: "Test")
         init() {
             button.cell = cell
-            button.showMenuOnLeftClick = false // Exercise the original SkitchButton contract by default.
+            button.showMenuOnLeftClick = false // Exercise the original OriginalButton contract by default.
             button.target = receiver
             button.action = #selector(ActionReceiver.primary(_:))
             button.alternateTarget = receiver

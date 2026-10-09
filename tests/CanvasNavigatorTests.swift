@@ -1,8 +1,8 @@
 // Standalone checks: no NSApplication, window, event posting, or desktop input.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete \
 //   -target arm64-apple-macosx13.0 -D CANVAS_NAVIGATOR_TESTS \
-//   Sources/CanvasNavigator.swift tests/CanvasNavigatorTests.swift -o /tmp/skitch-canvas-navigator-tests
-// rtk proxy /tmp/skitch-canvas-navigator-tests
+//   Sources/CanvasNavigator.swift tests/CanvasNavigatorTests.swift -o /tmp/opensnap-canvas-navigator-tests
+// rtk proxy /tmp/opensnap-canvas-navigator-tests
 #if CANVAS_NAVIGATOR_TESTS
 import AppKit
 

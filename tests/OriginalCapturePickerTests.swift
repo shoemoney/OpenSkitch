@@ -137,9 +137,9 @@ private enum OriginalCapturePickerTests {
         expect(G.placementFrame(mousePoint: NSPoint(x: 5000, y: 5000), requiredSize: size, in: bounds)
                == NSRect(x: 888, y: 671, width: 112, height: 129), "Clamped to the far overlay side")
 
-        let suite = "OpenSkitch.magnifier.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let suite = "OpenSnap.magnifier.\(UUID().uuidString)"
+        let defaults = TestDefaults(name: suite)
+        defer { TestDefaults.dispose(defaults, name: suite) }
         let off = OriginalCaptureSelectionView(frame: bounds, windowOnly: false, defaults: defaults)
         off.mountMagnifierIfEnabled(pointer: NSPoint(x: 500, y: 400))
         expect(off.magnifier == nil && off.subviews.isEmpty, "Preference off mounts nothing")
@@ -399,7 +399,7 @@ private enum OriginalCapturePickerTests {
         let busy = PickerRig(); busy.begin()
         let accepted = busy.panel
         busy.begin(windowOnly: true)
-        expect(busy.error.domain == "OpenSkitch.CapturePicker" && busy.error.code == 1 && busy.picker.isPicking && busy.panel === accepted,
+        expect(busy.error.domain == "OpenSnap.CapturePicker" && busy.error.code == 1 && busy.picker.isPicking && busy.panel === accepted,
                "Differently configured busy request fails without changing accepted selection")
         busy.drag(NSPoint(x: 20, y: 20), NSPoint(x: 100, y: 100))
         expect(busy.selection.windowID == nil && busy.selection.rect == NSRect(x: 21, y: 700, width: 79, height: 80),

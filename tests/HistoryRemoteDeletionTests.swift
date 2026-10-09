@@ -2,8 +2,8 @@ import Foundation
 import Darwin
 
 // Standalone, no UI/network/process/Keychain operations; every deletion adapter is fake.
-// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift Sources/HistoryRemoteDeletion.swift tests/HistoryRemoteDeletionTests.swift -o /tmp/skitch-history-deletion-tests
-// /tmp/skitch-history-deletion-tests --test
+// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift Sources/HistoryRemoteDeletion.swift tests/HistoryRemoteDeletionTests.swift -o /tmp/opensnap-history-deletion-tests
+// /tmp/opensnap-history-deletion-tests --test
 private final class FakeHistoryDeletionAdapter: HistoryRemoteDeletionAdapter {
     private let lock = NSLock()
     private var config: PublishingSettings

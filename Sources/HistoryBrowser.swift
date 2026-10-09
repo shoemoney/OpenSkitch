@@ -42,8 +42,8 @@ final class HistoryBrowser: NSWindowController, NSCollectionViewDataSource,
         var title: String { ["Open", "Copy", "Copy Link", "Open Link", "Hide from History", "Move to Trash", "Delete from Web"][rawValue] }
     }
     struct Section { var day: Date; var title: String; var items: [Item] }
-    nonisolated static let dragFormats = ["png", "jpeg", "tiff", "pdf", "svg", "skitch"]
-    nonisolated static let dragFormatDefaultsKey = "SkitchRedux.HistoryDragFormat"
+    nonisolated static let dragFormats = ["png", "jpeg", "tiff", "pdf", "svg", "opensnap"]
+    nonisolated static let dragFormatDefaultsKey = "OpenSnap.HistoryDragFormat"
 
     var onOpen: (([UUID]) -> Void)? { didSet { updateControls() } }
     var onCopy: (([UUID]) -> Void)? { didSet { updateControls() } }
@@ -483,11 +483,11 @@ final class HistoryPromiseSnapshot: NSObject, NSFilePromiseProviderDelegate, @un
         let ext = format == "jpeg" ? "jpg" : format
         let invalid = CharacterSet(charactersIn:"/\\:\0").union(.controlCharacters)
         let clean = name.components(separatedBy:invalid).joined(separator:"_").trimmingCharacters(in:CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn:".")))
-        let base = clean.isEmpty ? "Skitch" : String(clean.prefix(160))
+        let base = clean.isEmpty ? "OpenSnap" : String(clean.prefix(160))
         let knownExtension = HistoryBrowser.dragFormats.contains((base as NSString).pathExtension.lowercased()) || (base as NSString).pathExtension.lowercased() == "jpg"
         filename = (knownExtension ? (base as NSString).deletingPathExtension : base)+"."+ext
-        typeIdentifier = format == "skitch" ? UTType.svg.identifier : (UTType(filenameExtension:ext)?.identifier ?? UTType.data.identifier)
-        queue = OperationQueue(); queue.maxConcurrentOperationCount = 1; queue.name = "Skitch.HistoryPromise"
+        typeIdentifier = UTType(filenameExtension:ext)?.identifier ?? UTType.data.identifier
+        queue = OperationQueue(); queue.maxConcurrentOperationCount = 1; queue.name = "OpenSnap.HistoryPromise"
         super.init()
     }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider,fileNameForType fileType: String) -> String { filename }

@@ -159,7 +159,7 @@ extension AppSafetyTests {
         walk(content)
         try expect(app.nameField.superview == nil && !all.contains { ($0 as? NSTextField)?.isEditable == true }, "Modern has no editable file-name field on screen")
         try expect(!all.contains { ($0 as? NSButton)?.title == "Actual Size" }, "Modern has no Actual Size button")
-        let footer = try all.first { $0.identifier?.rawValue == "OpenSkitchFooter" }.unwrap("footer row")
+        let footer = try all.first { $0.identifier?.rawValue == "OpenSnapFooter" }.unwrap("footer row")
         let row = footer.convert(footer.bounds, to: content)
         for part in [app.zoomControl, app.status, app.dragFormatToggle, try (app.dragExportView).unwrap("drag"), chrome.shareButton] as [NSView] {
             let frame = part.convert(part.bounds, to: content)
@@ -442,7 +442,7 @@ extension AppSafetyTests {
             "tool.text.id": "text",
             "tool.text.label": "Text",
             "tool.text.tip": "Text tool",
-            "toolbox.items": "Toolbox|About OpenSkitch|Preferences…|Quit OpenSkitch||New|Open...|Browse Photos|Save to History|Export...|Save As...|Print...||Cut|Copy|Paste|Delete|Select All|Duplicate|Show Fonts||Crosshair Snapshot|Fullscreen Snapshot|Frame Snapshot|Re-snap (Keep Pen)||Set Snap to Normal Size|Flip|Rotate 90° Clockwise|Background Color to Transparent|Crop Snap at Current View|Wipe Snap Only||More Commands|Filled Shapes|Shadow",
+            "toolbox.items": "Toolbox|About OpenSnap|Preferences…|Quit OpenSnap||New|Open...|Browse Photos|Save to History|Export...|Save As...|Print...||Cut|Copy|Paste|Delete|Select All|Duplicate|Show Fonts||Crosshair Snapshot|Fullscreen Snapshot|Frame Snapshot|Re-snap (Keep Pen)||Set Snap to Normal Size|Flip|Rotate 90° Clockwise|Background Color to Transparent|Crop Snap at Current View|Wipe Snap Only||More Commands|Filled Shapes|Shadow",
             "toolbox.label": "Toolbox",
             "toolbox.tip": "Common drawing and capture commands; additional actions are in More Commands",
             "zoom.label": "Canvas zoom"
@@ -918,7 +918,7 @@ extension AppSafetyTests {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
         app.writeLayoutEvidence()
-        let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? app.support.path
+        let folder = ProcessInfo.processInfo.environment["OPENSNAP_EVIDENCE_DIR"] ?? app.support.path
         let data = try Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent("layout.json"))
         guard let evidence = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure(description: "layout.json is not an object") }
         let appearance = evidence["appearance"] as? [String: Any]
@@ -939,8 +939,8 @@ extension AppSafetyTests {
             if !isButtonInternal { try expect((entry["fontSize"] as? Double ?? 0) >= 18, "\(label) is at least 18 pt: \(entry)") }
             try expect(!frame.isEmpty && abs(frame.width - visible.width) < 0.5 && abs(frame.height - visible.height) < 0.5, "\(label) is not clipped (\(frame) vs \(visible))")
         }
-        try expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "The top bar carries no logo")
-        try expect(app.window.contentView?.subviews.contains { $0.identifier?.rawValue == "OpenSkitchHeader" } == false, "The header lives inside the chrome, which the evidence accommodates")
+        try expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSnapBrand" }, "The top bar carries no logo")
+        try expect(app.window.contentView?.subviews.contains { $0.identifier?.rawValue == "OpenSnapHeader" } == false, "The header lives inside the chrome, which the evidence accommodates")
     }
 
     private static func modernMenus() throws {

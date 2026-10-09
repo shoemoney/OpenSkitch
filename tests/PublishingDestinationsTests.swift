@@ -2,10 +2,10 @@ import Foundation
 
 // Standalone pure checks for multi-destination storage and S3 transport. No network, no Keychain,
 // no real ~/.aws and no real Application Support: every path is a fresh temp folder, secrets are in memory.
-// xcrun swiftc -swift-version 5 Sources/Publishing.swift Sources/PublishingS3.swift Sources/PublishingDestinations.swift Sources/PublishingDestinationsView.swift tests/PublishingDestinationsTests.swift -o /tmp/skitch-destinations-tests
-// /tmp/skitch-destinations-tests --test
+// xcrun swiftc -swift-version 5 Sources/Publishing.swift Sources/PublishingS3.swift Sources/PublishingDestinations.swift Sources/PublishingDestinationsView.swift tests/PublishingDestinationsTests.swift -o /tmp/opensnap-destinations-tests
+// /tmp/opensnap-destinations-tests --test
 // Explicit integration path (never run by --test):
-// /tmp/skitch-destinations-tests --live-s3 "AWS cdn"
+// /tmp/opensnap-destinations-tests --live-s3 "AWS cdn"
 @main
 enum PublishingDestinationsTests {
     static var checks = 0
@@ -18,7 +18,7 @@ enum PublishingDestinationsTests {
         throw PublishingFailure("SELF-CHECK FAILED: accepted " + message)
     }
     static func temporaryDirectory() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("skitch-destinations-" + UUID().uuidString, isDirectory: true)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("opensnap-destinations-" + UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
@@ -265,13 +265,13 @@ enum PublishingDestinationsTests {
         try expect(secrets4.items[dav.credentialID] == "dav-password", "removing an unedited migrated destination keeps the legacy Keychain item")
         try expect(try Data(contentsOf: directoryLegacy.appendingPathComponent("destination.json")) == davBytes, "and leaves the legacy file byte-identical")
 
-        // Isolation: SKITCH_APP_SUPPORT puts the store inside that folder with in-memory secrets.
+        // Isolation: OPENSNAP_APP_SUPPORT puts the store inside that folder with in-memory secrets.
         let support = try temporaryDirectory()
-        let isolated = PublishingDestinationStore.forEnvironment(["SKITCH_APP_SUPPORT": support.path])
+        let isolated = PublishingDestinationStore.forEnvironment(["OPENSNAP_APP_SUPPORT": support.path])
         try expect(isolated.directory.standardizedFileURL.path == support.appendingPathComponent("Publishing").standardizedFileURL.path && isolated.secrets is PublishingMemorySecrets,
                    "an isolated support folder holds the store and its secrets stay in memory")
         let production = PublishingDestinationStore.forEnvironment([:])
-        try expect(production.directory.path.hasSuffix("/Application Support/SkitchRedux/Publishing") && production.secrets is PublishingKeychain, "no environment means the real folder and Keychain")
+        try expect(production.directory.path.hasSuffix("/Application Support/OpenSnap/Publishing") && production.secrets is PublishingKeychain, "no environment means the real folder and Keychain")
 
         // An unreadable old file blocks migration and is left alone.
         let directory3 = try temporaryDirectory()
@@ -366,7 +366,7 @@ enum PublishingDestinationsTests {
         let credentials = try PublishingS3Credentials.resolve(
             settings: destination.settings, secrets: store.secrets,
             credentialsFile: AWSSharedCredentials.defaultFile(environment: ProcessInfo.processInfo.environment, home: URL(fileURLWithPath: NSHomeDirectory())))
-        let name = "openskitch-live-check-" + UUID().uuidString.lowercased() + ".png"
+        let name = "opensnap-live-check-" + UUID().uuidString.lowercased() + ".png"
         let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1cAAAAASUVORK5CYII=")!
         let worker = PublishingWorkController()
         func run<T>(_ body: @escaping (PublishingCancellation) throws -> T) throws -> T {

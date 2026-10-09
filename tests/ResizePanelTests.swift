@@ -1,8 +1,8 @@
 // Pure tests only: no windows, application launch, desktop input, or permissions.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D RESIZE_PANEL_TESTS Sources/ResizePresets.swift Sources/ResizePanel.swift tests/ResizePanelTests.swift \
-//   -o /tmp/skitch-resize-panel-tests
-// rtk proxy /tmp/skitch-resize-panel-tests
+//   -o /tmp/opensnap-resize-panel-tests
+// rtk proxy /tmp/opensnap-resize-panel-tests
 #if RESIZE_PANEL_TESTS
 import Foundation
 import CoreGraphics

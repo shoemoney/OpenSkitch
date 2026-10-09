@@ -2,8 +2,8 @@
 // No app/window creation, OS hotkey registration, Accessibility, keyboard event
 // synthesis, credentials, desktop capture, or network.
 // xcrun swiftc -D GLOBAL_HOTKEY_TESTS -swift-version 5 -target arm64-apple-macosx13.0 \
-//   Sources/GlobalHotkeys.swift tests/GlobalHotkeysTests.swift -o /tmp/skitch-hotkey-tests
-// /tmp/skitch-hotkey-tests
+//   Sources/GlobalHotkeys.swift tests/GlobalHotkeysTests.swift -o /tmp/opensnap-hotkey-tests
+// /tmp/opensnap-hotkey-tests
 // Repeat compilation for x86_64-apple-macosx13.0 (Intel); Swift 6 is also checked.
 #if GLOBAL_HOTKEY_TESTS
 import AppKit
@@ -99,9 +99,9 @@ private enum GlobalHotkeysTests {
         catch { fputs("FAIL GlobalHotkeysTests: \(error)\n", stderr); exit(1) }
     }
     private static func run() async throws {
-        let suite = "SkitchRedux.GlobalHotkeys.Tests." + UUID().uuidString
-        guard let defaults = UserDefaults(suiteName: suite) else { throw Failure(description: "Could not create isolated preferences suite") }
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let suite = "OpenSnap.GlobalHotkeys.Tests." + UUID().uuidString
+        let defaults = TestDefaults(name: suite)
+        defer { TestDefaults.dispose(defaults, name: suite) }
         let store = GlobalHotkeyStore(defaults: defaults)
 
         let first = try store.load()
@@ -117,7 +117,7 @@ private enum GlobalHotkeysTests {
         try expect(GlobalHotkeySettings.originalBindings[.show] == nil && first.upload == .none && first.show == .none, "Show has no original default and neither new action is claimed on first launch")
         try expect(GlobalHotkeyAction(rawValue: "upload") == .upload && GlobalHotkeyAction(rawValue: "show") == .show, "Upload/Show raw values")
         try expect(Set(GlobalHotkeyAction.allCases.map(\.carbonID)).count == 6 && GlobalHotkeyAction.allCases.count == 6, "Six actions with distinct carbon IDs")
-        try expect(GlobalHotkeyAction.upload.title == "Upload" && GlobalHotkeyAction.show.title == "Show Skitch", "Upload/Show titles")
+        try expect(GlobalHotkeyAction.upload.title == "Upload" && GlobalHotkeyAction.show.title == "Show OpenSnap", "Upload/Show titles")
         let legacy = Data(#"{"version":1,"enabled":true,"screen":{"modifiers":0},"window":{"modifiers":0},"fullscreen":{"modifiers":0},"frame":{"modifiers":0},"camera":{"modifiers":0}}"#.utf8)
         let decodedLegacy = try? JSONDecoder().decode(GlobalHotkeySettings.self, from: legacy)
         try expect(decodedLegacy?.upload == GlobalHotkeyBinding.none && decodedLegacy?.show == GlobalHotkeyBinding.none, "Preferences saved before Upload/Show still load")

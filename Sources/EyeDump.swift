@@ -3,12 +3,12 @@ import AppKit
 /// `--eye-dump <outdir>`: saves PNGs of the app's own windows for repeatable visual review, then quits.
 extension AppDelegate {
     /// The dump draws on the live canvas and quits clean, which would delete the real recovery file,
-    /// so the flag is ignored unless SKITCH_APP_SUPPORT points at an isolated directory.
+    /// so the flag is ignored unless OPENSNAP_APP_SUPPORT points at an isolated directory.
     static func eyeDumpDirectory(arguments: [String] = CommandLine.arguments, environment: [String: String] = ProcessInfo.processInfo.environment) -> URL? {
         let args = arguments
         guard let flag = args.firstIndex(of: "--eye-dump"), args.indices.contains(flag + 1) else { return nil }
         var isDirectory: ObjCBool = false
-        guard let support = environment["SKITCH_APP_SUPPORT"], !support.isEmpty,
+        guard let support = environment["OPENSNAP_APP_SUPPORT"], !support.isEmpty,
               FileManager.default.fileExists(atPath: support, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
         return URL(fileURLWithPath: args[flag + 1], isDirectory: true)
     }

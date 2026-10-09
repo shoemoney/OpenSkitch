@@ -12,7 +12,7 @@ enum GlobalHotkeyAction: String, Codable, CaseIterable, Sendable {
         case .fullscreen: return "Full screen"
         case .frame: return "Frame"
         case .upload: return "Upload"
-        case .show: return "Show Skitch"
+        case .show: return "Show OpenSnap"
         }
     }
     var carbonID: UInt32 { UInt32(Self.allCases.firstIndex(of: self)! + 1) }
@@ -107,7 +107,7 @@ private func globalHotkeyFailure(_ message: String, underlying: [Error] = []) ->
     var info: [String: Any] = [NSLocalizedDescriptionKey: message]
     if let first = underlying.first { info[NSUnderlyingErrorKey] = first }
     if !underlying.isEmpty { info["RelatedErrors"] = underlying.map { $0 as NSError } }
-    return NSError(domain: "SkitchRedux.GlobalHotkeys", code: 1, userInfo: info)
+    return NSError(domain: "OpenSnap.GlobalHotkeys", code: 1, userInfo: info)
 }
 
 private func carbonHotkeyFailure(_ operation: String, _ status: OSStatus) -> NSError {
@@ -240,7 +240,7 @@ struct GlobalHotkeySettings: Codable, Equatable, Sendable {
 // missing keyCode plus empty modifiers. No account, credential or captured key
 // text is stored. A corrupt/future blob must not fall back to enabled defaults.
 struct GlobalHotkeyStore {
-    static let defaultsKey = "SkitchRedux.GlobalHotkeys.v1"
+    static let defaultsKey = "OpenSnap.GlobalHotkeys.v1"
     let defaults: UserDefaults
     func load() throws -> GlobalHotkeySettings {
         guard let object = defaults.object(forKey: Self.defaultsKey) else { return .defaults }
@@ -280,7 +280,7 @@ private final class CarbonHotkeyRelay: Sendable {
     }
 }
 
-private let skitchGlobalHotkeyHandler: EventHandlerUPP = { _, event, userData in
+private let openSnapGlobalHotkeyHandler: EventHandlerUPP = { _, event, userData in
     guard Thread.isMainThread, let event, let userData,
           GetEventClass(event) == UInt32(kEventClassKeyboard),
           GetEventKind(event) == UInt32(kEventHotKeyPressed) else { return OSStatus(eventNotHandledErr) }
@@ -339,7 +339,7 @@ private final class CarbonGlobalHotkeyBackend: GlobalHotkeyBackend {
         let relay = CarbonHotkeyRelay(signature: UInt32.random(in: 1...UInt32.max), callback: onEvent)
         var specification = EventTypeSpec(eventClass: UInt32(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         var handler: EventHandlerRef?
-        let status = InstallEventHandler(GetApplicationEventTarget(), skitchGlobalHotkeyHandler, 1,
+        let status = InstallEventHandler(GetApplicationEventTarget(), openSnapGlobalHotkeyHandler, 1,
                                          &specification, Unmanaged.passUnretained(relay).toOpaque(), &handler)
         guard status == noErr else { throw carbonHotkeyFailure("InstallEventHandler", status) }
         guard let handler else { throw globalHotkeyFailure("InstallEventHandler returned success without a handler reference.") }

@@ -1,8 +1,8 @@
 // Internal native events only: no event posting, visible UI, or desktop input.
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D CANVAS_BORDER_TESTS \
 //   Sources/WindowSizing.swift Sources/CanvasBorderView.swift \
-//   tests/CanvasBorderTests.swift -o /tmp/skitch-canvas-border-tests
-// /tmp/skitch-canvas-border-tests
+//   tests/CanvasBorderTests.swift -o /tmp/opensnap-canvas-border-tests
+// /tmp/opensnap-canvas-border-tests
 #if CANVAS_BORDER_TESTS
 import AppKit
 

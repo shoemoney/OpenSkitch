@@ -5,7 +5,7 @@ import Darwin
 import WebKit
 
 private func captureFailure(_ code: Int, _ message: String) -> NSError {
-    NSError(domain: "SkitchRedux.Capture", code: code,
+    NSError(domain: "OpenSnap.Capture", code: code,
             userInfo: [NSLocalizedDescriptionKey: message])
 }
 
@@ -211,7 +211,7 @@ private final class ScreenshotProcess: @unchecked Sendable {
     init(environment: CaptureEnvironment) throws {
         killDelay = environment.killDelay
         directory = environment.temporaryRoot
-            .appendingPathComponent("skitch-capture-" + UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("opensnap-capture-" + UUID().uuidString, isDirectory: true)
         imageURL = directory.appendingPathComponent("capture.png")
         diagnosticURL = directory.appendingPathComponent("diagnostics.txt")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false,
@@ -314,7 +314,7 @@ private final class ScreenshotProcess: @unchecked Sendable {
 private func captureCleanupError(_ errors: [Error]) -> Error? {
     guard let first = errors.first else { return nil }
     if errors.count == 1 { return first }
-    return NSError(domain: "SkitchRedux.Capture", code: 41,
+    return NSError(domain: "OpenSnap.Capture", code: 41,
                    userInfo: [NSLocalizedDescriptionKey: errors.map { $0.localizedDescription }.joined(separator: "; "),
                               NSUnderlyingErrorKey: first, "CleanupErrors": errors])
 }
@@ -323,7 +323,7 @@ private func captureCleanupError(_ errors: [Error]) -> Error? {
 /// (3072), so callers can suppress an error alert without suppressing real errors.
 /// Screen modes: crosshair = rectangle; fullscreen = main display; window =
 /// system window picker; frame = the supplied repeatable screen rectangle.
-/// The original Skitch see-through frame preview belongs to the parent UI and
+/// The original see-through frame preview belongs to the parent UI and
 /// is not implemented here.
 @MainActor
 final class CaptureCoordinator: NSObject, WKNavigationDelegate {

@@ -5,17 +5,17 @@ import AppKit
 struct GeneralPreferencesState: Equatable {
     var drawingPrecision: StrokeSmoothing
     var arrowHead: Int
-    var includeSkitch: Bool
+    var includeApp: Bool
     var statusMenu: Int
     var showToolTips: Bool
     var showKeyboardTips: Bool
 
-    init(drawingPrecision: StrokeSmoothing, arrowHead: Int, includeSkitch: Bool,
+    init(drawingPrecision: StrokeSmoothing, arrowHead: Int, includeApp: Bool,
          statusMenu: Int, showToolTips: Bool = false,
          showKeyboardTips: Bool = false) {
         self.drawingPrecision = drawingPrecision
         self.arrowHead = arrowHead
-        self.includeSkitch = includeSkitch
+        self.includeApp = includeApp
         self.statusMenu = statusMenu
         self.showToolTips = showToolTips
         self.showKeyboardTips = showKeyboardTips
@@ -34,7 +34,7 @@ final class GeneralPreferencesForm: NSView {
     private var precisionButtons: [NSButton] = []
     private var arrowButtons: [NSButton] = []
     private var visibilityButtons: [NSButton] = []
-    private let snap = NSButton(checkboxWithTitle: "Show Skitch window in fullscreen and crosshairs Snap", target: nil, action: nil)
+    private let snap = NSButton(checkboxWithTitle: "Show OpenSnap window in fullscreen and crosshairs Snap", target: nil, action: nil)
     private let toolTips = NSButton(checkboxWithTitle: "Show tool tip overlays", target: nil, action: nil)
     private let keyboardTips = NSButton(checkboxWithTitle: "Show keyboard tip overlay", target: nil, action: nil)
 
@@ -60,7 +60,7 @@ final class GeneralPreferencesForm: NSView {
         help.setContentCompressionResistancePriority(.required, for: .vertical)
         let arrowChoices = vertical([horizontal(arrowButtons), help], spacing: 6)
         configure(snap, action: #selector(changeSnap(_:)))
-        snap.identifier = NSUserInterfaceItemIdentifier("includeSkitch")
+        snap.identifier = NSUserInterfaceItemIdentifier("includeApp")
         snap.cell?.wraps = true
         snap.cell?.isScrollable = false
         snap.cell?.lineBreakMode = .byWordWrapping
@@ -76,7 +76,7 @@ final class GeneralPreferencesForm: NSView {
         tabs.identifier = NSUserInterfaceItemIdentifier("preferencesTabs")
         tabs.font = .systemFont(ofSize: 20)
         tabs.translatesAutoresizingMaskIntoConstraints = false
-        let general: [NSView] = [toolTips, keyboardTips, row("Show Skitch in:", choices: horizontal(visibilityButtons))]
+        let general: [NSView] = [toolTips, keyboardTips, row("Show OpenSnap in:", choices: horizontal(visibilityButtons))]
         // Recovered MainMenu.nib ownership, rather than the older help image.
         let sections: [(String, [NSView])] = [
             ("General", general),
@@ -137,7 +137,7 @@ final class GeneralPreferencesForm: NSView {
         select(precisionButtons, tag: precision)
         select(arrowButtons, tag: normalized.arrowHead)
         select(visibilityButtons, tag: normalized.statusMenu)
-        snap.state = normalized.includeSkitch ? .on : .off
+        snap.state = normalized.includeApp ? .on : .off
         toolTips.state = normalized.showToolTips ? .on : .off
         keyboardTips.state = normalized.showKeyboardTips ? .on : .off
     }
@@ -213,7 +213,7 @@ final class GeneralPreferencesForm: NSView {
     }
     @objc private func changeArrow(_ sender: NSButton) { state.arrowHead = sender.tag; publish() }
     @objc private func changeVisibility(_ sender: NSButton) { state.statusMenu = sender.tag; publish() }
-    @objc private func changeSnap(_ sender: NSButton) { state.includeSkitch = sender.state == .on; publish() }
+    @objc private func changeSnap(_ sender: NSButton) { state.includeApp = sender.state == .on; publish() }
     @objc private func changeToolTips(_ sender: NSButton) { state.showToolTips = sender.state == .on; publish() }
     @objc private func changeKeyboardTips(_ sender: NSButton) { state.showKeyboardTips = sender.state == .on; publish() }
     @objc private func requestDone() { onDone?() }

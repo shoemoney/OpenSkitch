@@ -16,7 +16,7 @@ struct WindowZoomCorners: Equatable {
         return CGRect(x: left, y: bottom, width: right-left, height: top-bottom)
     }
 
-    // SkitchIconifiedWindow appear:/disappear: and its 2x2 setCorners mesh.
+    // OriginalIconifiedWindow appear:/disappear: and its 2x2 setCorners mesh.
     static func frame(source: CGRect, destination: CGRect, direction: WindowZoomDirection, index: Int, count: Int) -> Self {
         let t = CGFloat(max(0, min(index, max(1, count)))) / CGFloat(max(1, count))
         let curved = direction == .shrink ? sqrt(t) : t*t

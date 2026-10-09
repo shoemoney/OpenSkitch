@@ -1,9 +1,9 @@
 import AppKit
 
 enum ExportAccessoryFormat: String, CaseIterable {
-    case png, jpeg, tiff, gif, bmp, pdf, svg, skitch
+    case png, jpeg, tiff, gif, bmp, pdf, svg, opensnap
 
-    var title: String { self == .skitch ? "Skitch" : rawValue.uppercased() }
+    var title: String { self == .opensnap ? "OpenSnap" : rawValue.uppercased() }
 
     static func validated(_ value: String) -> ExportAccessoryFormat {
         switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {

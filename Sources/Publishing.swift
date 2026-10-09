@@ -700,7 +700,7 @@ enum PublishingCurl {
             return plan.publicURL ?? plan.remoteURL
         }
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchPublish-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapPublish-") }
         catch { throw PublishingFailure("A private temporary upload folder could not be created.") }
         let file = directory.appendingPathComponent("image")
         do {
@@ -722,7 +722,7 @@ private enum PublishingSFTP {
     static func upload(data: Data, plan: PublishingPlan, cancellation: PublishingCancellation) throws -> URL {
         guard available, let sftp = plan.keyedSFTP else { throw PublishingFailure("The keyed SFTP backend is unavailable.") }
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchSFTP-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapSFTP-") }
         catch { throw PublishingFailure("A private SFTP verification folder could not be created.") }
         let source = directory.appendingPathComponent("image"), verification = directory.appendingPathComponent("verified-image")
         do {
@@ -760,7 +760,7 @@ enum PublishingTransfer {
         try cancellation.check()
         guard let publicURL = plan.publicURL else { return uploaded }
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchPublicCheck-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapPublicCheck-") }
         catch { throw PublishingFailure("The file uploaded, but a private public-URL verification folder could not be created. No link was copied.") }
         let download = directory.appendingPathComponent("public-image")
         let check = try PublishingPublicCheck(url: publicURL)

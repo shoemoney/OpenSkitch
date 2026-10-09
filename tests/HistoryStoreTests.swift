@@ -1,7 +1,7 @@
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D HISTORY_STORE_TESTS \
-//   Sources/{LegacySkitch,LegacyBridge,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,SVGExport,SkitchFile,LegacyHistoryImporter,HistoryStore}.swift \
-//   tests/HistoryStoreTests.swift -o /tmp/skitch-history-store-tests
-// /tmp/skitch-history-store-tests
+//   Sources/{SVGPath,DocumentModel,VectorGeometry,StrokeFitting,ImageExport,Canvas,OpenSnapFile,HistoryStore}.swift \
+//   tests/HistoryStoreTests.swift -o /tmp/opensnap-history-store-tests
+// /tmp/opensnap-history-store-tests
 #if HISTORY_STORE_TESTS
 import AppKit
 
@@ -19,23 +19,23 @@ enum HistoryStoreTests {
         let view = CanvasView(frame: .zero); view.newBlank(size: CGSize(width: 160, height: 100))
         var text = SketchElement(kind: .text); text.text = title; text.rect = CGRect(x: 10, y: 10, width: 130, height: 50)
         view.document.elements.append(text)
-        var metadata = LegacyBridge.Metadata(); metadata.root["skitchCustom"] = "preserved"
-        return try HistoryStore.Snapshot(canvasData: view.snapshotDocumentData(), metadata: metadata, preview: view.imageData(format: "png"))
+        var metadata = DrawingDefaults(); metadata.values["customColor"] = "preserved"
+        return try HistoryStore.Snapshot(canvasData: view.snapshotDocumentData(), drawingDefaults: metadata, preview: view.imageData(format: "png"))
     }
     @MainActor static func main() throws {
-        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("SkitchHistoryTests-" + UUID().uuidString)
+        let root = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("OpenSnapHistoryTests-" + UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let directory = root.appendingPathComponent("History"), store = try HistoryStore(directory: directory)
         let first = try snapshot(), date = Date(timeIntervalSince1970: 1_791_000_000)
         let emptyView = CanvasView(frame: .zero)
-        try expect(try HistoryStore.Snapshot(canvasData: emptyView.snapshotDocumentData(), metadata: .init(), preview: nil).isEmpty, "Default blank is empty")
+        try expect(try HistoryStore.Snapshot(canvasData: emptyView.snapshotDocumentData(), drawingDefaults: .init(), preview: nil).isEmpty, "Default blank is empty")
         emptyView.setBackgroundColor(.blue)
-        try expect(try !HistoryStore.Snapshot(canvasData: emptyView.snapshotDocumentData(), metadata: .init(), preview: nil).isEmpty, "Solid-color drawing is meaningful artwork")
+        try expect(try !HistoryStore.Snapshot(canvasData: emptyView.snapshotDocumentData(), drawingDefaults: .init(), preview: nil).isEmpty, "Solid-color drawing is meaningful artwork")
         let link = URL(string: "https://example.invalid/imgs/proof.png")!
         let id = try store.archive(first, name: "Proof", action: .shared, destination: "SFTP", remoteURL: link, remoteBinding: ["destination": "fixture"], date: date)
         try expect(store.entries.count == 1, "Archive creates one item")
-        try expect(try store.read(id).metadata.root["skitchCustom"] == "preserved", "Unknown original metadata survives archive")
+        try expect(try store.read(id).drawingDefaults.values["customColor"] == "preserved", "Unknown original metadata survives archive")
         try expect(try store.read(id).document.elements.first?.text == "café revised", "Editable text survives archive")
         try expect(store.entries.first?.text == "café revised", "Search text comes from actual drawing")
         try expect(store.entries.first?.action.title == "Shared", "Original action category is retained")
@@ -74,7 +74,7 @@ enum HistoryStoreTests {
         try expect(try Data(contentsOf: currentFile) == Data("tampered".utf8), "Externally modified file is preserved")
         try store.remove([id], deleteFiles: true)
         try expect(!FileManager.default.fileExists(atPath: currentFile.path), "Explicit Delete Files deletes local copy")
-        let legacyDir = root.appendingPathComponent("Loose"), legacyURL = legacyDir.appendingPathComponent("1791000000-old-proof.skitch")
+        let legacyDir = root.appendingPathComponent("Loose"), legacyURL = legacyDir.appendingPathComponent("1791000000-old-proof.opensnap")
         try FileManager.default.createDirectory(at: legacyDir, withIntermediateDirectories: true)
         try first.native.write(to: legacyURL)
         let legacyStore = try HistoryStore(directory: legacyDir)
@@ -102,8 +102,8 @@ enum HistoryStoreTests {
         try legacyStore.trash([legacyID], move: trashMove)
         try expect(legacyStore.entry(legacyID) == nil && !FileManager.default.fileExists(atPath: revisionURL.path), "Successful Trash transaction removes only owned revision")
         try expect(FileManager.default.fileExists(atPath: legacyURL.path), "Trashing follow revision does not destroy original legacy source")
-        let outside = root.appendingPathComponent("outside.skitch"); try first.native.write(to: outside)
-        let symlink = legacyDir.appendingPathComponent("escape.skitch")
+        let outside = root.appendingPathComponent("outside.opensnap"); try first.native.write(to: outside)
+        let symlink = legacyDir.appendingPathComponent("escape.opensnap")
         try FileManager.default.createSymbolicLink(at: symlink, withDestinationURL: outside)
         try expect(try HistoryStore(directory: legacyDir).entries.isEmpty, "Symlink escape is never imported")
         let indexURL = directory.appendingPathComponent("index.json"), before = try Data(contentsOf: indexURL)
@@ -115,44 +115,20 @@ enum HistoryStoreTests {
         object["version"] = 2
         try JSONSerialization.data(withJSONObject: object).write(to: indexURL)
         try rejects({ _ = try HistoryStore(directory: directory) }, "Newer version fails closed")
-        let oldPictures = root.appendingPathComponent("OldPictures"), importedDirectory = root.appendingPathComponent("Imported")
-        try FileManager.default.createDirectory(at: oldPictures, withIntermediateDirectories: true)
-        let oldPicture = oldPictures.appendingPathComponent("original.skitch"); try first.native.write(to: oldPicture)
-        let imported = try HistoryStore(directory: importedDirectory)
-        let uid: (Int) -> [String: Int] = { ["CF$UID": $0] }
-        let objects: [Any] = ["$null", ["$class": uid(4), "NS.objects": [uid(2)]],
-            ["$class": uid(5), "mInfo": uid(3)],
-            ["$class": uid(6), "NS.keys": ["localPath", "local", "saved", "remoteURL", "textContent", "accountID"],
-             "NS.objects": ["/untrusted/outside/original.skitch", false, false, "https://example.invalid/imgs/original.png", "Original indexed words", "old-account"]],
-            ["$classname": "NSArray", "$classes": ["NSArray", "NSObject"]],
-            ["$classname": "HistoryObject", "$classes": ["HistoryObject", "NSObject"]],
-            ["$classname": "NSDictionary", "$classes": ["NSDictionary", "NSObject"]]]
-        let plist: [String: Any] = ["$archiver": "NSKeyedArchiver", "$version": 100000, "$top": ["root": uid(1)], "$objects": objects]
-        let legacyData = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
-        let report = try imported.importLegacy(indexData: legacyData, archiveDirectory: oldPictures)
-        try expect(report.imported == 1 && report.skipped == 0, "Synthetic keyed archive imports one native copy")
-        let importedEntry = imported.entries[0]
-        try expect(importedEntry.action == .shared && importedEntry.remoteURL?.absoluteString == "https://example.invalid/imgs/original.png" && importedEntry.remoteBinding == nil,
-                   "Legacy shared URL preserved without granting unproven remote-deletion binding")
-        try expect(importedEntry.text == "Original indexed words" && importedEntry.legacyAccountID == "old-account", "Legacy search snapshot and account identifier retained")
-        try expect(try imported.read(importedEntry.id).nativeCanvasDataMatches(first), "Legacy copied drawing retains editable raw state and metadata")
-        try expect(try Data(contentsOf: oldPicture) == first.native, "Original legacy picture remains untouched")
-        try expect(try imported.importLegacy(indexData: legacyData, archiveDirectory: oldPictures).imported == 0, "Legacy import is idempotent")
-        try imported.remove([importedEntry.id], deleteFiles: false)
-        try expect(try HistoryStore(directory: importedDirectory).importLegacy(indexData: legacyData, archiveDirectory: oldPictures).imported == 0, "Hidden imported record is not resurrected")
-        let failingImport = try HistoryStore(directory: root.appendingPathComponent("FailedImport"))
-        failingImport.writeIndex = { _, _ in throw Failure(message: "Import index unavailable") }
-        try rejects({ _ = try failingImport.importLegacy(indexData: legacyData, archiveDirectory: oldPictures) }, "Failed import commit reports failure")
-        try expect(failingImport.entries.isEmpty && FileManager.default.fileExists(atPath: oldPicture.path), "Failed import leaves source and index intact")
         let sharedDir = root.appendingPathComponent("SharedPreview")
-        try FileManager.default.createDirectory(at: sharedDir, withIntermediateDirectories: true)
-        try first.native.write(to: sharedDir.appendingPathComponent("same.skitch"))
-        try first.native.write(to: sharedDir.appendingPathComponent("same.skitchredux"))
-        try first.preview!.write(to: sharedDir.appendingPathComponent("same.png"))
+        let sharedStore0 = try HistoryStore(directory: sharedDir)
+        let leftID = try sharedStore0.archive(first, name: "left", action: .archived), rightID = try sharedStore0.archive(first, name: "right", action: .archived)
+        // Two entries pointing at one preview picture: trashing one must keep the other's picture.
+        let sharedIndexURL = sharedDir.appendingPathComponent("index.json")
+        var sharedIndex = try JSONSerialization.jsonObject(with: Data(contentsOf: sharedIndexURL)) as! [String: Any]
+        var sharedEntries = sharedIndex["entries"] as! [[String: Any]]
+        let sharedPreview = sharedEntries[0]["previewFile"] as! String
+        sharedEntries[1]["previewFile"] = sharedPreview
+        sharedIndex["entries"] = sharedEntries
+        try JSONSerialization.data(withJSONObject: sharedIndex).write(to: sharedIndexURL)
         let sharedStore = try HistoryStore(directory: sharedDir)
-        let left = sharedStore.entries.first { $0.nativeFile == "same.skitch" }!, right = sharedStore.entries.first { $0.nativeFile == "same.skitchredux" }!
-        try sharedStore.trash([left.id], move: trashMove)
-        try expect(FileManager.default.fileExists(atPath: sharedDir.appendingPathComponent("same.png").path) && !sharedStore.missing(right.id), "Trashing one migrated entry preserves another entry's shared preview and drawing")
+        try sharedStore.trash([leftID], move: trashMove)
+        try expect(FileManager.default.fileExists(atPath: sharedDir.appendingPathComponent(sharedPreview).path) && !sharedStore.missing(rightID), "Trashing one entry preserves another entry's shared preview and drawing")
         let recoveryStore = try HistoryStore(directory: root.appendingPathComponent("RollbackWarning"))
         let recoverID = try recoveryStore.archive(first, name: "recover", action: .archived)
         let recoverFile = recoveryStore.directory.appendingPathComponent(recoveryStore.entry(recoverID)!.nativeFile)
@@ -166,12 +142,6 @@ enum HistoryStoreTests {
         }
         try expect(FileManager.default.fileExists(atPath: trashDirectory.appendingPathComponent(recoverFile.lastPathComponent).path), "Unrestorable copy remains recoverable in Trash")
         print("History store tests: \(count) passed")
-    }
-}
-private extension SkitchFile {
-    func nativeCanvasDataMatches(_ snapshot: HistoryStore.Snapshot) throws -> Bool {
-        let expected = try SkitchFile.decode(snapshot.native)
-        return try canvasData == expected.canvasData && metadata == expected.metadata
     }
 }
 #endif
