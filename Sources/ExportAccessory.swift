@@ -253,6 +253,8 @@ final class ExportAccessory: NSObject {
         if let index = ExportAccessoryFormat.allCases.firstIndex(of: options.selectedFormat) {
             formatPopup?.selectItem(at: index)
         }
+        // A fixed quality sits between the 10% ticks, so let the knob rest exactly on it.
+        qualitySlider?.allowsTickMarkValuesOnly = fixedJPEGQuality == nil
         qualitySlider?.doubleValue = effectiveJPEGQuality
         qualitySlider?.isEnabled = options.jpegControlsEnabled && fixedJPEGQuality == nil
         qualityLabel?.isEnabled = options.jpegControlsEnabled

@@ -93,7 +93,7 @@ extension AppSafetyTests {
         var sliders: [NSSlider] = []
         func findSliders(_ view: NSView) { if let slider = view as? NSSlider { sliders.append(slider) }; view.subviews.forEach(findSliders) }
         findSliders(accessory.view)
-        try expect(sliders.count == 1 && !sliders[0].isEnabled, "The export quality slider is locked at 0.75: \(sliders.map { ($0.isEnabled, $0.doubleValue) })")
+        try expect(sliders.count == 1 && !sliders[0].isEnabled && abs(sliders[0].doubleValue - 0.75) < 0.001, "The export quality slider is locked at 0.75: \(sliders.map { ($0.isEnabled, $0.doubleValue) })")
         try expect(try app.exportPanelData(accessory) == want, "The real export bytes are exactly the 0.75 encoding")
         let historyID = try app.archiveStore().archive(try app.historySnapshot(), name: "Toggle", action: .archived)
         let history = try app.historyExport(historyID, format: "jpeg")
