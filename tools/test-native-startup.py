@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Exercise the built native app, editable save/reopen, render and real AppKit Quit.
 
-Uses isolated application support and the bundled original sample. No desktop
+Uses isolated application support and a home folder (CFFIXED_USER_HOME) under build/. No desktop
 input, capture permissions or network publishing are exercised. The built window
 must carry the glass chrome.
 """

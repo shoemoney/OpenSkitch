@@ -364,7 +364,7 @@ extension AppSafetyTests {
         try expect(app.dragExportView?.drawsBackground == false, "Drag Me lets its glass be the plate")
         try expect(try surface(chrome, app.dragExportView).shape == .capsule && (try surface(chrome, app.dragExportView).fixedSize) == NSSize(width: 48, height: 36),
                    "Drag Me is a compact 48x36 capsule like the other icon buttons")
-        try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) 
+        try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36)
                    && chrome.surface(for: app.dragFormatToggle)?.shape == .capsule, "Color and the format popup have their glass")
         try expect(chrome.surface(for: app.zoomControl) == nil && chrome.surface(for: app.status) == nil && chrome.surface(for: app.canvas) == nil, "Zoom, status and the canvas stay outside glass")
         try expect((app.status.font?.pointSize ?? 0) >= 18 && (app.zoomControl.font?.pointSize ?? 0) >= 18, "Text stays at its readable sizes")
@@ -884,7 +884,7 @@ extension AppSafetyTests {
         app.wipe()
         try expect(reads("Blank", false) && canvas.editingUndoManager.undoActionName == untouched,
                    "The Wipe menu command on a blank drawing changes nothing")
-        
+
         canvas.setBackground(try image(size: CGSize(width: 120, height: 80)))
         try expect(reads("Clear", true) && canvas.document.backgroundPNG != nil, "A snap image alone reads a live Clear: " + detail())
         canvas.document.elements = [shape]

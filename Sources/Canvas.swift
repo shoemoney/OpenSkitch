@@ -304,7 +304,6 @@ final class CanvasView: NSView, NSTextViewDelegate {
     var onHistoryRestored: ((CGSize) -> Void)?
     var onToolChange: ((SketchTool) -> Void)?
     var onColorChange: ((NSColor) -> Void)?
-    /// Original resource stems: wipe_brushlayer, wipe_snap, wipe_already_blank.
     var onHintModifiers: ((NSEvent.ModifierFlags) -> Void)?
     var onHintHover: ((Bool) -> Void)?
     /// See-through framing is a view state; rendering/export/recovery keep the full document.

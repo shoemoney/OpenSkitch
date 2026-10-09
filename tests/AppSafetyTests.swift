@@ -478,6 +478,16 @@ enum AppSafetyTests {
         try expect(app.canvas.document == before && text.superview === app.canvas,
                    "Discard decisions must protect pending text even when dirty is false")
     }
+    static func captureDismissesPreferences() throws {
+        let fixture = try Fixture(), app = fixture.app
+        app.showPreferences()
+        let preferences = app.preferencesWindow as! AppSafetyWindow
+        preferences.simulatesVisibility = true; preferences.shown = true
+        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
+        try expect(preferences.isVisible, "Cancelled capture retains Preferences")
+        app.receiveCapture(.success(try image()))
+        try expect(!preferences.isVisible, "Accepted Snap dismisses Preferences before showing the replacement drawing")
+    }
     static func originalMetadataRecovery() throws {
         let brushMetadata = LegacyBridge.Metadata(root: ["skitchBrushColor": "0.2 0.4 0.6 1", "skitchBrushSize": "6"], elements: [:])
         var fallback = SketchDocument(size: CGSize(width: 71, height: 53)); fallback.backgroundColor = SketchColor(.green)
@@ -499,9 +509,11 @@ enum AppSafetyTests {
             let typing = text.undoManager, caret = text.selectedRange()
             app.saveRecovery()
             let recovery = app.support.appendingPathComponent("Recovery.skitch"), bytes = try Data(contentsOf: recovery)
-            let decoded = try SkitchFile.decode(bytes)
+            let decoded = try SkitchFile.decode(bytes), visible = try LegacySkitch.decode(bytes)
             try expect(decoded.document == pending && decoded.metadata == metadata && metadata.root["skitchBrushSize"] == "6",
                        "Native recovery must retain pending edits and brush metadata together")
+            try expect(visible.attributes["skitchBrushColor"] == "0.2 0.4 0.6 1" && visible.attributes["skitchBrushSize"] == "6" && visible.paths.count == 3,
+                       "Recovery's visible SVG must retain the seeded brush settings and three editable paths")
             try expect(app.canvas.document == before && text.superview === app.canvas && app.window.firstResponder === text &&
                        text.undoManager === typing && text.selectedRange() == caret && app.legacyMetadata == metadata,
                        "Metadata recovery must not commit or replace the live editor, model, caret or metadata")
@@ -3162,6 +3174,7 @@ enum AppSafetyTests {
             ("recovery includes pending text without committing", recoverySnapshot),
             ("pending text remains protected with a stale dirty flag", pendingTextFallback),
             ("First launch opens a blank canvas, and a recovered drawing still wins", firstLaunchBlankCanvas),
+            ("an accepted capture dismisses Preferences and a cancelled one leaves it visible", captureDismissesPreferences),
             ("original metadata survives native recovery, startup preference and legacy JSON migration", originalMetadataRecovery),
             ("accepted document drop saves to B and preserves A", acceptedDrop),
             ("cancelled document drop preserves pending typing", cancelledDrop),

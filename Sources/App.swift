@@ -604,9 +604,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func label(_ text: String) -> NSTextField { let f = NSTextField(labelWithString: text); f.font = .systemFont(ofSize: 18); return f }
     func button(_ title: String, _ action: Selector) -> NSButton { let b = OriginalActionButton(title: title, target: self, action: action); b.font = .systemFont(ofSize: 18); return b }
-    func stack(_ views: [NSView], horizontal: Bool = false) -> NSStackView {
-        let s = NSStackView(views: views); s.orientation = horizontal ? .horizontal : .vertical; s.spacing = 12; s.alignment = horizontal ? .centerY : .leading; return s
-    }
     func copiedMainMenuItem(_ action: Selector, title: String? = nil) -> NSMenuItem? {
         func find(_ menu: NSMenu) -> NSMenuItem? {
             for item in menu.items {

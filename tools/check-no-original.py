@@ -3,11 +3,19 @@
 
 Usage: check-no-original.py PATH   (the whole .app)
 The name list is static on purpose: this gate must work with no original/ folder on disk.
-Names are matched case-insensitively against every file in the bundle; ".m4a" and the
-original's numbered families are also matched by pattern.
+Three independent checks, all of which must come up empty:
+  1. every file name in the bundle against the original's names and numbered families,
+     and any sound file (.m4a .wav .aif .aiff .caf .mp3);
+  2. every asset/rendition name inside every compiled *.car catalog (xcrun assetutil --info),
+     against the same name list and patterns;
+  3. the SHA-256 of every bundle file against tools/original-resource-hashes.txt
+     (hashes only, no assets) so a renamed copy of an original file is still caught.
 """
+import hashlib
+import json
 import os
 import re
+import subprocess
 import sys
 
 ORIGINAL_NAMES = {n.lower() for n in (
@@ -70,9 +78,33 @@ ORIGINAL_NAMES = {n.lower() for n in (
     'xhtml1-strict.dtd', 'xhtml1-transitional.dtd'
 )}
 PATTERNS = [re.compile(p, re.I) for p in (
-    r"\.m4a$", r"\.skitch$", r"^ToolO(ff|n)[A-Za-z]+\.png$", r"^docWin_", r"^SkitchCount\d", r"^Skitch_",
+    r"\.(m4a|wav|aiff?|caf|mp3)$", r"\.skitch$", r"^ToolO(ff|n)[A-Za-z]+\.png$", r"^docWin_", r"^SkitchCount\d", r"^Skitch_",
     r"^Cursor[A-Za-z]+(-dark|-light|-overlay)?\.png$", r"^autoSave-\d+\.png$", r"^SKPresetResize", r"^Snap[A-Za-z]+\.png$",
 )]
+
+HASHES = set()
+hash_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "original-resource-hashes.txt")
+if os.path.isfile(hash_file):
+    HASHES = {l.strip() for l in open(hash_file) if l.strip() and not l.startswith("#")}
+
+
+def is_original(name):
+    base = os.path.basename(name)
+    stems = {base.lower(), (base + ".png").lower()}
+    return any(n in ORIGINAL_NAMES for n in stems) or any(p.search(base) for p in PATTERNS)
+
+
+def catalog_names(car):
+    out = subprocess.run(["xcrun", "assetutil", "--info", car], capture_output=True, text=True)
+    if out.returncode != 0:
+        return None
+    try:
+        entries = json.loads(out.stdout)
+    except ValueError:
+        return None
+    return {e["Name"] for e in entries if isinstance(e, dict) and e.get("Name")} | \
+           {e["RenditionName"] for e in entries if isinstance(e, dict) and e.get("RenditionName")}
+
 
 root = sys.argv[1] if len(sys.argv) > 1 else None
 if not root or not os.path.isdir(root):
@@ -81,10 +113,21 @@ if not root or not os.path.isdir(root):
 hits = []
 for directory, _, names in os.walk(root):
     for name in names:
-        if name.lower() in ORIGINAL_NAMES or any(p.search(name) for p in PATTERNS):
-            hits.append(os.path.join(directory, name))
-for path in hits:
-    print("original asset in bundle: " + path, file=sys.stderr)
+        path = os.path.join(directory, name)
+        if is_original(name):
+            hits.append("original asset in bundle: " + path)
+        if HASHES and not os.path.islink(path) and os.path.isfile(path):
+            with open(path, "rb") as handle:
+                if hashlib.sha256(handle.read()).hexdigest() in HASHES:
+                    hits.append("bundle file is byte-identical to an original resource: " + path)
+        if name.lower().endswith(".car"):
+            inside = catalog_names(path)
+            if inside is None:
+                hits.append("cannot read asset catalog (assetutil failed): " + path)
+            else:
+                hits.extend("original asset in catalog %s: %s" % (path, n) for n in sorted(inside) if is_original(n))
+for line in sorted(set(hits)):
+    print(line, file=sys.stderr)
 if hits:
     sys.exit(1)
-print("PASS check-no-original (%s: no original assets, no .m4a)" % root)
+print("PASS check-no-original (%s: no original assets by name, catalog entry or hash; no sound files)" % root)
