@@ -28,8 +28,8 @@ private enum ResizePresetsTests {
 
     static func suite(_ body: (UserDefaults) throws -> Void) throws {
         let name = "OpenSnap.ResizePresetsTests.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: name) else { throw Failure(description: "Suite unavailable") }
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = TestDefaults(name: name)
+        defer { TestDefaults.dispose(defaults, name: name) }
         try body(defaults)
     }
 

@@ -138,8 +138,8 @@ private enum OriginalCapturePickerTests {
                == NSRect(x: 888, y: 671, width: 112, height: 129), "Clamped to the far overlay side")
 
         let suite = "OpenSnap.magnifier.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = TestDefaults(name: suite)
+        defer { TestDefaults.dispose(defaults, name: suite) }
         let off = OriginalCaptureSelectionView(frame: bounds, windowOnly: false, defaults: defaults)
         off.mountMagnifierIfEnabled(pointer: NSPoint(x: 500, y: 400))
         expect(off.magnifier == nil && off.subviews.isEmpty, "Preference off mounts nothing")

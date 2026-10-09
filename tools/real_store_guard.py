@@ -17,6 +17,20 @@ REAL_STORE_FILES = [HOME / "Library/Preferences/com.shoemoney.skitch-redux.plist
                     HOME / "Library/Preferences/com.shoemoney.opensnap.plist"]
 
 
+PREFERENCES = HOME / "Library/Preferences"
+# Throwaway defaults suites the tests (current and earlier names) create; none may be left behind by a run.
+THROWAWAY_PREFIXES = ["SkitchRedux.ResizePresetsTests.", "SkitchHistoryTests.", "OpenSkitch.preferences.tests.",
+                      "SkitchRedux.GlobalHotkeys.Tests.", "OpenSkitch.appearance.tests.", "OpenSkitch.magnifier.",
+                      "OpenSnap.ResizePresetsTests.", "OpenSnapHistoryTests.", "OpenSnap.preferences.tests.",
+                      "OpenSnap.magnifier.", "OpenSnap.GlobalHotkeys.Tests.", "openskitch-hotkey-probe",
+                      "com.test.opensnap."]
+
+
+def throwaway_plists():
+    """Names of every plist in ~/Library/Preferences that matches a throwaway test prefix."""
+    return {path.name for path in PREFERENCES.glob("*.plist") if path.name.startswith(tuple(THROWAWAY_PREFIXES))}
+
+
 def describe():
     return [str(path) for path in REAL_STORE_FOLDERS + REAL_STORE_FILES]
 
@@ -40,15 +54,15 @@ def snapshot():
     return REAL_STORE_FOLDERS, entries
 
 
-def compare(before, opensnap_folder_existed):
+def compare(before, opensnap_folder_existed, plists_before=None):
     """Problems found since `before` (an earlier snapshot()); empty when nothing was touched."""
     _, after = snapshot()
     problems = [f"{'changed' if name in before and name in after else 'appeared' if name in after else 'disappeared'} {name}"
                 for name in sorted(before.keys() | after.keys()) if before.get(name) != after.get(name)]
     # No test may write preferences for any OpenSnap-named domain: CFFIXED_USER_HOME does not redirect the
     # preferences daemon, so a defaults suite used by a test lands in the real ~/Library/Preferences.
-    for leftover in sorted((HOME / "Library/Preferences").glob("com.test.opensnap.*")):
-        problems.append(f"left behind {leftover}")
+    if plists_before is not None:
+        problems += [f"left behind {PREFERENCES / name}" for name in sorted(throwaway_plists() - plists_before)]
     if not opensnap_folder_existed and OPENSNAP_FOLDER.exists():
         problems.append(f"created {OPENSNAP_FOLDER}")
     return problems

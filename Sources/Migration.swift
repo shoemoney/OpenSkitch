@@ -6,9 +6,10 @@ import Security
 /// "com.shoemoney.skitch-redux", Keychain service "SkitchRedux.CustomPublishing") into OpenSnap's own stores.
 ///
 /// Rules: nothing in the old stores is ever modified, moved or deleted; the new folder is assembled in a
-/// staging folder and moved into place; the marker file is written last, so an interrupted run simply runs
-/// again; one failing document never aborts the rest. Every location and store is injectable for tests.
-/// This file, together with LegacySkitch.swift, is the only code that knows the retired document formats.
+/// staging folder and moved into place; the marker file is written last, and only when no whole store failed, so an interrupted or
+/// partly failed run simply runs again (stores already installed are remembered and never copied twice); one failing
+/// document never aborts the rest and is final. Every location and store is injectable for tests.
+/// This file, together with LegacyReader.swift, is the only code that knows the retired document formats.
 protocol MigrationKeychain {
     func accounts(service: String) throws -> [String]
     func password(service: String, account: String) throws -> Data?
@@ -41,6 +42,8 @@ struct MigrationReport {
     var keychainAlreadyPresent = 0
     var keychainFailed = 0
     var failures: [String] = []
+    /// A whole store (History, Publishing, the Keychain listing, the placement) failed: the next launch must retry.
+    var storeFailed = false
     var notes: [String] = []
 
     var hasProblems: Bool { !failures.isEmpty || keychainFailed > 0 }
@@ -76,12 +79,14 @@ struct MigrationReport {
     /// One line for the status bar when something needs attention.
     var notice: String? {
         guard hasProblems else { return nil }
-        return "Moved your data to OpenSnap, but \(failures.count + keychainFailed) item(s) need attention; see migration-report.txt in the OpenSnap folder."
+        return "Copied your data to OpenSnap, but \(failures.count + keychainFailed) item(s) need attention; see migration-report.txt in the OpenSnap folder."
     }
 }
 
 enum OpenSnapMigration {
     static let markerName = ".migrated-from-skitchredux"
+    static let storeMarkerPrefix = ".migrated-store-"
+    static let stagingPrefix = ".OpenSnap-migrating-"
     static let reportName = "migration-report.txt"
     static let oldFolderName = "SkitchRedux"
     static let newFolderName = "OpenSnap"
@@ -95,8 +100,10 @@ enum OpenSnapMigration {
         "skitchInSnap": "opensnapInSnap",
         "SkitchRedux.GlobalHotkeys.v1": "OpenSnap.GlobalHotkeys.v1",
         "SkitchRedux.HistoryDragFormat": "OpenSnap.HistoryDragFormat",
-        "SkitchReduxResizePresetID": "OpenSnapResizePresetID",
     ]
+    /// Keys that live inside each row of the resize presets array (the array key itself is unchanged).
+    static let resizePresetsKey = "SKPresetResizes"
+    static let renamedResizeRowKeys: [String: String] = ["SkitchReduxResizePresetID": "OpenSnapResizePresetID"]
     /// Stored values that named the retired document format.
     static let renamedDefaultsValues: [String: [String: String]] = [
         "ExportFormat": ["skitch": "opensnap", "skitchredux": "opensnap"],
@@ -131,7 +138,8 @@ enum OpenSnapMigration {
               !fm.fileExists(atPath: newSupport.appendingPathComponent(markerName).path) else { return nil }
         var report = MigrationReport()
         let parent = newSupport.deletingLastPathComponent()
-        let stage = parent.appendingPathComponent(".OpenSnap-migrating-" + UUID().uuidString, isDirectory: true)
+        removeLeftoverStaging(in: parent)
+        let stage = parent.appendingPathComponent(stagingPrefix + UUID().uuidString, isDirectory: true)
         do {
             try fm.createDirectory(at: stage, withIntermediateDirectories: true)
         } catch {
@@ -140,20 +148,31 @@ enum OpenSnapMigration {
         }
         defer { try? fm.removeItem(at: stage) }
 
-        migratePublishing(from: oldSupport.appendingPathComponent("Publishing", isDirectory: true),
-                          to: stage.appendingPathComponent("Publishing", isDirectory: true), report: &report)
-        migrateHistory(from: oldSupport.appendingPathComponent("History", isDirectory: true),
-                       to: stage.appendingPathComponent("History", isDirectory: true), report: &report)
+        // A store an earlier run already installed is never copied again.
+        func alreadyInstalled(_ name: String) -> Bool { fm.fileExists(atPath: newSupport.appendingPathComponent(storeMarkerPrefix + name).path) }
+        if alreadyInstalled("Publishing") { report.notes.append("Upload destinations were already copied by an earlier run; left as they are.") } else {
+            migratePublishing(from: oldSupport.appendingPathComponent("Publishing", isDirectory: true),
+                              to: stage.appendingPathComponent("Publishing", isDirectory: true), report: &report)
+        }
+        if alreadyInstalled("History") { report.notes.append("History was already copied by an earlier run; left as it is.") } else {
+            migrateHistory(from: oldSupport.appendingPathComponent("History", isDirectory: true),
+                           to: stage.appendingPathComponent("History", isDirectory: true), report: &report)
+        }
         do {
             try fm.createDirectory(at: newSupport, withIntermediateDirectories: true)
             for name in ["Publishing", "History"] {
                 let staged = stage.appendingPathComponent(name, isDirectory: true), target = newSupport.appendingPathComponent(name, isDirectory: true)
                 guard fm.fileExists(atPath: staged.path) else { continue }
                 if fm.fileExists(atPath: target.path) {
-                    report.notes.append("\(name) already exists in the OpenSnap folder; the previous app's \(name) was not merged into it.")
-                } else { try fm.moveItem(at: staged, to: target) }
+                    report.storeFailed = true
+                    report.failures.append("\(name) already exists in the OpenSnap folder, so the previous app's \(name) was not copied (nothing was merged or overwritten); the next launch will try again.")
+                    continue
+                }
+                try fm.moveItem(at: staged, to: target)
+                try Data().write(to: newSupport.appendingPathComponent(storeMarkerPrefix + name), options: .atomic)
             }
         } catch {
+            report.storeFailed = true
             report.failures.append("Could not place the migrated folders (\(error.localizedDescription)); the next launch will try again.")
             return report
         }
@@ -162,6 +181,8 @@ enum OpenSnapMigration {
 
         do {
             try Data(report.text.utf8).write(to: newSupport.appendingPathComponent(reportName), options: .atomic)
+            // A whole store that failed leaves no marker: the next launch retries it (documents already copied are not repeated).
+            guard !report.storeFailed else { return report }
             let marker: [String: Any] = ["migratedAt": ISO8601DateFormatter().string(from: now), "from": oldSupport.path, "version": 1]
             try JSONSerialization.data(withJSONObject: marker, options: [.sortedKeys, .prettyPrinted])
                 .write(to: newSupport.appendingPathComponent(markerName), options: .atomic)
@@ -169,6 +190,18 @@ enum OpenSnapMigration {
             report.failures.append("Could not write the migration marker (\(error.localizedDescription)); the next launch will repeat the copy safely.")
         }
         return report
+    }
+
+    /// Staging folders from interrupted runs, recognised only by OpenSnap's own exact naming, directly inside Application Support.
+    private static func removeLeftoverStaging(in parent: URL) {
+        let fm = FileManager.default
+        guard let names = try? fm.contentsOfDirectory(atPath: parent.path) else { return }
+        for name in names where name.hasPrefix(stagingPrefix) && UUID(uuidString: String(name.dropFirst(stagingPrefix.count))) != nil {
+            let url = parent.appendingPathComponent(name, isDirectory: true)
+            guard let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey]),
+                  values.isDirectory == true, values.isSymbolicLink != true else { continue }
+            try? fm.removeItem(at: url)
+        }
     }
 
     // MARK: Publishing
@@ -183,8 +216,9 @@ enum OpenSnapMigration {
                 guard fm.fileExists(atPath: source.path) else { continue }
                 var data = try Data(contentsOf: source)
                 // Any Keychain service named inside the files now points at the new service.
-                if let range = data.range(of: Data(oldKeychainService.utf8)) {
-                    data.replaceSubrange(range, with: Data(newKeychainService.utf8))
+                if var text = String(data: data, encoding: .utf8), text.contains(oldKeychainService) {
+                    text = text.replacingOccurrences(of: oldKeychainService, with: newKeychainService)
+                    data = Data(text.utf8)
                 }
                 let target = new.appendingPathComponent(name)
                 try data.write(to: target, options: .atomic)
@@ -193,7 +227,9 @@ enum OpenSnapMigration {
                 if name == "destinations.json" { describeDestinations(data, report: &report) }
             }
         } catch {
-            report.failures.append("Upload destinations could not be copied (\(error.localizedDescription)); they are still in the previous app's folder.")
+            report.storeFailed = true
+            try? fm.removeItem(at: new)
+            report.failures.append("Upload destinations could not be copied (\(error.localizedDescription)); they are still in the previous app's folder and the next launch will try again.")
         }
     }
 
@@ -228,11 +264,13 @@ enum OpenSnapMigration {
         guard let indexData = try? Data(contentsOf: indexURL),
               var root = (try? JSONSerialization.jsonObject(with: indexData)) as? [String: Any],
               let entries = root["entries"] as? [[String: Any]] else {
+            report.storeFailed = true
             report.failures.append("The previous History index could not be read; no History was migrated and the old files were left alone.")
             return
         }
         do { try fm.createDirectory(at: new, withIntermediateDirectories: true) } catch {
-            report.failures.append("History could not be prepared (\(error.localizedDescription)).")
+            report.storeFailed = true
+            report.failures.append("History could not be prepared (\(error.localizedDescription)); the next launch will try again.")
             return
         }
         report.historyEntries = entries.count
@@ -310,19 +348,27 @@ enum OpenSnapMigration {
         do {
             try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys]).write(to: new.appendingPathComponent("index.json"), options: .atomic)
         } catch {
-            report.failures.append("The migrated History index could not be written (\(error.localizedDescription)); no History was migrated.")
+            report.storeFailed = true
+            report.failures.append("The migrated History index could not be written (\(error.localizedDescription)); no History was migrated and the next launch will try again.")
             try? fm.removeItem(at: new)
             return
         }
         // The new History must open with the app's own store before it is allowed into place.
         do {
-            let store = try HistoryStore(directory: new)
-            for entry in store.entries { _ = try store.read(entry.id) }
-            if store.entries.count != kept.count { throw HistoryStore.Failure.corruptIndex }
+            try verifyHistory(at: new, expectingEntries: kept.count)
         } catch {
-            report.failures.append("The migrated History did not pass verification (\(error.localizedDescription)); it was not installed. Nothing in the old folder was changed.")
+            report.storeFailed = true
+            report.failures.append("The migrated History did not pass verification (\(error.localizedDescription)); it was not installed and the next launch will try again. Nothing in the old folder was changed.")
             try? fm.removeItem(at: new)
         }
+    }
+
+    /// Opens the staged History with the app's own store and reads every drawing. The entry count must match what
+    /// was written: the store imports stray valid documents it finds, which would silently add entries.
+    static func verifyHistory(at directory: URL, expectingEntries expected: Int) throws {
+        let store = try HistoryStore(directory: directory)
+        for entry in store.entries { _ = try store.read(entry.id) }
+        if store.entries.count != expected { throw HistoryStore.Failure.corruptIndex }
     }
 
     /// An editable drawing holding only the old preview picture, for documents that cannot be converted.
@@ -342,6 +388,15 @@ enum OpenSnapMigration {
             let key = renamedDefaultsKeys[oldKey] ?? oldKey
             if defaults.hasNewValue(forKey: key) { report.defaultsKeptExisting.append(key); continue }
             var stored = value
+            if key == resizePresetsKey, let rows = value as? [Any] {
+                stored = rows.map { row -> Any in
+                    guard var dictionary = row as? [String: Any] else { return row }
+                    for (oldName, newName) in renamedResizeRowKeys {
+                        if let id = dictionary.removeValue(forKey: oldName), dictionary[newName] == nil { dictionary[newName] = id }
+                    }
+                    return dictionary
+                }
+            }
             if let text = value as? String, let replacement = renamedDefaultsValues[key]?[text] { stored = replacement }
             defaults.setNewValue(stored, forKey: key)
             report.defaultsCopied.append(key)
@@ -352,7 +407,7 @@ enum OpenSnapMigration {
     private static func migrateKeychain(_ keychain: MigrationKeychain, report: inout MigrationReport) {
         let accounts: [String]
         do { accounts = try keychain.accounts(service: oldKeychainService) } catch {
-            report.keychainFailed += 1; report.failures.append("The previous Keychain items could not be listed (\(error.localizedDescription)).")
+            report.keychainFailed += 1; report.storeFailed = true; report.failures.append("The previous Keychain items could not be listed (\(error.localizedDescription)).")
             return
         }
         for account in accounts {

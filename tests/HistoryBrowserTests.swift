@@ -30,8 +30,8 @@ struct HistoryBrowserTests {
     }
     static func browser(_ body: (HistoryBrowser,UserDefaults) throws -> Void) throws {
         let suite = "OpenSnapHistoryTests."+UUID().uuidString
-        let defaults = UserDefaults(suiteName:suite)!
-        defer { defaults.removePersistentDomain(forName:suite) }
+        let defaults = TestDefaults(name: suite)
+        defer { TestDefaults.dispose(defaults, name: suite) }
         let view = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ now })
         defer { view.close() }
         try body(view,defaults)
@@ -150,8 +150,8 @@ struct HistoryBrowserTests {
             }),
             ("Moving recovered date windows expire unchanged timer entries", {
                 for filter in [HistoryBrowser.DateFilter.lastHour,.last48] {
-                    let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
-                    defer { defaults.removePersistentDomain(forName:suite) }
+                    let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = TestDefaults(name: suite)
+                    defer { TestDefaults.dispose(defaults, name: suite) }
                     var clock = now
                     let browser = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ clock }); defer { browser.close() }
                     var value = item("Expiring"); value.date = now.addingTimeInterval(filter == .lastHour ? -3599 : -172799)
@@ -162,8 +162,8 @@ struct HistoryBrowserTests {
                 }
             }),
             ("Midnight refresh changes day headings despite unchanged catalog", {
-                let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
-                defer { defaults.removePersistentDomain(forName:suite) }
+                let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = TestDefaults(name: suite)
+                defer { TestDefaults.dispose(defaults, name: suite) }
                 var clock = now
                 let browser = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ clock }); defer { browser.close() }
                 let a = item("A"); browser.update(items:[a]); try expect(browser.sections[0].title == "Today","Initial heading")

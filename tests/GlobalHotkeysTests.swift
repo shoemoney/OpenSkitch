@@ -100,8 +100,8 @@ private enum GlobalHotkeysTests {
     }
     private static func run() async throws {
         let suite = "OpenSnap.GlobalHotkeys.Tests." + UUID().uuidString
-        guard let defaults = UserDefaults(suiteName: suite) else { throw Failure(description: "Could not create isolated preferences suite") }
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let defaults = TestDefaults(name: suite)
+        defer { TestDefaults.dispose(defaults, name: suite) }
         let store = GlobalHotkeyStore(defaults: defaults)
 
         let first = try store.load()

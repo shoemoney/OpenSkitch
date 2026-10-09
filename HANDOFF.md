@@ -1,6 +1,6 @@
 # OpenSnap agent handoff
 
-Resume document, October 9, 2026, America/Chicago. Describes branch `opensnap/integration-w1` plus the documentation pass in `opensnap/w2-docs`. The product is **OpenSnap**, a native macOS 26+ AppKit screen-capture and annotation app with a Liquid Glass UI. The repository and local folder are still named `OpenSkitch` until the owner approves the rename. Apple Silicon only. Origin is GitHub `shoemoney/OpenSkitch` (issue tracker; also pushes to the Forgejo mirror). Read `AGENTS.md` and `docs/agents/` first. Plan: `build/declassic-plan.md` (git-ignored); its section 4 "OWNER DECISIONS" overrides the rest.
+Resume document, October 9, 2026, America/Chicago. Describes branch `opensnap/w3-rename`, which carries the integration work (`opensnap/integration-w1`), the documentation pass (`opensnap/w2-docs`) and the OpenSnap rename with its one-time data migration. The product is **OpenSnap**, a native macOS 26+ AppKit screen-capture and annotation app with a Liquid Glass UI. The repository and local folder are still named `OpenSkitch` until the owner approves the rename. Apple Silicon only. Origin is GitHub `shoemoney/OpenSkitch` (issue tracker; also pushes to the Forgejo mirror). Read `AGENTS.md` and `docs/agents/` first. Plan: `build/declassic-plan.md` (git-ignored); its section 4 "OWNER DECISIONS" overrides the rest.
 
 ## What landed
 
@@ -28,7 +28,7 @@ Resume document, October 9, 2026, America/Chicago. Describes branch `opensnap/in
 
 ## Remaining work
 
-1. **Landing the rename and migration package:** point `~/Applications/OpenSnap.app` at `build/OpenSnap.app` (the old `OpenSkitch.app` symlink target no longer exists after a rebuild), launch once and read `~/Library/Application Support/OpenSnap/migration-report.txt`. Expect 58 History documents, 2 destinations (default "AWS cdn"), and a Keychain prompt per upload credential on an ad-hoc-signed build.
+1. **Landing the rename and migration package:** point `~/Applications/OpenSnap.app` at `build/OpenSnap.app` (`tools/build.sh` does not remove an old `build/OpenSkitch.app` from an earlier build; it is simply no longer updated, so delete it or leave it, but do not keep launching it), launch once and read `~/Library/Application Support/OpenSnap/migration-report.txt`. Expect 58 History documents, 2 destinations (default "AWS cdn"), and no Keychain prompts expected for the owner (if macOS does ask, that is the only expected variation; an item that cannot be copied is listed in the report as a Keychain failure and the item is still in the old service).
 2. **Fresh-clone verification:** clone, `tools/build.sh`, `python3 tools/test.py`, `tools/test-native-startup.py` with no `original/` and no Font Awesome token.
 3. **0.4.0 release:** bump `Info.plist`, `sh tools/release.sh 0.4.0`, startup smoke on the release bundle, tag, push, GitHub release with the zip SHA-256. Builds are ad-hoc signed, not notarized.
 4. **Repo rename:** GitHub `shoemoney/OpenSkitch`, the Forgejo mirror and the local path become OpenSnap only after explicit owner approval.

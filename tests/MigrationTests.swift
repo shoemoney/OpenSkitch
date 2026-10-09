@@ -38,26 +38,41 @@ enum LegacySample {
                                                           "customColor": "rgb(0,255,255)", "customColorAlpha": "1"])
 }
 
+/// Fails a case when a preferences or Keychain call arrives after the "migration complete" marker already exists:
+/// the marker must be the very last thing written (a crash after an early marker would skip the rest forever).
+enum MarkerWatch {
+    nonisolated(unsafe) static var url: URL?
+    nonisolated(unsafe) static var violations = 0
+    static func check() { if let url, FileManager.default.fileExists(atPath: url.path) { violations += 1 } }
+}
+
 final class FakeDefaults: MigrationDefaults {
     var old: [String: Any]
     var new: [String: Any]
     var writes = 0
     init(old: [String: Any], new: [String: Any] = [:]) { self.old = old; self.new = new }
-    func oldValues() -> [String: Any] { old }
-    func hasNewValue(forKey key: String) -> Bool { new[key] != nil }
-    func setNewValue(_ value: Any, forKey key: String) { new[key] = value; writes += 1 }
+    func oldValues() -> [String: Any] { MarkerWatch.check(); return old }
+    func hasNewValue(forKey key: String) -> Bool { MarkerWatch.check(); return new[key] != nil }
+    func setNewValue(_ value: Any, forKey key: String) { MarkerWatch.check(); new[key] = value; writes += 1 }
 }
 
 final class FakeKeychain: MigrationKeychain {
     var items: [String: [String: Data]] = [:]
     var failingAccounts: Set<String> = []
     var adds = 0
-    func accounts(service: String) throws -> [String] { (items[service] ?? [:]).keys.sorted() }
+    var listingFails = false
+    func accounts(service: String) throws -> [String] {
+        MarkerWatch.check()
+        if listingFails { throw NSError(domain: "FakeKeychain", code: -25308) }
+        return (items[service] ?? [:]).keys.sorted()
+    }
     func password(service: String, account: String) throws -> Data? {
+        MarkerWatch.check()
         if failingAccounts.contains(account) { throw NSError(domain: "FakeKeychain", code: -25293) }
         return items[service]?[account]
     }
     func add(_ password: Data, service: String, account: String) throws -> Bool {
+        MarkerWatch.check()
         if items[service]?[account] != nil { return false }
         items[service, default: [:]][account] = password; adds += 1; return true
     }
@@ -110,7 +125,7 @@ enum MigrationTests {
 
     /// An old SkitchRedux folder built from the committed fixtures: 5 History entries (one with a corrupt document),
     /// two destinations with a default, the legacy single destination file, and files the migration must ignore.
-    static func makeWorld(extraCorruptWithoutPreview: Bool = false) throws -> World {
+    static func makeWorld(extraCorruptWithoutPreview: Bool = false, customize: ((URL, inout [[String: Any]]) throws -> Void)? = nil) throws -> World {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("opensnap-migration-tests-" + UUID().uuidString)
         let oldSupport = root.appendingPathComponent("Application Support/SkitchRedux", isDirectory: true)
         let newSupport = root.appendingPathComponent("Application Support/OpenSnap", isDirectory: true)
@@ -141,13 +156,14 @@ enum MigrationTests {
             try add(5, name: "Corrupt, no preview", text: "lost", native: "redux-\(ids[5])-AAAAAAAA-0000-4000-8000-000000000006.skitch",
                     document: Data("garbage".utf8), preview: nil, previewName: nil)
         }
+        try customize?(history, &entries)
         let index: [String: Any] = ["version": 1, "entries": entries, "ignoredLooseFiles": ["hidden-by-user.skitch"]]
         try JSONSerialization.data(withJSONObject: index, options: [.prettyPrinted, .sortedKeys]).write(to: history.appendingPathComponent("index.json"))
         try fixture("legacy-sample.skitch").write(to: history.appendingPathComponent("stray.skitch"))
         try fixture("legacy-sample.skitch").write(to: history.appendingPathComponent("hidden-by-user.skitch"))
         let destinations = """
         {"defaultID":"D2222222-2222-4222-8222-222222222222","version":2,"destinations":[
-         {"id":"D1111111-1111-4111-8111-111111111111","name":"SFTP test","settings":{"credentialID":"C1111111-1111-4111-8111-111111111111","endpoint":"sftp://example.invalid/imgs","transport":"sftp","note":"\(oldService)"}},
+         {"id":"D1111111-1111-4111-8111-111111111111","name":"SFTP test","settings":{"credentialID":"C1111111-1111-4111-8111-111111111111","endpoint":"sftp://example.invalid/imgs","transport":"sftp","note":"\(oldService)","other":"\(oldService)/\(oldService)"}},
          {"id":"D2222222-2222-4222-8222-222222222222","name":"S3 test","settings":{"credentialID":"C2222222-2222-4222-8222-222222222222","endpoint":"","transport":"s3"}}]}
         """
         try Data(destinations.utf8).write(to: publishing.appendingPathComponent("destinations.json"))
@@ -156,13 +172,18 @@ enum MigrationTests {
         try Data("{\"old\":true}".utf8).write(to: publishing.appendingPathComponent("destination.json.pre-destinations.bak"))
         try Data("recovery".utf8).write(to: oldSupport.appendingPathComponent("Recovery.skitch"))
         try Data("{}".utf8).write(to: oldSupport.appendingPathComponent("layout.json"))
+        MarkerWatch.url = newSupport.appendingPathComponent(OpenSnapMigration.markerName)
         return World(root: root, oldSupport: oldSupport, newSupport: newSupport)
+    }
+    static func entry(_ id: String, name: String, native: String, document: Data) -> [String: Any] {
+        ["id": id, "name": name, "date": 813053688.5, "updated": 813053700.25, "size": [320, 200], "text": "", "action": "archived",
+         "nativeFile": native, "digest": sha(document), "imported": false]
     }
     static func makeDefaults() -> FakeDefaults {
         FakeDefaults(old: ["arrowHead": 2, "PencilSmoothing": "medium", "disableSounds": false, "appearanceStyle": "classic",
                            "skitchInSnap": true, "SkitchRedux.GlobalHotkeys.v1": Data([1, 2, 3]), "ExportFormat": "skitch",
-                           "SkitchRedux.HistoryDragFormat": "skitch", "SkitchReduxResizePresetID": "preset-9", "fittingPrecision": 1,
-                           "NSWindow Frame NSColorPanel": "0 284 266 366 0 0 2056 1290 ", "SKPresetResizes": [["SKPresetResizeNameKey": "Ad"]]],
+                           "SkitchRedux.HistoryDragFormat": "skitch", "fittingPrecision": 1,
+                           "NSWindow Frame NSColorPanel": "0 284 266 366 0 0 2056 1290 ", "SKPresetResizes": [["SKPresetResizeNameKey": "Ad", "SkitchReduxResizePresetID": "preset-9"], ["SKPresetResizeNameKey": "Banner"]]],
                      new: ["arrowHead": 5])
     }
     static func makeKeychain() -> FakeKeychain {
@@ -252,6 +273,7 @@ enum MigrationTests {
                 try expect(report.destinations == 2 && report.defaultDestinationName == "S3 test", "Report names the default")
                 let text = String(decoding: data, as: UTF8.self)
                 try expect(!text.contains(oldService) && text.contains(newService), "Keychain service reference rewritten")
+                try expect(text.components(separatedBy: newService).count - 1 == 3, "Every occurrence rewritten, not just the first")
                 let legacy = try Data(contentsOf: world.newPublishing.appendingPathComponent("destination.json"))
                 try expect(legacy == (try Data(contentsOf: world.oldSupport.appendingPathComponent("Publishing/destination.json"))), "Legacy destination.json copied")
                 try expect(!FileManager.default.fileExists(atPath: world.newPublishing.appendingPathComponent("destination.json.pre-destinations.bak").path), "Old backup file is not carried over")
@@ -268,11 +290,15 @@ enum MigrationTests {
                 try expect(Set(report.defaultsObsolete) == ["disableSounds", "appearanceStyle"], "Obsolete keys are listed")
                 try expect(defaults.new["opensnapInSnap"] as? Bool == true && defaults.new["skitchInSnap"] == nil, "Renamed capture preference")
                 try expect(defaults.new["OpenSnap.GlobalHotkeys.v1"] as? Data == Data([1, 2, 3]) && defaults.new["SkitchRedux.GlobalHotkeys.v1"] == nil, "Renamed hotkeys")
-                try expect(defaults.new["OpenSnapResizePresetID"] as? String == "preset-9", "Renamed resize preset id")
+                let rows = defaults.new["SKPresetResizes"] as? [[String: Any]] ?? []
+                try expect(rows.count == 2 && rows[0]["OpenSnapResizePresetID"] as? String == "preset-9" && rows[0]["SkitchReduxResizePresetID"] == nil
+                           && rows[0]["SKPresetResizeNameKey"] as? String == "Ad" && rows[1]["OpenSnapResizePresetID"] == nil, "Resize preset id renamed inside each row: \(rows)")
+                try expect(defaults.new["OpenSnapResizePresetID"] == nil, "No top-level resize preset id invented")
                 try expect(defaults.new["ExportFormat"] as? String == "opensnap" && defaults.new["OpenSnap.HistoryDragFormat"] as? String == "opensnap", "Stored format values follow the new extension")
                 try expect(defaults.new["PencilSmoothing"] as? String == "medium" && defaults.new["fittingPrecision"] as? Int == 1 && defaults.new["NSWindow Frame NSColorPanel"] != nil && defaults.new["SKPresetResizes"] != nil, "Ordinary keys copied")
                 try expect(!defaults.new.keys.contains { $0.lowercased().contains("skitch") }, "No key keeps the old product name")
-                try expect(defaults.old.count == 12, "Old domain untouched")
+                try expect(!rows.contains { $0.keys.contains { $0.lowercased().contains("skitch") } }, "No row key keeps the old product name")
+                try expect(defaults.old.count == 11, "Old domain untouched")
             }),
             ("Keychain items are copied to the new service, existing ones kept, old ones never deleted", {
                 let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
@@ -324,7 +350,7 @@ enum MigrationTests {
                 let writes = defaults.writes, adds = keychain.adds
                 let again = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: defaults, keychain: keychain)!
                 try expect(try snapshot(world.newHistory) == historyBefore, "History not rewritten or merged")
-                try expect(again.notes.contains { $0.contains("already exists") }, "Notes explain the skipped folders")
+                try expect(again.notes.contains { $0.contains("already copied") } && !again.hasProblems, "Notes explain the stores an earlier run installed: \(again.text)")
                 try expect(defaults.writes == writes && keychain.adds == adds, "No extra preference or Keychain writes")
                 try expect(FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(".migrated-from-skitchredux").path), "Marker rewritten")
             }),
@@ -342,8 +368,101 @@ enum MigrationTests {
                 let before = try snapshot(world.oldSupport)
                 let report = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())!
                 try expect(report.failures.contains { $0.contains("History index could not be read") } && !FileManager.default.fileExists(atPath: world.newHistory.path), "Reported, not migrated")
+                try expect(report.hasProblems && report.notice?.hasPrefix("Copied your data") == true, "Notice shown, worded as a copy")
+                try expect(!FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "A failed store leaves no marker")
                 try expect(FileManager.default.fileExists(atPath: world.newPublishing.path), "Publishing still migrated")
                 try expect(try snapshot(world.oldSupport) == before, "Old folder unchanged")
+            }),
+            ("A store-level failure leaves no marker and a later launch completes it without duplicates", {
+                let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
+                let goodIndex = try Data(contentsOf: world.oldHistory.appendingPathComponent("index.json"))
+                try Data("not json".utf8).write(to: world.oldHistory.appendingPathComponent("index.json"))
+                let defaults = makeDefaults(), keychain = makeKeychain()
+                let first = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: defaults, keychain: keychain)!
+                try expect(first.storeFailed && first.hasProblems, "First run reports the failed store")
+                try expect(!FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "No marker after a failed store")
+                try expect(FileManager.default.fileExists(atPath: world.newPublishing.path), "The healthy store was installed")
+                let publishingBefore = try snapshot(world.newPublishing), adds = keychain.adds
+                try goodIndex.write(to: world.oldHistory.appendingPathComponent("index.json"))
+                guard let second = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: defaults, keychain: keychain) else {
+                    throw Failure(description: "A launch after a failed store must try again")
+                }
+                try expect(try HistoryStore(directory: world.newHistory).entries.count == 5, "History completed on the later launch")
+                try expect(try snapshot(world.newPublishing) == publishingBefore && keychain.adds == adds, "Publishing and Keychain not duplicated")
+                try expect(!second.hasProblems || second.failures.allSatisfy { $0.contains("picture-only") || $0.contains("preview file is missing") }, "No store-level failure on the second run: \(second.failures)")
+                try expect(!second.storeFailed, "Second run complete")
+                try expect(FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "Marker written once everything is in place")
+                try expect(OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: defaults, keychain: keychain) == nil, "Third launch does nothing")
+            }),
+            ("A destination folder that already exists is a problem, nothing is merged, and no marker is written", {
+                let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
+                try FileManager.default.createDirectory(at: world.newHistory, withIntermediateDirectories: true)
+                try Data("mine".utf8).write(to: world.newHistory.appendingPathComponent("keep.txt"))
+                let report = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())!
+                try expect(report.failures.contains { $0.contains("History already exists") } && report.hasProblems && report.notice != nil, "Surfaced as a problem: \(report.failures)")
+                let existing = try snapshot(world.newHistory)
+                try expect(existing.count == 1 && existing.values.first == sha(Data("mine".utf8)) && existing.keys.first?.hasSuffix("keep.txt") == true, "The existing folder is untouched, nothing merged: \(existing)")
+                try expect(!FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "No marker")
+                try expect(FileManager.default.fileExists(atPath: world.newPublishing.path), "The other store was still installed")
+            }),
+            ("A Keychain that cannot be listed leaves no marker", {
+                let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
+                let keychain = makeKeychain(); keychain.listingFails = true
+                let report = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: keychain)!
+                try expect(report.storeFailed && !FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "Retry on the next launch")
+            }),
+            ("Two History entries whose converted names collide both survive under different names", {
+                let document = try fixture("legacy-sample.skitch")
+                let a = UUID().uuidString, b = UUID().uuidString
+                let world = try makeWorld { history, entries in
+                    try document.write(to: history.appendingPathComponent("same.skitch"))
+                    try document.write(to: history.appendingPathComponent("same.skitchredux"))
+                    entries.append(entry(a, name: "Collide A", native: "same.skitch", document: document))
+                    entries.append(entry(b, name: "Collide B", native: "same.skitchredux", document: document))
+                }
+                defer { try? FileManager.default.removeItem(at: world.root) }
+                let report = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())!
+                try expect(!report.storeFailed, "History installed: \(report.failures)")
+                let store = try HistoryStore(directory: world.newHistory)
+                let pair = store.entries.filter { $0.name.hasPrefix("Collide") }
+                try expect(pair.count == 2 && Set(pair.map(\.nativeFile)).count == 2, "Distinct file names: \(pair.map(\.nativeFile))")
+                for entry in pair { _ = try store.read(entry.id) }
+            }),
+            ("An index with an entry the History store refuses is caught by verification and not installed", {
+                let document = try fixture("legacy-sample.skitch")
+                let world = try makeWorld { history, entries in
+                    try document.write(to: history.appendingPathComponent("badsize.skitch"))
+                    var bad = entry(UUID().uuidString, name: "Bad size", native: "badsize.skitch", document: document)
+                    bad["size"] = [0, 0]
+                    entries.append(bad)
+                }
+                defer { try? FileManager.default.removeItem(at: world.root) }
+                let report = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())!
+                try expect(report.storeFailed && report.failures.contains { $0.contains("did not pass verification") }, "Verification failure reported: \(report.failures)")
+                try expect(!FileManager.default.fileExists(atPath: world.newHistory.path) && !FileManager.default.fileExists(atPath: world.newSupport.appendingPathComponent(OpenSnapMigration.markerName).path), "Nothing half-installed, no marker")
+            }),
+            ("Verification fails when the History holds a different number of entries than was written", {
+                let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
+                _ = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())
+                try OpenSnapMigration.verifyHistory(at: world.newHistory, expectingEntries: 5)
+                var wrongCount = false
+                do { try OpenSnapMigration.verifyHistory(at: world.newHistory, expectingEntries: 4) } catch { wrongCount = true }
+                try expect(wrongCount, "A count that differs from what was written is refused")
+                // A stray, valid document the store would import as an extra entry.
+                let kept = try FileManager.default.contentsOfDirectory(atPath: world.newHistory.path).first { $0.hasSuffix(".opensnap") }!
+                try FileManager.default.copyItem(at: world.newHistory.appendingPathComponent(kept), to: world.newHistory.appendingPathComponent("stray.opensnap"))
+                var strayRefused = false
+                do { try OpenSnapMigration.verifyHistory(at: world.newHistory, expectingEntries: 5) } catch { strayRefused = true }
+                try expect(strayRefused, "An extra imported entry is refused")
+            }),
+            ("Staging folders left by an interrupted run are removed, and only OpenSnap's own", {
+                let world = try makeWorld(); defer { try? FileManager.default.removeItem(at: world.root) }
+                let parent = world.newSupport.deletingLastPathComponent()
+                let leftover = parent.appendingPathComponent(OpenSnapMigration.stagingPrefix + UUID().uuidString), foreign = parent.appendingPathComponent(OpenSnapMigration.stagingPrefix + "not-a-uuid"), other = parent.appendingPathComponent("SomethingElse")
+                for url in [leftover, foreign, other] { try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true) }
+                _ = OpenSnapMigration.migrateIfNeeded(oldSupport: world.oldSupport, newSupport: world.newSupport, defaults: makeDefaults(), keychain: makeKeychain())
+                try expect(!FileManager.default.fileExists(atPath: leftover.path), "Own leftover staging removed")
+                try expect(FileManager.default.fileExists(atPath: foreign.path) && FileManager.default.fileExists(atPath: other.path), "Anything else is left alone")
             }),
             ("The native reader refuses every retired format", {
                 for name in ["legacy-sample.skitch", "legacy-sample.skitchredux", "legacy-sample-plain.skitch"] {
@@ -381,7 +500,12 @@ enum MigrationTests {
         ]
         var failures = 0
         for (name, test) in cases {
-            do { try test(); print("PASS \(name)") } catch { failures += 1; print("FAIL \(name): \(error)") }
+            MarkerWatch.url = nil; MarkerWatch.violations = 0
+            do {
+                try test()
+                if MarkerWatch.violations > 0 { throw Failure(description: "preferences or Keychain were touched after the marker was written (\(MarkerWatch.violations) calls)") }
+                print("PASS \(name)")
+            } catch { failures += 1; print("FAIL \(name): \(error)") }
         }
         print("MigrationTests: \(cases.count - failures)/\(cases.count) passed; \(failures) failed")
         if failures != 0 { exit(1) }
@@ -424,6 +548,8 @@ enum MigrationTests {
             print("DRY-RUN VERIFIED: \(store.entries.count) History entries open in the new store (\(editable) editable, \(pictureOnly) picture-only); all .opensnap: \(store.entries.allSatisfy { $0.nativeFile.hasSuffix(".opensnap") })")
             print("DRY-RUN VERIFIED: destinations \((list["destinations"] as! [Any]).count), default \(report.defaultDestinationName ?? "none")")
             print("DRY-RUN VERIFIED: copied preference keys \(defaults.new.count) of \(oldValues.count); Keychain (placeholders) copied \(report.keychainCopied)")
+            let rowsOut = defaults.new["SKPresetResizes"] as? [[String: Any]] ?? [], rowsIn = oldValues["SKPresetResizes"] as? [[String: Any]] ?? []
+            print("DRY-RUN VERIFIED: resize preset rows \(rowsOut.count) of \(rowsIn.count); row ids renamed: \(rowsOut.filter { $0["OpenSnapResizePresetID"] != nil }.count) (old-named ids in input: \(rowsIn.filter { $0["SkitchReduxResizePresetID"] != nil }.count), old-named ids left in output: \(rowsOut.filter { $0["SkitchReduxResizePresetID"] != nil }.count))")
             print("DRY-RUN VERIFIED: old copy unchanged: \(try snapshot(old) == before)")
             let unchanged = try snapshot(old) == before
             exit(report.hasProblems || !unchanged ? 1 : 0)

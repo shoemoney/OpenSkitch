@@ -21,8 +21,8 @@ enum OriginalGeneralPreferencesTests {
     static func main() throws {
         _ = NSApplication.shared
         let domain = "OpenSnap.preferences.tests." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: domain)!
-        defer { defaults.removePersistentDomain(forName: domain) }
+        let defaults = TestDefaults(name: domain)
+        defer { TestDefaults.dispose(defaults, name: domain) }
         let store = OriginalGeneralPreferences(defaults: defaults)
         let fresh = store.state
         try expect(fresh.drawingPrecision == .medium && fresh.arrowHead == 2 && !fresh.includeApp && fresh.statusMenu == 0,
@@ -34,7 +34,7 @@ enum OriginalGeneralPreferencesTests {
             for keyboardTips in [false, true] {
                 var proposed = store.state; proposed.showToolTips = toolTips; proposed.showKeyboardTips = keyboardTips
                 store.apply(proposed)
-                let reopened = OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state
+                let reopened = OriginalGeneralPreferences(defaults: TestDefaults(name: domain)).state
                 try expect(reopened.showToolTips == toolTips && reopened.showKeyboardTips == keyboardTips, "Independent inverse overlay choices reload exactly")
                 if defaults.object(forKey: "disableOverlay") != nil {
                     try expect(defaults.bool(forKey: "disableOverlay") == !toolTips, "disableOverlay stores inverse checkbox polarity")
@@ -68,13 +68,13 @@ enum OriginalGeneralPreferencesTests {
                     try expect(NSDictionary(dictionary: defaults.persistentDomain(forName: domain)!).isEqual(to: before), "Temporary capture reversal never mutates saved settings")
                 }
             }
-            try expect(OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state.includeApp == include, "Saved inclusion reloads through another store")
+            try expect(OriginalGeneralPreferences(defaults: TestDefaults(name: domain)).state.includeApp == include, "Saved inclusion reloads through another store")
         }
         for presence in [0, 1, 2] {
             var state = store.state; state.statusMenu = presence; state.arrowHead = presence == 1 ? 1 : 2
             state.drawingPrecision = .precise
             store.apply(state)
-            let reopened = OriginalGeneralPreferences(defaults: UserDefaults(suiteName: domain)!).state
+            let reopened = OriginalGeneralPreferences(defaults: TestDefaults(name: domain)).state
             try expect(reopened == state, "Native states persist together and reload exactly")
         }
         let before = store.state

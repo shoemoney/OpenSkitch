@@ -53,11 +53,11 @@ The app icon is a Liquid Glass `.icon` built with `actool`, with a flattened `.i
 
 Release builds are ad-hoc signed and not notarized, so Gatekeeper blocks the first launch of a downloaded copy. Verify the download first: `shasum -a 256` of the zip must equal `zip_sha256` in the manifest. Then try to open the app once and choose Open Anyway in System Settings > Privacy & Security, or run `xattr -dr com.apple.quarantine` on the app.
 
-This release renames the app to OpenSnap (bundle identifier `com.shoemoney.opensnap`, Application Support folder `OpenSnap`, `.opensnap` documents). On first launch it copies data from the previous app's folder, leaving the old folder untouched, and converts History to the new format. Files in the old `.skitch` format are no longer opened.
+This release renames the app to OpenSnap (bundle identifier `com.shoemoney.opensnap`, Application Support folder `OpenSnap`, `.opensnap` documents). On first launch it copies data from the previous app's folder, leaving the old folder untouched, and converts History to the new format. Old `.skitch` files no longer open; existing History is converted once.
 
 ## 🕰️ History
 
-OpenSnap began as a rebuild inspired by Skitch. It no longer contains Skitch code, art or assets.
+OpenSnap began as a rebuild inspired by Skitch.
 
 ## 📄 License
 
