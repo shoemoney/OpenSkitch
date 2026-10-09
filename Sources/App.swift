@@ -175,6 +175,13 @@ final class DragThumbnailView: NSView {
     }
 }
 
+/// The document name. Classic shows it as an editable field; Modern keeps it off screen and mirrors it into the window title.
+@MainActor
+final class DocumentNameField: NSTextField {
+    var onChange: ((String) -> Void)?
+    override var stringValue: String { didSet { onChange?(stringValue) } }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation, NSFontChanging, @preconcurrency NSSharingServicePickerDelegate, NSSharingServiceDelegate, @preconcurrency NSMenuDelegate {
     var window: NSWindow!
@@ -199,7 +206,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var helpBevel: OriginalHelpBevel?
     private var hintEventMonitor: Any?
     let photoBrowser = PhotoBrowserCoordinator()
-    let nameField = NSTextField(string: "Untitled")
+    let nameField = DocumentNameField(string: "Untitled")
     let status = NSTextField(labelWithString: "")
     let colorWell = NSColorWell()
     let widthControl = BezelSizeSlider(frame: .zero)
@@ -919,6 +926,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         close.target = self; file.insertItem(close, at: 3)
         let setup = NSMenuItem(title: "Page Setup…", action: #selector(pageSetup), keyEquivalent: "P")
         setup.target = self; file.insertItem(setup, at: file.numberOfItems - 1)
+        if modernChrome == nil, Appearance.isModern, #available(macOS 26, *) {
+            let rename = NSMenuItem(title: "Rename…", action: #selector(renameDocument), keyEquivalent: "")
+            rename.target = self; file.insertItem(rename, at: (file.items.firstIndex { $0.title == "Save As…" } ?? 3) + 1)
+        }
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
         let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Add Shadow", #selector(addShadow), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
         let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Skitch Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
@@ -1975,6 +1986,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard let self, self.documentGeneration == generation else { return }
             self.receiveCapture(result, expectedGeneration: generation)
         }
+    }
+    /// Modern has no file-name field, so the document name lives in the window title and changes here.
+    @objc func renameDocument() {
+        guard !terminationStarted, window.attachedSheet == nil else { return }
+        if let name = prompt("Rename", text: "Document name", value: nameField.stringValue) { applyDocumentName(name) }
+    }
+    func applyDocumentName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty { nameField.stringValue = trimmed }
     }
     func prompt(_ title: String, text: String, value: String) -> String? { let a = NSAlert(); a.messageText = title; a.informativeText = text; let field = NSTextField(string: value); field.font = .systemFont(ofSize: 20); field.frame = NSRect(x: 0,y: 0,width: 340,height: 32); a.accessoryView = field; a.addButton(withTitle: "OK"); a.addButton(withTitle: "Cancel"); return a.runModal() == .alertFirstButtonReturn ? field.stringValue : nil }
     @objc func chooseFont() {

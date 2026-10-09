@@ -15,7 +15,7 @@ enum MenuSymbols {
         ("copyArtwork", "doc.on.doc"), ("copyImage", "doc.on.clipboard"), ("paste", "clipboard"),
         ("deleteSelection", "trash"), ("selectAll", "square.dashed"), ("duplicate", "plus.square.on.square"),
         ("wipe", "clear"), ("wipeSnap", "rectangle.slash"), ("clear", "pencil.slash"),
-        ("toggleActualSize", "arrow.up.left.and.arrow.down.right"), ("resize", "ruler"), ("crop", "crop"),
+        ("toggleActualSize", "arrow.up.left.and.arrow.down.right"), ("resize", "ruler"), ("renameDocument", "pencil"), ("crop", "crop"),
         ("trimSnap", "rectangle.compress.vertical"), ("rotateCW", "rotate.right"), ("rotateCCW", "rotate.left"),
         ("flipH", "arrow.left.and.right.righttriangle.left.righttriangle.right"),
         ("flipV", "arrow.up.and.down.righttriangle.up.righttriangle.down"),

@@ -27,6 +27,8 @@ extension AppSafetyTests {
             ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover),
             ("Modern centres a small canvas in the editor area at default and minimum size and leaves a larger one at today's origin", modernCanvasCentred),
             ("A click at the visual centre of the centred canvas selects the element at the document centre", modernCanvasCentredHitTest),
+            ("Modern puts every tool and Resize in the top bar, drops the left rail, and keeps Undo and Wipe under the slider", modernTopBarLayout),
+            ("Modern has one footer row and no file-name field; the window title is the document name and Rename changes the export name", modernDocumentNameInTitle),
             ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures)
         ]
     }
@@ -38,6 +40,68 @@ extension AppSafetyTests {
         let area = chrome.scrollView.contentView.frame
         let rect = chrome.scrollView.convert(app.canvas.bounds, from: app.canvas)
         return (rect.minX - area.minX, area.maxX - rect.maxX, rect.minY - area.minY, area.maxY - rect.maxY)
+    }
+
+    @available(macOS 26, *)
+    private static func modernTopBarLayout() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        let content = try (app.window.contentView).unwrap("content view")
+        let defaultFrame = app.window.frame
+        for (name, frame) in [("default", defaultFrame), ("minimum", CGRect(origin: defaultFrame.origin, size: app.window.minSize))] {
+            app.setWindowFrame(frame)
+            content.layoutSubtreeIfNeeded(); app.updateViewportChrome()
+            let bar = chrome.header.convert(chrome.header.bounds, to: content)
+            for (id, button) in Array(chrome.toolButtons) + [("resize", chrome.resizeButton)] {
+                let frame = button.convert(button.bounds, to: content)
+                try expect(bar.insetBy(dx: -0.5, dy: -0.5).contains(frame) && content.bounds.contains(frame), "\(name): \(id) sits unclipped in the top bar")
+            }
+            for pair in zip(chrome.header.subviews.sorted { $0.frame.minX < $1.frame.minX }, chrome.header.subviews.sorted { $0.frame.minX < $1.frame.minX }.dropFirst()) {
+                try expect(pair.0.frame.maxX <= pair.1.frame.minX + 0.5, "\(name): top bar groups do not overlap")
+            }
+            try expect(chrome.header.subviews.count == 3, "\(name): the top bar is Hide/Toolbox/Photos, the tools with Resize, and Save/History")
+            var all: [NSView] = []
+            func walk(_ view: NSView) { all.append(view); view.subviews.forEach(walk) }
+            walk(chrome)
+            try expect(!all.contains { $0.identifier?.rawValue == "GlassToolRail" }, "\(name): no left rail")
+            let area = chrome.scrollView.convert(chrome.scrollView.bounds, to: content)
+            try expect(abs(area.minX - 12) < 0.5, "\(name): the canvas viewport starts at the left margin (\(area.minX))")
+            let railLeft = content.bounds.width - 12 - GlassChrome.Metrics.rightRailWidth
+            try expect(abs(area.maxX - (railLeft - 8)) < 0.5, "\(name): the viewport ends at the right rail's spacing (\(area.maxX) vs \(railLeft - 8))")
+            let slider = try (chrome.surface(for: app.widthControl)).unwrap("slider surface"), undo = try (chrome.surface(for: chrome.undoButton)).unwrap("undo surface")
+            let gap = slider.convert(slider.bounds, to: content).minY - undo.convert(undo.bounds, to: content).maxY
+            try expect(gap >= 0 && gap <= GlassChrome.Metrics.groupSpacing + 0.5, "\(name): Undo is directly under the slider (gap \(gap))")
+        }
+    }
+
+    @available(macOS 26, *)
+    private static func modernDocumentNameInTitle() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        let content = try (app.window.contentView).unwrap("content view")
+        var all: [NSView] = []
+        func walk(_ view: NSView) { all.append(view); view.subviews.forEach(walk) }
+        walk(content)
+        try expect(app.nameField.superview == nil && !all.contains { ($0 as? NSTextField)?.isEditable == true }, "Modern has no editable file-name field on screen")
+        try expect(!all.contains { ($0 as? NSButton)?.title == "Actual Size" }, "Modern has no Actual Size button")
+        let footer = try all.first { $0.identifier?.rawValue == "OpenSkitchFooter" }.unwrap("footer row")
+        let row = footer.convert(footer.bounds, to: content)
+        for part in [app.zoomControl, app.status, app.dragFormatControl, try (app.dragExportView).unwrap("drag"), chrome.shareButton] as [NSView] {
+            let frame = part.convert(part.bounds, to: content)
+            try expect(row.insetBy(dx: -0.5, dy: -0.5).contains(frame) && abs(frame.midY - row.midY) <= 6, "The footer row holds \(part)")
+        }
+        try expect(footer.subviews.count == 2, "The footer is one row")
+        try expect(app.window.title == app.nameField.stringValue, "The window title shows the document name: \(app.window.title)")
+        let file = try NSApp.mainMenu.unwrap("main menu").items.compactMap(\.submenu).first { $0.title == "File" }.unwrap("File menu")
+        try expect(file.items.contains { $0.action == #selector(AppDelegate.renameDocument) && $0.title == "Rename…" }, "File has a Rename… command")
+        app.applyDocumentName("  Quarterly report ")
+        try expect(app.window.title == "Quarterly report" && app.nameField.stringValue == "Quarterly report", "Renaming updates the title: \(app.window.title)")
+        app.applyDocumentName("   ")
+        try expect(app.window.title == "Quarterly report", "A blank rename is ignored")
+        let payload = try (app.dragExportView?.prepare?()).unwrap("drag payload")
+        try expect(payload.name == "Quarterly report" && app.safeName() == "Quarterly report", "The drag and export file name follows the rename: \(payload.name)")
+        app.nameField.stringValue = "Direct"
+        try expect(app.window.title == "Direct" && app.safeName() == "Direct", "Setting the document name directly also updates the title")
     }
 
     @available(macOS 26, *)
@@ -150,7 +214,7 @@ extension AppSafetyTests {
         ("hide", #selector(AppDelegate.vanish)), ("photos", #selector(AppDelegate.showPhotos)), ("save", #selector(AppDelegate.saveHistory)),
         ("history", #selector(AppDelegate.showHistory)), ("snap", #selector(AppDelegate.snapButtonPressed)),
         ("cancel", #selector(AppDelegate.cancelFrame)), ("font", #selector(AppDelegate.chooseFont)), ("undo", #selector(AppDelegate.undo)),
-        ("wipe", #selector(AppDelegate.wipe)), ("actual", #selector(AppDelegate.toggleActualSize)), ("resize", #selector(AppDelegate.resize))
+        ("wipe", #selector(AppDelegate.wipe)), ("resize", #selector(AppDelegate.resize))
     ]
 
     private static func controlFacts(_ app: AppDelegate) -> [String: String] {
@@ -183,10 +247,9 @@ extension AppSafetyTests {
         let plain = collect(NSButton.self, in: content).filter { !($0 is NSPopUpButton) && !tools.contains(ObjectIdentifier($0)) }
         // Modern's upload command is icon-only with its own label; webpostModernIconOnly covers it.
         let upload = #selector(AppDelegate.share(_:))
-        facts["buttons"] = plain.filter { $0.action != upload }.map(\.title).sorted().joined(separator: "|")
+        facts["buttons"] = plain.filter { $0.action != upload && $0.action != #selector(AppDelegate.toggleActualSize) }.map(\.title).sorted().joined(separator: "|")
         // What VoiceOver reads for each command. Classic buttons read their titles; a symbol fallback must not read its own name instead.
         for (name, action) in commandActions { facts["axLabel.\(name)"] = plain.first { $0.action == action }?.accessibilityLabel() ?? "<nil>" }
-        facts["actual.title"] = app.actualButton?.title ?? "<nil>"
         facts["resize.title"] = app.resizeButton?.title ?? "<nil>"
         return facts
     }
@@ -228,17 +291,17 @@ extension AppSafetyTests {
         try expect(content.canvasScrollView === chrome.scrollView && app.canvas.enclosingScrollView === chrome.scrollView && chrome.scrollView.documentView === app.canvas,
                    "The Frame hole and the canvas both use the chrome's scroll view")
         try expect(app.canvasBorder.superview === chrome && chrome.subviews.last === app.canvasBorder, "The canvas border stays the topmost sibling in chrome coordinates")
-        try expect(app.window.minSize == NSSize(width: 900, height: 640), "The minimum window size is unchanged")
+        try expect(app.window.minSize == NSSize(width: ModernEditorChrome.minimumWindowWidth, height: 640), "The Modern minimum width is raised just enough for the one-row top bar; the height is unchanged")
 
         // Controls the app keeps by reference are the chrome's own.
         try expect(app.snapButton === chrome.snapButton && app.cancelFrameButton === chrome.cancelFrameButton
-                   && app.actualButton === chrome.actualButton && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cancel, Actual Size and Resize through the chrome's buttons")
+                   && app.actualButton == nil && app.resizeButton === chrome.resizeButton, "AppDelegate controls Snap, Cancel and Resize through the chrome's buttons; Modern has no Actual Size button")
         let tools = toolOrder.compactMap { SketchTool(rawValue: $0).flatMap { app.toolButtons[$0] } }
         try expect(tools.count == 10 && app.toolButtons.count == 10, "All ten tools, Crop included, are registered")
         try expect(tools.allSatisfy { $0 is GlassChromeButton && !($0 is ToolButton) }, "Modern tools are glass buttons, not the Classic ToolButton")
         try expect(tools.map { $0.identifier?.rawValue ?? "" } == toolOrder, "Tool identifiers keep the archive order and raw values")
-        let top = tools.sorted { $0.convert($0.bounds, to: content).maxY > $1.convert($1.bounds, to: content).maxY }
-        try expect(top.map { $0.identifier?.rawValue ?? "" } == toolOrder, "The tool rail runs top to bottom in archive order with Crop last")
+        let across = tools.sorted { $0.convert($0.bounds, to: content).minX < $1.convert($1.bounds, to: content).minX }
+        try expect(across.map { $0.identifier?.rawValue ?? "" } == toolOrder, "The top bar runs the tools left to right in archive order with Crop last")
         try expect(zip(tools, toolOrder).allSatisfy { button, id in chrome.toolButtons[id] === button }, "Registered tool buttons are the chrome's")
         try expect(tools.allSatisfy { $0.target === app && $0.action == #selector(AppDelegate.chooseTool(_:)) }, "Every tool sends chooseTool to the AppDelegate")
 
@@ -247,10 +310,10 @@ extension AppSafetyTests {
         try expect(app.dragExportView?.drawsBackground == false, "Drag Me lets its glass be the plate")
         try expect(try surface(chrome, app.dragExportView).shape == .capsule && (try surface(chrome, app.dragExportView).fixedSize) == NSSize(width: 48, height: 36),
                    "Drag Me is a compact 48x36 capsule like the other icon buttons")
-        try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) && chrome.surface(for: app.nameField)?.shape == .capsule
-                   && chrome.surface(for: app.dragFormatControl)?.shape == .capsule, "Color, the name field and the format popup have their glass")
+        try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) 
+                   && chrome.surface(for: app.dragFormatControl)?.shape == .capsule, "Color and the format popup have their glass")
         try expect(chrome.surface(for: app.zoomControl) == nil && chrome.surface(for: app.status) == nil && chrome.surface(for: app.canvas) == nil, "Zoom, status and the canvas stay outside glass")
-        try expect((app.nameField.font?.pointSize ?? 0) >= 20 && (app.status.font?.pointSize ?? 0) >= 18 && (app.zoomControl.font?.pointSize ?? 0) >= 18, "Text stays at its readable sizes")
+        try expect((app.status.font?.pointSize ?? 0) >= 18 && (app.zoomControl.font?.pointSize ?? 0) >= 18, "Text stays at its readable sizes")
         try expect(app.widthControl.target === app && app.widthControl.action == #selector(AppDelegate.changeWidth(_:)) && app.widthControl.onBegin != nil && app.widthControl.onEnd != nil,
                    "The size slider keeps its undo-grouping callbacks")
         try expect(app.zoomControl.target === app && app.zoomControl.action == #selector(AppDelegate.changeZoom(_:)) && app.zoomControl.titleOfSelectedItem == "100%", "Zoom keeps its action and 100% default")
@@ -282,7 +345,7 @@ extension AppSafetyTests {
                    && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
         // At launch the rail Wipe reads its Blank stage; every other command reads its title (the icon-only upload button is checked on its own).
         let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cancel": "Cancel", "font": "Font",
-                      "undo": "Undo", "wipe": "Blank", "actual": "Actual Size", "resize": "Resize…"]
+                      "undo": "Undo", "wipe": "Blank", "resize": "Resize…"]
         let misread = spoken.keys.sorted().filter { modern["axLabel.\($0)"] != spoken[$0] }
             .map { "\($0): '\(modern["axLabel.\($0)"] ?? "")' instead of '\(spoken[$0] ?? "")'" }
         try expect(misread.isEmpty && spoken.count == commandActions.count, "VoiceOver reads the wrong command labels: " + misread.joined(separator: "; "))
@@ -305,7 +368,7 @@ extension AppSafetyTests {
             (#selector(AppDelegate.saveHistory), "Save", "Save to History"), (#selector(AppDelegate.showHistory), "History", "History"),
             (#selector(AppDelegate.snapButtonPressed), "Snap", ModernEditorChrome.snapToolTip), (#selector(AppDelegate.chooseFont), "Font", "Font"),
             (#selector(AppDelegate.undo), "Undo", "Undo (⌘Z)"), (#selector(AppDelegate.wipe), "Blank", "Blank"),
-            (#selector(AppDelegate.toggleActualSize), "Actual Size", "Actual Size"), (#selector(AppDelegate.resize), "Resize…", "Resize…"),
+            (#selector(AppDelegate.resize), "Resize…", "Resize…"),
             (#selector(AppDelegate.share(_:)), "Upload to destination", AppDelegate.webpostHelp)]
         func verify(_ label: String) throws {
             let buttons = collect(NSButton.self, in: content)
@@ -352,8 +415,6 @@ extension AppSafetyTests {
         app.dragExportView?.overview = try image(size: CGSize(width: 60, height: 40))
         let withThumb = try inkedPixels()
         try expect(withThumb == inked, "A thumbnail never changes the icon-only well (\(withThumb) vs \(inked))")
-        let logo = try collect(NSImageView.self, in: chrome.header).first.unwrap("logo")
-        try expect(logo.toolTip == "OpenSkitch" && logo.accessibilityLabel() == "OpenSkitch", "The logo has a tooltip and label instead of title text")
     }
 
     @available(macOS 26, *)
@@ -593,7 +654,7 @@ extension AppSafetyTests {
         let (fixture, chrome) = try modernFixture()
         let app = fixture.app
         let surfaces = collect(GlassSurfaceView.self, in: app.window.contentView!)
-        try expect(surfaces.count >= 28, "Header, rails and footer have their glass surfaces (\(surfaces.count))")
+        try expect(surfaces.count >= 26, "Header, rails and footer have their glass surfaces (\(surfaces.count))")
         let snap = try surface(chrome, chrome.snapButton), arrow = try surface(chrome, app.toolButtons[.arrow]), undo = try surface(chrome, chrome.undoButton)
         undo.setHovered(true)
         try expect(surfaces.allSatisfy { $0.accessibility == .none && $0.lastAnimationDuration == GlassSurfaceView.animationDuration }, "Surfaces start with no display options and animate")
@@ -620,7 +681,7 @@ extension AppSafetyTests {
             ("Snap", chrome.snapButton, #selector(AppDelegate.snapButtonPressed)),
             ("Cancel", chrome.cancelFrameButton, #selector(AppDelegate.cancelFrame)), ("Font", chrome.fontButton, #selector(AppDelegate.chooseFont)),
             ("Undo", chrome.undoButton, #selector(AppDelegate.undo)), ("Wipe", chrome.wipeButton, #selector(AppDelegate.wipe)),
-            ("Actual Size", chrome.actualButton, #selector(AppDelegate.toggleActualSize)), ("Resize…", chrome.resizeButton, #selector(AppDelegate.resize)),
+            ("Resize…", chrome.resizeButton, #selector(AppDelegate.resize)),
             ("Webpost…", chrome.shareButton, #selector(AppDelegate.share(_:)))
         ]
         for (name, button, action) in routes {
@@ -641,7 +702,6 @@ extension AppSafetyTests {
         try expect(app.canvas.document == before, "The Modern Undo button undoes the edit")
         // Hidden/disabled state reaches the glass the way AppDelegate toggles it for the viewport.
         app.updateViewportChrome()
-        try expect(chrome.actualButton.title == "Actual Size" && chrome.actualButton.isEnabled == app.canToggleActualSize, "Actual Size follows the viewport policy")
         chrome.resizeButton.isEnabled = false
         try expect(try surface(chrome, chrome.resizeButton).isDisabled, "A disabled command dims its glass")
         chrome.resizeButton.isEnabled = true
@@ -780,9 +840,7 @@ extension AppSafetyTests {
         let appearance = evidence["appearance"] as? [String: Any]
         try expect(appearance?["style"] as? String == "modern" && appearance?["modernChrome"] as? Bool == true, "appearance.style reports modern with its chrome: \(String(describing: appearance))")
         try expect((evidence["bezelLayout"] as? [String: Any])?["recoveredArtwork"] as? Bool == false, "Modern reports no recovered bezel artwork")
-        guard let header = evidence["bezelHeader"] as? [String: Any] else { throw Failure(description: "Header evidence is missing in Modern") }
-        try expect(abs(header["brandCenterOffset"] as? Double ?? 99) <= 1, "The brand is centered on the window: \(String(describing: header["brandCenterOffset"]))")
-        try expect((header["commandFrames"] as? [String])?.count == 2, "The two header command groups are reported")
+        try expect(evidence["bezelHeader"] == nil, "Modern has no logo, so the brand-centred header evidence is absent")
         let tools = evidence["toolButtons"] as? [[String: Any]] ?? []
         try expect(tools.count == 10 && tools.allSatisfy { ($0["fontSize"] as? Double ?? 0) >= 18 }, "Ten tool buttons report readable fonts")
         try expect(tools.filter { $0["selected"] as? Bool == true }.compactMap { $0["tool"] as? String } == ["arrow"], "Exactly the Arrow tool reports selected")
@@ -798,7 +856,7 @@ extension AppSafetyTests {
             if !isButtonInternal { try expect((entry["fontSize"] as? Double ?? 0) >= 18, "\(label) is at least 18 pt: \(entry)") }
             try expect(!frame.isEmpty && abs(frame.width - visible.width) < 0.5 && abs(frame.height - visible.height) < 0.5, "\(label) is not clipped (\(frame) vs \(visible))")
         }
-        try expect(chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "The brand is the header's direct child")
+        try expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "The top bar carries no logo")
         try expect(app.window.contentView?.subviews.contains { $0.identifier?.rawValue == "OpenSkitchHeader" } == false, "The header is one level deeper than Classic, which the evidence accommodates")
     }
 

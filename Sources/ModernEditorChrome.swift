@@ -24,21 +24,20 @@ private final class ControlHolderView: NSView {
     }
 }
 
-/// The Modern editor layout: a window backdrop, the canvas between two glass rails, a header and a two-row footer.
+/// The Modern editor layout: a window backdrop, a header holding every command, the canvas beside one right rail and a single footer row.
 /// Glass sits only on the command layer and never over the canvas; every control is owned by the caller and re-parented here.
 @available(macOS 26, *)
 @MainActor
 final class ModernEditorChrome: NSView {
     struct SharedControls {
-        let canvas: NSView, canvasBorder: NSView, nameField: NSTextField, status: NSTextField, sizeLabel: NSTextField
+        let canvas: NSView, canvasBorder: NSView, status: NSTextField, sizeLabel: NSTextField
         let widthControl: NSControl, paletteButton: NSButton, zoomControl: NSPopUpButton, dragFormatControl: NSPopUpButton
         let dragOriginalControl: NSButton, dragSizeLabel: NSTextField, dragExportView: NSView, toolbox: NSPopUpButton
-        let brandLogo: NSImage?
     }
 
     struct Actions {
         weak var target: AnyObject?
-        var hide, photos, saveHistory, showHistory, chooseTool, snap, cancelFrame, font, undo, wipe, actualSize, resize, share: Selector
+        var hide, photos, saveHistory, showHistory, chooseTool, snap, cancelFrame, font, undo, wipe, resize, share: Selector
     }
 
     static let snapToolTip = "Snap: drag an area or click a window; right-click or Control-click for Fullscreen"
@@ -48,11 +47,14 @@ final class ModernEditorChrome: NSView {
         "fill": .fillDrip, "eraser": .eraser, "text": .text, "arrow": .arrowUpRight, "crop": .cropSimple
     ]
 
+    /// Narrowest window the one-row top bar fits in without clipping (measured 934 pt, rounded up).
+    static let minimumWindowWidth: CGFloat = 940
+
     let scrollView = NSScrollView()
     let header = NSView()
     private(set) var toolButtons: [String: GlassChromeButton] = [:]
     let hideButton, photosButton, saveButton, historyButton, snapButton, cancelFrameButton,
-        fontButton, undoButton, wipeButton, actualButton, resizeButton, shareButton: GlassChromeButton
+        fontButton, undoButton, wipeButton, resizeButton, shareButton: GlassChromeButton
     var backdropIsVisible: Bool { !backdrop.isHidden }
     var bleedIsVisible: Bool { !bleed.isHidden }
 
@@ -104,7 +106,6 @@ final class ModernEditorChrome: NSView {
         fontButton = make("Font", .font, actions.font)
         undoButton = make("Undo", .arrowRotateLeft, actions.undo, shortcut: "⌘Z")
         wipeButton = make("Wipe", .broom, actions.wipe)
-        actualButton = make("Actual Size", .maximize, actions.actualSize)
         resizeButton = make("Resize…", .rulerCombined, actions.resize)
         // Icon-only upload command: a native SF Symbol, no title, so nothing but the explicit label is read aloud.
         shareButton = GlassChromeButton(title: "", target: actions.target, action: actions.share)
@@ -187,11 +188,10 @@ final class ModernEditorChrome: NSView {
     private func build(actions: Actions) {
         typealias Metrics = GlassChrome.Metrics
         let margin: CGFloat = 12, gap: CGFloat = 8
-        let headerTop: CGFloat = 4, rowHeight: CGFloat = 44, statusHeight: CGFloat = 30, rowGap: CGFloat = 4, footerBottom: CGFloat = 8
-        let pillPadding = Metrics.pillPadding
+        let headerTop: CGFloat = 4, rowHeight: CGFloat = 44, footerBottom: CGFloat = 8
 
-        for control in [controls.nameField, controls.dragFormatControl, controls.toolbox, controls.paletteButton] as [NSControl] { GlassChrome.useExtraLarge(control) }
-        for control in [controls.nameField, controls.dragFormatControl, controls.toolbox] as [NSControl] { readable(control, 20) }
+        for control in [controls.dragFormatControl, controls.toolbox, controls.paletteButton] as [NSControl] { GlassChrome.useExtraLarge(control) }
+        for control in [controls.dragFormatControl, controls.toolbox] as [NSControl] { readable(control, 20) }
         for control in [controls.status, controls.dragSizeLabel, controls.zoomControl, controls.dragOriginalControl, controls.widthControl] as [NSControl] { readable(control, 18) }
         // Color shows only its swatch: the title stays on the control (and its accessibility label) but is never drawn.
         controls.paletteButton.isBordered = false
@@ -242,32 +242,7 @@ final class ModernEditorChrome: NSView {
         let leadingGroup = GlassChrome.group([hideSurface, toolboxSurface, photosSurface], orientation: .horizontal, identifier: "GlassHeaderLeading")
         let trailingGroup = GlassChrome.group([saveSurface, historySurface], orientation: .horizontal, identifier: "GlassHeaderTrailing")
 
-        let logo = NSImageView()
-        logo.image = controls.brandLogo
-        logo.imageScaling = .scaleProportionallyUpOrDown
-        logo.setAccessibilityLabel("OpenSkitch")
-        logo.toolTip = "OpenSkitch"
-        let brand = NSStackView(views: [logo])
-        brand.orientation = .horizontal
-        brand.alignment = .centerY
-        brand.identifier = NSUserInterfaceItemIdentifier("OpenSkitchBrand")
-        for view in [leadingGroup, brand, trailingGroup] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            header.addSubview(view)
-        }
-        NSLayoutConstraint.activate([
-            logo.widthAnchor.constraint(equalToConstant: 32), logo.heightAnchor.constraint(equalToConstant: 32),
-            leadingGroup.leadingAnchor.constraint(equalTo: header.leadingAnchor),
-            trailingGroup.trailingAnchor.constraint(equalTo: header.trailingAnchor),
-            brand.centerXAnchor.constraint(equalTo: header.centerXAnchor),
-            brand.leadingAnchor.constraint(greaterThanOrEqualTo: leadingGroup.trailingAnchor, constant: margin),
-            trailingGroup.leadingAnchor.constraint(greaterThanOrEqualTo: brand.trailingAnchor, constant: margin),
-            leadingGroup.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            brand.centerYAnchor.constraint(equalTo: header.centerYAnchor),
-            trailingGroup.centerYAnchor.constraint(equalTo: header.centerYAnchor)
-        ])
-
-        // Left rail: the ten tools, archive order, icon only.
+        // The ten tools, archive order, icon only, then Resize: one centred row between the two end groups.
         var toolSurfaces: [GlassSurfaceView] = []
         for id in toolOrder {
             guard let icon = Self.toolIcons[id] else { continue }
@@ -284,11 +259,27 @@ final class ModernEditorChrome: NSView {
             toolButtons[id] = button
             toolSurfaces.append(surface)
         }
-        let toolGroup = GlassChrome.group(toolSurfaces, orientation: .vertical, identifier: "GlassToolRail", spacing: Metrics.toolSpacing)
-        let leftRail = NSView()
-        leftRail.addSubview(toolGroup)
+        let resizeSurface = iconPill(resizeButton)
+        let toolGroup = GlassChrome.group(toolSurfaces + [resizeSurface], orientation: .horizontal, identifier: "GlassToolBar", spacing: Metrics.toolSpacing)
+        if let stack = toolGroup.contentView as? NSStackView { stack.setCustomSpacing(Metrics.groupSpacing, after: toolSurfaces.last ?? resizeSurface) }
+        for view in [leadingGroup, toolGroup, trailingGroup] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            header.addSubview(view)
+        }
+        let centred = toolGroup.centerXAnchor.constraint(equalTo: header.centerXAnchor)
+        centred.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            leadingGroup.leadingAnchor.constraint(equalTo: header.leadingAnchor),
+            trailingGroup.trailingAnchor.constraint(equalTo: header.trailingAnchor),
+            centred,
+            toolGroup.leadingAnchor.constraint(greaterThanOrEqualTo: leadingGroup.trailingAnchor, constant: margin),
+            trailingGroup.leadingAnchor.constraint(greaterThanOrEqualTo: toolGroup.trailingAnchor, constant: margin),
+            leadingGroup.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            toolGroup.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            trailingGroup.centerYAnchor.constraint(equalTo: header.centerYAnchor)
+        ])
 
-        // Right rail: Snap / Cancel · Color / Font / Size · (flexible) · Undo / Wipe, all icon-only
+        // Right rail: Snap / Cancel · Color / Font / Size · Undo / Wipe, stacked with normal spacing, all icon-only
         snapButton.isPrimary = true
         snapButton.toolTip = Self.snapToolTip
         cancelFrameButton.isHidden = true
@@ -316,24 +307,7 @@ final class ModernEditorChrome: NSView {
         let rightRail = NSView()
         for group in [captureGroup, drawingGroup, historyGroup] { rightRail.addSubview(group) }
 
-        // Footer row 1: [Actual Size][Resize…] · name · format · drag thumbnail · Upload
-        actualButton.setButtonType(.toggle)
-        actualButton.selectedIcon = .minimize
-        actualButton.selectedClassicArtworkName = ChromeIcons.classicArtworkName(for: .minimize)
-        actualButton.selectionTints = false
-        let actualSurface = iconPill(actualButton)
-        let resizeSurface = iconPill(resizeButton)
-        controls.nameField.isBezeled = false
-        controls.nameField.isBordered = false
-        controls.nameField.drawsBackground = false
-        controls.nameField.borderShape = .capsule
-        let nameHolder = ControlHolderView(controls.nameField, inset: pillPadding)
-        nameHolder.focusTarget = controls.nameField
-        let nameSurface = GlassChrome.surface(nameHolder, shape: .capsule, accessibility: accessibility,
-                                              size: NSSize(width: 120, height: Metrics.commandHeight))
-        nameSurface.setSize(NSSize(width: 120, height: Metrics.commandHeight), flexibleWidth: true)
-        nameSurface.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        register(nameSurface, for: controls.nameField, nameHolder)
+        // One footer row: [zoom][status text] ········ [format][drag][upload]
         let formatFont = controls.dragFormatControl.font ?? .systemFont(ofSize: Metrics.labelPointSize)
         let widestFormat = controls.dragFormatControl.itemTitles.map { ($0 as NSString).size(withAttributes: [.font: formatFont]).width }.max() ?? 0
         let formatHolder = ControlHolderView(controls.dragFormatControl, inset: 8)
@@ -346,14 +320,9 @@ final class ModernEditorChrome: NSView {
         register(dragSurface, for: controls.dragExportView)
         let shareSurface = iconPill(shareButton)
         shareButton.setAccessibilityLabel("Upload to destination")
-        let footerGroup = GlassChrome.group([actualSurface, resizeSurface, nameSurface, formatSurface, dragSurface, shareSurface],
-                                            orientation: .horizontal, identifier: "GlassFooterRow")
-        if let stack = footerGroup.contentView as? NSStackView {
-            stack.distribution = .fill
-            for view in [resizeSurface, nameSurface, formatSurface, dragSurface] { stack.setCustomSpacing(Metrics.groupSpacing, after: view) }
-        }
+        let footerGroup = GlassChrome.group([formatSurface, dragSurface, shareSurface], orientation: .horizontal, identifier: "GlassFooterRow")
+        if let stack = footerGroup.contentView as? NSStackView { stack.distribution = .fill }
 
-        // Footer row 2: plain 18-point labels.
         controls.zoomControl.isBordered = true
         let zoomWidth = controls.zoomControl.widthAnchor.constraint(equalToConstant: 160)
         zoomWidth.priority = .defaultHigh
@@ -362,12 +331,14 @@ final class ModernEditorChrome: NSView {
         statusRow.orientation = .horizontal
         statusRow.spacing = 12
         statusRow.alignment = .centerY
+        statusRow.identifier = NSUserInterfaceItemIdentifier("OpenSkitchStatusRow")
 
-        let row1 = NSView(), row2 = NSView()
-        row1.addSubview(footerGroup)
-        row2.addSubview(statusRow)
-        let all: [NSView] = [backdrop, bleed, scrollView, header, leftRail, rightRail, row1, row2]
-        let rails: [NSView] = [toolGroup, captureGroup, drawingGroup, historyGroup, footerGroup, statusRow]
+        let footer = NSView()
+        footer.identifier = NSUserInterfaceItemIdentifier("OpenSkitchFooter")
+        footer.addSubview(statusRow)
+        footer.addSubview(footerGroup)
+        let all: [NSView] = [backdrop, bleed, scrollView, header, rightRail, footer]
+        let rails: [NSView] = [captureGroup, drawingGroup, historyGroup, footerGroup, statusRow]
         for view in all + rails { view.translatesAutoresizingMaskIntoConstraints = false }
         for view in all { addSubview(view) }
         addSubview(controls.canvasBorder)
@@ -383,42 +354,33 @@ final class ModernEditorChrome: NSView {
             header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             header.heightAnchor.constraint(equalToConstant: Metrics.headerHeight),
 
-            row2.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            row2.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
-            row2.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -footerBottom),
-            row2.heightAnchor.constraint(equalToConstant: statusHeight),
-            statusRow.leadingAnchor.constraint(equalTo: row2.leadingAnchor), statusRow.trailingAnchor.constraint(equalTo: row2.trailingAnchor),
-            statusRow.centerYAnchor.constraint(equalTo: row2.centerYAnchor),
-            row1.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            row1.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
-            row1.bottomAnchor.constraint(equalTo: row2.topAnchor, constant: -rowGap),
-            row1.heightAnchor.constraint(equalToConstant: rowHeight),
-            footerGroup.leadingAnchor.constraint(equalTo: row1.leadingAnchor), footerGroup.trailingAnchor.constraint(equalTo: row1.trailingAnchor),
-            footerGroup.centerYAnchor.constraint(equalTo: row1.centerYAnchor),
+            footer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
+            footer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
+            footer.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -footerBottom),
+            footer.heightAnchor.constraint(equalToConstant: rowHeight),
+            statusRow.leadingAnchor.constraint(equalTo: footer.leadingAnchor), statusRow.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
+            statusRow.trailingAnchor.constraint(lessThanOrEqualTo: footerGroup.leadingAnchor, constant: -margin),
+            footerGroup.trailingAnchor.constraint(equalTo: footer.trailingAnchor), footerGroup.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
 
-            leftRail.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            leftRail.widthAnchor.constraint(equalToConstant: Metrics.railWidth),
-            leftRail.topAnchor.constraint(equalTo: header.bottomAnchor, constant: gap),
-            leftRail.bottomAnchor.constraint(equalTo: row1.topAnchor, constant: -gap),
-            toolGroup.centerXAnchor.constraint(equalTo: leftRail.centerXAnchor), toolGroup.topAnchor.constraint(equalTo: leftRail.topAnchor),
             rightRail.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             rightRail.widthAnchor.constraint(equalToConstant: Metrics.rightRailWidth),
-            rightRail.topAnchor.constraint(equalTo: leftRail.topAnchor), rightRail.bottomAnchor.constraint(equalTo: leftRail.bottomAnchor),
+            rightRail.topAnchor.constraint(equalTo: header.bottomAnchor, constant: gap),
+            rightRail.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -gap),
             captureGroup.centerXAnchor.constraint(equalTo: rightRail.centerXAnchor), captureGroup.topAnchor.constraint(equalTo: rightRail.topAnchor),
             drawingGroup.centerXAnchor.constraint(equalTo: rightRail.centerXAnchor),
             drawingGroup.topAnchor.constraint(equalTo: captureGroup.bottomAnchor, constant: Metrics.groupSpacing),
-            historyGroup.centerXAnchor.constraint(equalTo: rightRail.centerXAnchor), historyGroup.bottomAnchor.constraint(equalTo: rightRail.bottomAnchor),
-            historyGroup.topAnchor.constraint(greaterThanOrEqualTo: drawingGroup.bottomAnchor, constant: Metrics.groupSpacing),
+            historyGroup.centerXAnchor.constraint(equalTo: rightRail.centerXAnchor),
+            historyGroup.topAnchor.constraint(equalTo: drawingGroup.bottomAnchor, constant: Metrics.groupSpacing),
 
-            scrollView.leadingAnchor.constraint(equalTo: leftRail.trailingAnchor, constant: gap),
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
             scrollView.trailingAnchor.constraint(equalTo: rightRail.leadingAnchor, constant: -gap),
-            scrollView.topAnchor.constraint(equalTo: leftRail.topAnchor), scrollView.bottomAnchor.constraint(equalTo: leftRail.bottomAnchor)
+            scrollView.topAnchor.constraint(equalTo: rightRail.topAnchor), scrollView.bottomAnchor.constraint(equalTo: rightRail.bottomAnchor)
         ])
 
         // Only the mirrored edge of the thumbnail shows under the bars and rails; the canvas area itself stays clear.
         bleed.additionalSafeAreaInsets = NSEdgeInsets(
-            top: headerTop + Metrics.headerHeight + gap, left: margin + Metrics.railWidth + gap,
-            bottom: footerBottom + statusHeight + rowGap + rowHeight + gap, right: margin + Metrics.rightRailWidth + gap)
+            top: headerTop + Metrics.headerHeight + gap, left: margin,
+            bottom: footerBottom + rowHeight + gap, right: margin + Metrics.rightRailWidth + gap)
         updateBackdropAndBleed()
     }
 }

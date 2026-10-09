@@ -15,6 +15,12 @@ extension AppDelegate {
         if #available(macOS 26, *) { (modernChrome as? ModernEditorChrome)?.updateCanvasBleed(dragExportView?.overview) }
     }
 
+    /// Modern has no name field: the window title is the document name.
+    func showDocumentName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        window.title = trimmed.isEmpty ? "OpenSkitch" : trimmed
+    }
+
     /// What this process's window is built from, so tools/test-native-startup.py can tell a pinned appearance
     /// that really produced its chrome from one that silently fell back.
     func appearanceEvidence() -> [String: Any] {
@@ -38,6 +44,7 @@ extension AppDelegate {
     /// Classic's size constraints are not copied; the chrome sizes the shared controls and owns the canvas border.
     func buildModernWindowContent() {
         FontAwesomeFont.registerBundledFonts()
+        window.minSize.width = max(window.minSize.width, ModernEditorChrome.minimumWindowWidth)
         let content = FrameChromeView(frame: window.contentView?.bounds ?? .zero)
         window.contentView = content
         let toolbox = bezelToolbox()
@@ -58,7 +65,7 @@ extension AppDelegate {
         dragOriginalControl.target = self; dragOriginalControl.action = #selector(changeDragOptions(_:))
         dragOriginalControl.state = (UserDefaults.standard.object(forKey: "DragOriginalSize") as? Bool ?? true) ? .on : .off
         dragOriginalControl.setAccessibilityLabel("Drag out at original size")
-        nameField.font = .systemFont(ofSize: 20); nameField.placeholderString = "Image name"
+        nameField.placeholderString = "Image name"
         zoomControl.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"])
         for (index, item) in zoomControl.itemArray.enumerated() { item.representedObject = [0.25, 0.5, 0.75, 1, 1.5, 2][index] }
         zoomControl.selectItem(withTitle: "100%"); zoomControl.font = .systemFont(ofSize: 18)
@@ -79,15 +86,14 @@ extension AppDelegate {
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
 
         let controls = ModernEditorChrome.SharedControls(
-            canvas: canvas, canvasBorder: canvasBorder, nameField: nameField, status: status, sizeLabel: sizeLabel,
+            canvas: canvas, canvasBorder: canvasBorder, status: status, sizeLabel: sizeLabel,
             widthControl: widthControl, paletteButton: paletteButton, zoomControl: zoomControl, dragFormatControl: dragFormatControl,
-            dragOriginalControl: dragOriginalControl, dragSizeLabel: dragSizeLabel, dragExportView: drag, toolbox: toolbox,
-            brandLogo: recoveredImage("OpenSkitch"))
+            dragOriginalControl: dragOriginalControl, dragSizeLabel: dragSizeLabel, dragExportView: drag, toolbox: toolbox)
         let actions = ModernEditorChrome.Actions(
             target: self, hide: #selector(vanish), photos: #selector(showPhotos), saveHistory: #selector(saveHistory),
             showHistory: #selector(showHistory), chooseTool: #selector(chooseTool(_:)), snap: #selector(snapButtonPressed),
             cancelFrame: #selector(cancelFrame), font: #selector(chooseFont), undo: #selector(undo),
-            wipe: #selector(wipe), actualSize: #selector(toggleActualSize), resize: #selector(resize), share: #selector(share(_:)))
+            wipe: #selector(wipe), resize: #selector(resize), share: #selector(share(_:)))
         let originalToolOrder: [SketchTool] = [.select, .brush, .line, .ellipse, .rectangle, .fill, .eraser, .text, .arrow]
         let chrome = ModernEditorChrome(controls: controls, actions: actions, toolOrder: (originalToolOrder + [.crop]).map(\.rawValue))
         chrome.translatesAutoresizingMaskIntoConstraints = false
@@ -98,10 +104,12 @@ extension AppDelegate {
         ])
         content.canvasScrollView = chrome.scrollView
         modernChrome = chrome
+        nameField.onChange = { [weak self] name in self?.showDocumentName(name) }
+        showDocumentName(nameField.stringValue)
         configureWebpostButton(chrome.shareButton)
 
         snapButton = chrome.snapButton; cancelFrameButton = chrome.cancelFrameButton
-        actualButton = chrome.actualButton; resizeButton = chrome.resizeButton
+        resizeButton = chrome.resizeButton
         chrome.snapButton.alternateTarget = self
         chrome.snapButton.alternateAction = #selector(fullscreenSnap)
         for tool in SketchTool.allCases {

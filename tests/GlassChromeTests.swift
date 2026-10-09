@@ -594,21 +594,18 @@ private enum GlassChromeTests {
         palette.font = .systemFont(ofSize: 18)
         palette.setAccessibilityLabel("Drawing colors")
         palette.image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in NSColor.red.setFill(); rect.fill(); return true }
-        let name = NSTextField(string: "Untitled")
-        name.font = .systemFont(ofSize: 14)
         let original = NSButton(checkboxWithTitle: "Original size", target: nil, action: nil)
         original.font = .systemFont(ofSize: 11)
         let controls = ModernEditorChrome.SharedControls(
             canvas: NSView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700)), canvasBorder: NSView(),
-            nameField: name, status: label("Ready"), sizeLabel: label("Size · 6.75"),
+            status: label("Ready"), sizeLabel: label("Size · 6.75"),
             widthControl: BezelSizeSlider(frame: .zero), paletteButton: palette, zoomControl: zoom, dragFormatControl: format,
-            dragOriginalControl: original, dragSizeLabel: label("1000 × 700 · 48 KB"), dragExportView: NSView(), toolbox: toolbox,
-            brandLogo: NSImage(size: NSSize(width: 32, height: 32), flipped: false) { rect in NSColor.orange.setFill(); rect.fill(); return true })
+            dragOriginalControl: original, dragSizeLabel: label("1000 × 700 · 48 KB"), dragExportView: NSView(), toolbox: toolbox)
         let actions = ModernEditorChrome.Actions(
             target: target, hide: #selector(ActionTarget.hide(_:)), photos: #selector(ActionTarget.photos(_:)), saveHistory: #selector(ActionTarget.saveHistory(_:)),
             showHistory: #selector(ActionTarget.showHistory(_:)), chooseTool: #selector(ActionTarget.chooseTool(_:)), snap: #selector(ActionTarget.snap(_:)),
             cancelFrame: #selector(ActionTarget.cancelFrame(_:)), font: #selector(ActionTarget.font(_:)),
-            undo: #selector(ActionTarget.undo(_:)), wipe: #selector(ActionTarget.wipe(_:)), actualSize: #selector(ActionTarget.actualSize(_:)),
+            undo: #selector(ActionTarget.undo(_:)), wipe: #selector(ActionTarget.wipe(_:)),
             resize: #selector(ActionTarget.resize(_:)), share: #selector(ActionTarget.share(_:)))
         let chrome = ModernEditorChrome(controls: controls, actions: actions, toolOrder: toolOrder, accessibility: { box.value })
         chrome.translatesAutoresizingMaskIntoConstraints = false
@@ -725,24 +722,26 @@ private enum GlassChromeTests {
             }
         }
         // Order: header left to right, tools top to bottom in archive order, footer left to right.
-        let brand = chrome.header.subviews.first { $0.identifier?.rawValue == "OpenSkitchBrand" }
-        expect(brand != nil, "\(label): the brand is a direct child of the header")
-        if let brand {
-            let frame = rect(brand, in: rig)
-            expect(abs(frame.midX - rig.content.bounds.midX) <= 1, "\(label): brand is centered on the window (\(frame.midX) vs \(rig.content.bounds.midX))")
-            expect(rect(chrome.hideButton, in: rig).maxX < frame.minX && rect(chrome.saveButton, in: rig).minX > frame.maxX, "\(label): brand sits between the header groups")
-        }
+        expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "\(label): the logo is not in the header (no room at minimum width)")
         let headerOrder = [chrome.hideButton, rig.controls.toolbox, chrome.photosButton].map { rect($0, in: rig).minX }
         expect(headerOrder == headerOrder.sorted(), "\(label): Hide, Toolbox, Photos run left to right")
         expect(rect(chrome.saveButton, in: rig).minX < rect(chrome.historyButton, in: rig).minX, "\(label): Save precedes History")
-        let toolsByHeight = chrome.toolButtons.values.sorted { rect($0, in: rig).minY > rect($1, in: rig).minY }
-        expect(toolsByHeight.map { $0.identifier?.rawValue ?? "" } == toolOrder, "\(label): tools run top to bottom in archive order, crop last")
-        let footerOrder = [chrome.actualButton, chrome.resizeButton, rig.controls.nameField, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton].map { rect($0, in: rig).minX }
-        expect(footerOrder == footerOrder.sorted(), "\(label): the footer row runs Actual Size to Webpost")
-        let footerY = rect(chrome.actualButton, in: rig).midY
-        expect(abs(footerY - rect(chrome.shareButton, in: rig).midY) < 0.5, "\(label): footer controls share a baseline")
-        expect(rect(rig.controls.status, in: rig).maxY < rect(chrome.actualButton, in: rig).minY, "\(label): the status row sits below the command row")
-        expect(rect(chrome.undoButton, in: rig).minY < rect(rig.controls.widthControl, in: rig).minY, "\(label): Undo and Wipe are pinned below the drawing controls")
+        let toolsAcross = chrome.toolButtons.values.sorted { rect($0, in: rig).minX < rect($1, in: rig).minX }
+        expect(toolsAcross.map { $0.identifier?.rawValue ?? "" } == toolOrder, "\(label): tools run left to right in archive order, crop last")
+        let toolbar = rect(chrome.header, in: rig)
+        for button in toolsAcross + [chrome.resizeButton] {
+            let frame = rect(button, in: rig)
+            expect(toolbar.contains(frame.insetBy(dx: 0.5, dy: 0.5)), "\(label): \(describe(button)) sits inside the top bar")
+        }
+        expect(rect(toolsAcross.last!, in: rig).maxX < rect(chrome.resizeButton, in: rig).minX && rect(chrome.photosButton, in: rig).maxX < rect(toolsAcross[0], in: rig).minX
+               && rect(chrome.resizeButton, in: rig).maxX < rect(chrome.saveButton, in: rig).minX, "\(label): top bar order is Hide, Toolbox, Photos, tools, Resize, Save, History")
+        let footerOrder = [rig.controls.zoomControl, rig.controls.status, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton].map { rect($0, in: rig).minX }
+        expect(footerOrder == footerOrder.sorted(), "\(label): the one footer row runs zoom, status, format, drag, upload")
+        let footerY = rect(chrome.shareButton, in: rig).midY
+        expect(abs(footerY - rect(rig.controls.dragExportView, in: rig).midY) < 0.5 && abs(footerY - rect(rig.controls.zoomControl, in: rig).midY) < 3, "\(label): footer controls share a baseline")
+        let sliderBottom = rect(chrome.surface(for: rig.controls.widthControl)!, in: rig).minY, undoTop = rect(chrome.surface(for: chrome.undoButton)!, in: rig).maxY
+        expect(sliderBottom - undoTop >= 0 && sliderBottom - undoTop <= GlassChrome.Metrics.groupSpacing + 0.5, "\(label): Undo sits directly under the slider (gap \(sliderBottom - undoTop))")
+        expect(rect(chrome.undoButton, in: rig).maxY < rect(chrome.wipeButton, in: rig).maxY + 60 && rect(chrome.wipeButton, in: rig).minY < rect(chrome.undoButton, in: rig).minY, "\(label): Wipe is stacked beneath Undo")
         let rightEdge = [chrome.snapButton, chrome.fontButton, chrome.undoButton].map { rect($0, in: rig).midX.rounded() }
         expect(Set(rightEdge).count == 1 && rightEdge[0] < rig.content.bounds.maxX, "\(label): the right rail is one aligned column")
         // The canvas border lives where classic puts it, beside the scroll view and above everything.
@@ -753,13 +752,14 @@ private enum GlassChromeTests {
     @available(macOS 26, *)
     private static func chromeTests(glyphs: Bool) {
         let tag = glyphs ? "glyphs" : "symbols"
-        let minimum = NSWindow.contentRect(forFrameRect: NSRect(x: 0, y: 0, width: 900, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable]).size
+        let minimum = NSWindow.contentRect(forFrameRect: NSRect(x: 0, y: 0, width: ModernEditorChrome.minimumWindowWidth, height: 640), styleMask: [.titled, .closable, .miniaturizable, .resizable]).size
         for size in [minimum, NSSize(width: 1024, height: 740)] {
             let label = "\(tag) \(Int(size.width))x\(Int(size.height))"
             let rig = makeRig(size)
             verifyLayout(rig, label)
             semantics(rig, label)
             glassNeckChecks(rig, label)
+            redesignChecks(rig, label)
             rig.chrome.frameMode = true
             verifyLayout(rig, label + " frame mode")
             frameModeChecks(rig, label)
@@ -770,6 +770,42 @@ private enum GlassChromeTests {
                 accessibilityChecks(rig, label)
             }
         }
+    }
+
+    /// The owner redesign: every tool in the top bar, no left rail, Undo/Wipe under the slider, one footer row, no name field.
+    @available(macOS 26, *)
+    private static func redesignChecks(_ rig: Rig, _ label: String) {
+        let chrome = rig.chrome
+        func ancestors(_ view: NSView) -> [NSView] { view.superview.map { [$0] + ancestors($0) } ?? [] }
+        func descendants(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(descendants) }
+        for (id, button) in chrome.toolButtons {
+            expect(ancestors(button).contains { $0 === chrome.header }, "\(label): tool \(id) lives in the top bar container")
+        }
+        expect(ancestors(chrome.resizeButton).contains { $0 === chrome.header }, "\(label): Resize lives in the top bar container")
+        expect(!descendants(chrome).contains { $0.identifier?.rawValue == "GlassToolRail" }, "\(label): there is no left tool rail")
+        let scroll = rect(chrome.scrollView, in: rig)
+        expect(abs(scroll.minX - 12) < 0.5, "\(label): the canvas viewport starts at the left margin (\(scroll.minX))")
+        let railLeft = rig.content.bounds.width - 12 - GlassChrome.Metrics.rightRailWidth
+        expect(abs(scroll.maxX - (railLeft - 8)) < 0.5, "\(label): the viewport meets the right rail's spacing (\(scroll.maxX) vs \(railLeft - 8))")
+        let sliderBottom = rect(chrome.surface(for: rig.controls.widthControl)!, in: rig).minY
+        let undoTop = rect(chrome.surface(for: chrome.undoButton)!, in: rig).maxY
+        expect(sliderBottom - undoTop >= 0 && sliderBottom - undoTop <= GlassChrome.Metrics.groupSpacing + 0.5, "\(label): Undo sits directly under the slider, not pushed to the bottom")
+        let footer = descendants(chrome).first { $0.identifier?.rawValue == "OpenSkitchFooter" }
+        expect(footer != nil, "\(label): the footer row exists")
+        if let footer {
+            let parts = [rig.controls.zoomControl, rig.controls.status, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton] as [NSView]
+            for part in parts { expect(ancestors(part).contains { $0 === footer }, "\(label): \(describe(part)) is in the single footer row") }
+            expect(footer.subviews.count == 2 && footer.frame.height <= 44.5, "\(label): the footer is one row (\(footer.frame.height) pt)")
+            let known = Set(parts.map(ObjectIdentifier.init) + [ObjectIdentifier(rig.controls.dragOriginalControl), ObjectIdentifier(rig.controls.dragSizeLabel)])
+            let leaves = descendants(footer).filter { ($0 is NSControl) && !($0 is NSStackView) && $0.window != nil && !$0.isHidden }
+            let strays = leaves.filter { leaf in !known.contains(ObjectIdentifier(leaf)) && !ancestors(leaf).contains { known.contains(ObjectIdentifier($0)) } }
+            expect(strays.isEmpty, "\(label): the footer holds only zoom, status, format, drag and upload (strays: \(strays.map(describe)))")
+        }
+        expect(!descendants(chrome).contains { ($0 as? NSTextField)?.isEditable == true }, "\(label): Modern has no editable file-name field")
+        expect(!allButtons(in: chrome).contains { $0.title.contains("Actual Size") || $0.title.contains("Normal View") }, "\(label): the Actual Size button is gone")
+        let frames = rect(chrome.header, in: rig)
+        let groups = containers(rig).filter { ["GlassHeaderLeading", "GlassToolBar", "GlassHeaderTrailing"].contains($0.identifier?.rawValue ?? "") }
+        expect(groups.count == 3 && groups.allSatisfy { frames.contains(rect($0, in: rig).insetBy(dx: 0.5, dy: 0.5)) }, "\(label): the three top bar groups fit inside the bar with no clipping")
     }
 
     /// Glass shapes fuse into a "neck" when their container's spacing reaches the gap between them.
@@ -795,11 +831,6 @@ private enum GlassChromeTests {
     private static func semantics(_ rig: Rig, _ label: String) {
         let chrome = rig.chrome
         expect(chrome.header.identifier?.rawValue == "OpenSkitchHeader", "\(label): header identifier")
-        let brand = chrome.header.subviews.first { $0.identifier?.rawValue == "OpenSkitchBrand" } as? NSStackView
-        let logo = brand?.arrangedSubviews.first as? NSImageView
-        expect(logo?.accessibilityLabel() == "OpenSkitch" && logo?.toolTip == "OpenSkitch" && logo?.image === rig.controls.brandLogo, "\(label): the logo carries the OpenSkitch label and tooltip")
-        expect(brand?.arrangedSubviews.count == 1 && !chrome.header.subviews.contains { ($0 as? NSTextField) != nil }, "\(label): the brand is the logo alone, no title text")
-        expect(abs((logo?.frame.width ?? 0) - 32) < 0.5 && abs((logo?.frame.height ?? 0) - 32) < 0.5, "\(label): logo is 32 pt")
         expect(chrome.toolButtons.count == 10 && Set(chrome.toolButtons.keys) == Set(toolOrder), "\(label): ten tool buttons, crop included")
         for id in toolOrder {
             guard let button = chrome.toolButtons[id] else { continue }
@@ -817,7 +848,7 @@ private enum GlassChromeTests {
         for (button, title, hit) in [(chrome.hideButton, "Hide", "hide"), (chrome.photosButton, "Photos", "photos"), (chrome.saveButton, "Save", "saveHistory"),
                                      (chrome.historyButton, "History", "showHistory"), (chrome.snapButton, "Snap", "snap"),
                                      (chrome.cancelFrameButton, "Cancel", "cancelFrame"), (chrome.fontButton, "Font", "font"), (chrome.undoButton, "Undo", "undo"),
-                                     (chrome.wipeButton, "Wipe", "wipe"), (chrome.actualButton, "Actual Size", "actualSize"), (chrome.resizeButton, "Resize…", "resize")] {
+                                     (chrome.wipeButton, "Wipe", "wipe"), (chrome.resizeButton, "Resize…", "resize")] {
             expect(button.title == title, "\(label): \(title) keeps its classic name")
             expect(button.accessibilityLabel() == title, "\(label): \(title) is read by its old title")
             expect(button.controlSize == .extraLarge, "\(label): \(title) uses Apple's Extra Large control size")
@@ -831,7 +862,6 @@ private enum GlassChromeTests {
             expect(rig.target.hits == [hit], "\(label): \(title) sends its action (\(rig.target.hits))")
             expect(chrome.surface(for: button)?.isSelected == false, "\(label): clicking \(title) never leaves its glass selected")
         }
-        chrome.actualButton.state = .off
         expect(chrome.shareButton.accessibilityLabel() == "Upload to destination" && chrome.shareButton.title.isEmpty && chrome.shareButton.imagePosition == .imageOnly,
                "\(label): the upload button is icon-only with an explicit label")
         rig.target.hits.removeAll(); chrome.shareButton.performClick(nil)
@@ -845,17 +875,12 @@ private enum GlassChromeTests {
         let controlTitles = allButtons(in: chrome).flatMap { [$0.title, $0.accessibilityLabel() ?? "", $0.toolTip ?? ""] }
         expect(!controlTitles.contains { $0.lowercased().contains("cam") }, "\(label): no Cam/Camera button exists in the Modern rail (screen capture only)")
         expect(Mirror(reflecting: chrome).children.allSatisfy { $0.label?.lowercased().contains("camera") != true }, "\(label): the chrome owns no camera control")
-        expect(chrome.actualButton.selectedIcon == .minimize && !chrome.actualButton.selectionTints, "\(label): Actual Size swaps its glyph without tinting")
-        chrome.actualButton.title = "Normal View"
-        expect(chrome.actualButton.accessibilityLabel() == "Normal View" && chrome.actualButton.toolTip == "Normal View" && chrome.actualButton.visibleTitle.isEmpty,
-               "\(label): the Actual Size retitle lands in the tooltip and label, never as text")
-        chrome.actualButton.title = "Actual Size"
         iconOnlyChecks(rig, label)
 
         // Shared controls: re-parented, floors applied, caller-owned strings untouched.
         let shared = rig.controls
         expect(shared.toolbox.accessibilityLabel() == "Toolbox" && shared.paletteButton.accessibilityLabel() == "Drawing colors" && shared.zoomControl.accessibilityLabel() == "Canvas zoom" && shared.dragFormatControl.accessibilityLabel() == "Drag Me format", "\(label): caller labels are untouched")
-        for control in [shared.toolbox, shared.dragFormatControl, shared.paletteButton, shared.nameField] as [NSControl] {
+        for control in [shared.toolbox, shared.dragFormatControl, shared.paletteButton] as [NSControl] {
             expect(control.controlSize == .extraLarge && (control.font?.pointSize ?? 0) >= 18, "\(label): \(describe(control)) is Extra Large and keeps its readable font")
         }
         expect(shared.toolbox.imagePosition == .imageOnly && shared.toolbox.itemArray.first?.image != nil, "\(label): Toolbox shows its icon")
@@ -863,7 +888,6 @@ private enum GlassChromeTests {
         expect((shared.widthControl as? BezelSizeSlider)?.style == .modern, "\(label): the slider uses the vector style")
         expect(abs(rect(shared.widthControl, in: rig).width - 36) < 0.5 && abs(rect(shared.widthControl, in: rig).height - 96) < 0.5, "\(label): the slider is Apple's 36 pt wide Extra Large slider, 96 pt tall")
         expect(chrome.surface(for: shared.dragExportView)?.shape == .capsule, "\(label): Drag Me is a compact capsule surface")
-        expect(chrome.surface(for: shared.nameField)?.shape == .capsule && !shared.nameField.drawsBackground, "\(label): the name field sits in a glass capsule")
         expect(chrome.surface(for: shared.dragFormatControl)?.shape == .capsule, "\(label): the format popup sits in a glass capsule")
         expect(chrome.surface(for: shared.paletteButton) != nil && chrome.surface(for: chrome.fontButton) != nil, "\(label): Color and Font have surfaces")
         for plainControl in [shared.zoomControl, shared.dragOriginalControl, shared.dragSizeLabel, shared.status] as [NSControl] {
@@ -911,7 +935,7 @@ private enum GlassChromeTests {
             (chrome.hideButton, "Hide", "Hide (⌘M)"), (chrome.photosButton, "Photos", "Photos"), (chrome.saveButton, "Save", "Save to History"),
             (chrome.historyButton, "History", "History"), (chrome.snapButton, "Snap", snapToolTip), (chrome.cancelFrameButton, "Cancel", "Cancel"),
             (chrome.fontButton, "Font", "Font"), (chrome.undoButton, "Undo", "Undo (⌘Z)"), (chrome.wipeButton, "Wipe", "Wipe"),
-            (chrome.actualButton, "Actual Size", "Actual Size"), (chrome.resizeButton, "Resize…", "Resize…"),
+            (chrome.resizeButton, "Resize…", "Resize…"),
             (chrome.shareButton, "Upload to destination", "Upload")]
         for (button, name, tip) in expected {
             expect(button.imagePosition == .imageOnly, "\(label): \(name) draws only its icon")
