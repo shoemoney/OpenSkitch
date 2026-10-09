@@ -76,19 +76,19 @@ extension AppDelegate {
         configureDragExport(drag)
         drag.showsHandIconOnly = true
         drag.toolTip = "Drag the drawing into Finder or another app"
-        dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
-        dragFormatControl.font = .systemFont(ofSize: 20)
-        dragFormatControl.setAccessibilityLabel("Drag Me format")
-        for item in dragFormatControl.itemArray { item.attributedTitle = NSAttributedString(string: item.title, attributes: [.font: NSFont.systemFont(ofSize: 20)]) }
-        dragFormatControl.target = self; dragFormatControl.action = #selector(changeDragOptions(_:))
-        let choice = UserDefaults.standard.integer(forKey: "DragFormatChoice")
-        dragFormatControl.selectItem(at: (0..<dragFormatControl.numberOfItems).contains(choice) ? choice : 0)
+        dragFormatToggle.segmentStyle = .capsule
+        dragFormatToggle.font = .systemFont(ofSize: 20)
+        dragFormatToggle.setAccessibilityLabel("Image format")
+        dragFormatToggle.toolTip = FormatToggle.toolTip
+        for (index, title) in FormatToggle.titles.enumerated() { dragFormatToggle.setLabel(title, forSegment: index); dragFormatToggle.setWidth(0, forSegment: index); dragFormatToggle.setToolTip(FormatToggle.toolTip, forSegment: index) }
+        dragFormatToggle.target = self; dragFormatToggle.action = #selector(changeDragOptions(_:))
+        dragFormatToggle.selectedSegment = FormatToggle.segment(forStoredChoice: UserDefaults.standard.integer(forKey: FormatToggle.defaultsKey))
         dragSizeLabel.font = .systemFont(ofSize: 18); dragSizeLabel.lineBreakMode = .byTruncatingTail
         status.font = .systemFont(ofSize: 18); status.lineBreakMode = .byTruncatingTail
 
         let controls = ModernEditorChrome.SharedControls(
             canvas: canvas, canvasBorder: canvasBorder, status: status, sizeLabel: sizeLabel,
-            widthControl: widthControl, paletteButton: paletteButton, zoomControl: zoomControl, dragFormatControl: dragFormatControl,
+            widthControl: widthControl, paletteButton: paletteButton, zoomControl: zoomControl, dragFormatControl: dragFormatToggle,
             dragOriginalControl: dragOriginalControl, dragSizeLabel: dragSizeLabel, dragExportView: drag, toolbox: toolbox)
         let actions = ModernEditorChrome.Actions(
             target: self, hide: #selector(vanish), photos: #selector(showPhotos), saveHistory: #selector(saveHistory),

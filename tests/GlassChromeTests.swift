@@ -590,10 +590,10 @@ private enum GlassChromeTests {
         zoom.addItems(withTitles: ["25%", "50%", "75%", "100%", "150%", "200%"])
         zoom.font = .systemFont(ofSize: 13)
         zoom.setAccessibilityLabel("Canvas zoom")
-        let format = NSPopUpButton(frame: .zero, pullsDown: false)
-        format.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
+        let format = NSSegmentedControl(labels: ["PNG", "JPG"], trackingMode: .selectOne, target: nil, action: nil)
+        format.selectedSegment = 0
         format.font = .systemFont(ofSize: 20)
-        format.setAccessibilityLabel("Drag Me format")
+        format.setAccessibilityLabel("Image format")
         let toolbox = NSPopUpButton(frame: .zero, pullsDown: true)
         toolbox.addItems(withTitles: ["Toolbox", "About OpenSkitch", "Quit OpenSkitch"])
         toolbox.font = .systemFont(ofSize: 20)
@@ -745,11 +745,9 @@ private enum GlassChromeTests {
                && rect(chrome.resizeButton, in: rig).maxX < rect(chrome.saveButton, in: rig).minX, "\(label): top bar order is Hide, Toolbox, Photos, tools, Resize, Save, History")
         let footerOrder = [rig.controls.zoomControl, rig.controls.status, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton].map { rect($0, in: rig).minX }
         expect(footerOrder == footerOrder.sorted(), "\(label): the one footer row runs zoom, status, format, drag, upload")
-        let formatControl = rig.controls.dragFormatControl, formatSelected = formatControl.indexOfSelectedItem
-        let formatFit = (0..<formatControl.numberOfItems).map { formatControl.selectItem(at: $0); return formatControl.fittingSize.width }.max() ?? 0
-        formatControl.selectItem(at: formatSelected)
+        let formatControl = rig.controls.dragFormatControl, formatFit = formatControl.fittingSize.width
         let formatWidth = rect(chrome.surface(for: formatControl)!, in: rig).width
-        expect(formatWidth >= formatFit && formatWidth <= formatFit + 12, "\(label): the format popup hugs its widest item (\(formatWidth) pt for a \(formatFit) pt popup)")
+        expect(formatWidth >= formatFit && formatWidth <= formatFit + 12, "\(label): the format toggle hugs its segments (\(formatWidth) pt for a \(formatFit) pt popup)")
         let footerY = rect(chrome.shareButton, in: rig).midY
         expect(abs(footerY - rect(rig.controls.dragExportView, in: rig).midY) < 0.5 && abs(footerY - rect(rig.controls.zoomControl, in: rig).midY) < 3, "\(label): footer controls share a baseline")
         let sliderBottom = rect(chrome.surface(for: rig.controls.widthControl)!, in: rig).minY, undoTop = rect(chrome.surface(for: chrome.undoButton)!, in: rig).maxY
@@ -892,7 +890,7 @@ private enum GlassChromeTests {
 
         // Shared controls: re-parented, floors applied, caller-owned strings untouched.
         let shared = rig.controls
-        expect(shared.toolbox.accessibilityLabel() == "Toolbox" && shared.paletteButton.accessibilityLabel() == "Drawing colors" && shared.zoomControl.accessibilityLabel() == "Canvas zoom" && shared.dragFormatControl.accessibilityLabel() == "Drag Me format", "\(label): caller labels are untouched")
+        expect(shared.toolbox.accessibilityLabel() == "Toolbox" && shared.paletteButton.accessibilityLabel() == "Drawing colors" && shared.zoomControl.accessibilityLabel() == "Canvas zoom" && shared.dragFormatControl.accessibilityLabel() == "Image format", "\(label): caller labels are untouched")
         for control in [shared.toolbox, shared.dragFormatControl, shared.paletteButton] as [NSControl] {
             expect(control.controlSize == .extraLarge && (control.font?.pointSize ?? 0) >= 18, "\(label): \(describe(control)) is Extra Large and keeps its readable font")
         }
@@ -901,7 +899,7 @@ private enum GlassChromeTests {
         expect((shared.widthControl as? BezelSizeSlider)?.style == .modern, "\(label): the slider uses the vector style")
         expect(abs(rect(shared.widthControl, in: rig).width - 36) < 0.5 && abs(rect(shared.widthControl, in: rig).height - 96) < 0.5, "\(label): the slider is Apple's 36 pt wide Extra Large slider, 96 pt tall")
         expect(chrome.surface(for: shared.dragExportView)?.shape == .capsule, "\(label): Drag Me is a compact capsule surface")
-        expect(chrome.surface(for: shared.dragFormatControl)?.shape == .capsule, "\(label): the format popup sits in a glass capsule")
+        expect(chrome.surface(for: shared.dragFormatControl)?.shape == .capsule, "\(label): the format toggle sits in a glass capsule")
         expect(chrome.surface(for: shared.paletteButton) != nil && chrome.surface(for: chrome.fontButton) != nil, "\(label): Color and Font have surfaces")
         for plainControl in [shared.zoomControl, shared.dragOriginalControl, shared.dragSizeLabel, shared.status] as [NSControl] {
             expect(chrome.surface(for: plainControl) == nil, "\(label): \(describe(plainControl)) stays plain, outside any glass")

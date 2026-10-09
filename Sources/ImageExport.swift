@@ -2,6 +2,25 @@ import AppKit
 import ImageIO
 import UniformTypeIdentifiers
 
+/// The Modern footer's [PNG | JPG] toggle. The stored preference is the popup row index under
+/// "DragFormatChoice" (0 = PNG, 1...5 = the JPEG quality rows, 6+ = other formats); the toggle maps it onto two segments.
+enum FormatToggle {
+    static let defaultsKey = "DragFormatChoice"
+    static let titles = ["PNG", "JPG"]
+    static let jpgQuality = 0.75
+    static let jpgStoredChoice = 2
+    static let toolTip = "Format for drag, export and upload"
+    /// Anything that is not a stored JPEG row (absent, PNG, TIFF, ...) shows as PNG.
+    static func segment(forStoredChoice choice: Int) -> Int { (1...5).contains(choice) ? 1 : 0 }
+    /// Keeps a finer stored JPEG row when the segment is already JPG, so the shared preference is not needlessly rewritten.
+    static func storedChoice(forSegment segment: Int, current: Int) -> Int {
+        segment == 1 ? ((1...5).contains(current) ? current : jpgStoredChoice) : 0
+    }
+    static func payload(forSegment segment: Int) -> (format: String, quality: Double) {
+        segment == 1 ? ("jpeg", jpgQuality) : ("png", 1.0)
+    }
+}
+
 /// Output dimensions are independent of editable canvas and element geometry.
 enum ImageExport {
     static func encode(document: SketchDocument, size: CGSize, format: String,

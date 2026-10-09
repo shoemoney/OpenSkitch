@@ -32,8 +32,65 @@ extension AppSafetyTests {
             ("A click at the visual centre of the centred canvas selects the element at the document centre", modernCanvasCentredHitTest),
             ("Modern puts every tool and Resize in the top bar, drops the left rail, and keeps Undo and Wipe under the slider", modernTopBarLayout),
             ("Modern has one footer row and no file-name field; the window title is the document name and Rename changes the export name", modernDocumentNameInTitle),
-            ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures)
+            ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures),
+            ("Modern footer is a [PNG | JPG] toggle: PNG on a fresh install, JPG encodes drag, export and upload at 0.75, and a stored JPEG row reads as JPG", modernFormatToggle)
         ]
+    }
+
+    @available(macOS 26, *)
+    private static func modernFormatToggle() throws {
+        let defaults = UserDefaults.standard, key = FormatToggle.defaultsKey
+        let saved = defaults.object(forKey: key)
+        defer { if let saved { defaults.set(saved, forKey: key) } else { defaults.removeObject(forKey: key) } }
+        func isJPEG(_ d: Data) -> Bool { d.prefix(3) == Data([0xFF, 0xD8, 0xFF]) }
+        func isPNG(_ d: Data) -> Bool { d.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]) }
+
+        defaults.removeObject(forKey: key)
+        let (fresh, chrome) = try modernFixture()
+        let app = fresh.app, toggle = app.dragFormatToggle
+        try expect(toggle.segmentCount == 2 && toggle.label(forSegment: 0) == "PNG" && toggle.label(forSegment: 1) == "JPG", "The toggle has exactly the PNG and JPG segments")
+        try expect(toggle.trackingMode == .selectOne && toggle.accessibilityLabel() == "Image format" && toggle.toolTip == "Format for drag, export and upload", "Selection mode, label and tooltip")
+        try expect((toggle.font?.pointSize ?? 0) >= 18 && toggle.superview != nil && chrome.surface(for: toggle) != nil, "Text is at least 18 pt and the toggle sits in the glass footer")
+        try expect(toggle.selectedSegment == 0 && app.dragFormat == "png", "PNG is selected on a fresh defaults domain")
+
+        app.canvas.setBackgroundColor(.clear)
+        var shape = SketchElement(kind: .rectangle)
+        shape.rect = CGRect(x: 20, y: 20, width: 60, height: 40)
+        shape.filled = true; shape.color = SketchColor(NSColor(deviceRed: 1, green: 0, blue: 0, alpha: 1))
+        app.canvas.document.elements.append(shape)
+        let png = try app.exportData(format: app.dragFormat, originalSize: false, jpegQuality: app.dragQuality)
+        let pngRep = try (NSBitmapImageRep(data: png)).unwrap("PNG decodes")
+        try expect(isPNG(png) && pngRep.hasAlpha, "The PNG payload has an alpha channel")
+        try expect((pngRep.colorAt(x: 2, y: 2)?.alphaComponent ?? 1) < 0.01 && (pngRep.colorAt(x: 50, y: 40)?.alphaComponent ?? 0) > 0.99, "A transparent pixel stays alpha 0 and the drawn pixel is opaque")
+        try expect(app.uploadEncoding.format == "png" && app.uploadEncoding.fileExtension == "png", "Upload is PNG by default")
+
+        toggle.selectedSegment = 1
+        app.changeDragOptions(toggle)
+        try expect(app.dragFormat == "jpeg" && app.dragQuality == 0.75, "JPG selects JPEG at quality 0.75")
+        let jpg = try app.exportData(format: app.dragFormat, originalSize: false, jpegQuality: app.dragQuality)
+        try expect(isJPEG(jpg), "The JPG payload starts with the JPEG magic bytes")
+        let want = try app.canvas.imageData(format: "jpeg", jpegQuality: 0.75).unwrap("reference")
+        let other = [0.7, 1.0].compactMap { app.canvas.imageData(format: "jpeg", jpegQuality: $0) }
+        try expect(jpg == want && other.allSatisfy { $0 != want }, "The JPG payload is exactly the 0.75 encoding, not 0.7 or 1.0")
+        let flat = try (NSBitmapImageRep(data: jpg)).unwrap("JPEG decodes")
+        try expect((flat.colorAt(x: 2, y: 2)?.redComponent ?? 0) > 0.97 && (flat.colorAt(x: 2, y: 2)?.greenComponent ?? 0) > 0.97, "JPG composites transparency onto white")
+        let drag = try (app.dragExportView).unwrap("drag"), payload = try (drag.prepare?()).unwrap("drag payload")
+        try expect(isJPEG(payload.data) && payload.format == "jpeg", "The drag payload follows the toggle")
+        try expect(app.uploadEncoding.format == "jpeg" && app.uploadEncoding.quality == 0.75 && app.uploadEncoding.fileExtension == "jpg", "Upload follows the toggle")
+        let accessory = ExportAccessory(format: app.dragFormat, jpegQuality: 0.4)
+        accessory.fixedJPEGQuality = FormatToggle.jpgQuality
+        try expect(accessory.format == "jpeg" && accessory.effectiveJPEGQuality == 0.75, "Export defaults to JPEG at 0.75 under the toggle")
+        try expect(defaults.integer(forKey: key) == FormatToggle.jpgStoredChoice, "Choosing JPG stores a JPEG row in the shared preference")
+
+        for (stored, segment) in [(0, 0), (1, 1), (3, 1), (5, 1), (6, 0), (11, 0), (-1, 0), (99, 0)] {
+            try expect(FormatToggle.segment(forStoredChoice: stored) == segment, "Stored row \(stored) maps to segment \(segment)")
+        }
+        defaults.set(4, forKey: key)
+        let legacy = try Fixture()
+        try expect(legacy.app.dragFormatToggle.selectedSegment == 1 && legacy.app.dragFormat == "jpeg" && legacy.app.dragQuality == 0.75, "A legacy stored JPEG quality row shows as JPG at 0.75")
+        legacy.app.dragFormatToggle.selectedSegment = 0
+        legacy.app.changeDragOptions(nil)
+        try expect(defaults.integer(forKey: key) == 0, "Choosing PNG stores row 0")
     }
 
     // MARK: fixtures and walkers
@@ -93,7 +150,7 @@ extension AppSafetyTests {
         try expect(!all.contains { ($0 as? NSButton)?.title == "Actual Size" }, "Modern has no Actual Size button")
         let footer = try all.first { $0.identifier?.rawValue == "OpenSkitchFooter" }.unwrap("footer row")
         let row = footer.convert(footer.bounds, to: content)
-        for part in [app.zoomControl, app.status, app.dragFormatControl, try (app.dragExportView).unwrap("drag"), chrome.shareButton] as [NSView] {
+        for part in [app.zoomControl, app.status, app.dragFormatToggle, try (app.dragExportView).unwrap("drag"), chrome.shareButton] as [NSView] {
             let frame = part.convert(part.bounds, to: content)
             try expect(row.insetBy(dx: -0.5, dy: -0.5).contains(frame) && abs(frame.midY - row.midY) <= 6, "The footer row holds \(part)")
         }
@@ -254,7 +311,7 @@ extension AppSafetyTests {
         facts["palette.label"] = app.paletteButton.accessibilityLabel() ?? "<nil>"
         facts["palette.tip"] = app.paletteButton.toolTip ?? "<nil>"
         facts["zoom.label"] = app.zoomControl.accessibilityLabel() ?? "<nil>"
-        facts["format.label"] = app.dragFormatControl.accessibilityLabel() ?? "<nil>"
+        facts["format.label"] = (app.modernChrome != nil ? app.dragFormatToggle : app.dragFormatControl).accessibilityLabel() ?? "<nil>"
         facts["drag.label"] = app.dragExportView?.accessibilityLabel() ?? "<nil>"
         facts["drag.tip"] = app.dragExportView?.toolTip ?? "<nil>"
         facts["original.title"] = app.dragOriginalControl.title
@@ -335,13 +392,13 @@ extension AppSafetyTests {
         try expect(try surface(chrome, app.dragExportView).shape == .capsule && (try surface(chrome, app.dragExportView).fixedSize) == NSSize(width: 48, height: 36),
                    "Drag Me is a compact 48x36 capsule like the other icon buttons")
         try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) 
-                   && chrome.surface(for: app.dragFormatControl)?.shape == .capsule, "Color and the format popup have their glass")
+                   && chrome.surface(for: app.dragFormatToggle)?.shape == .capsule, "Color and the format popup have their glass")
         try expect(chrome.surface(for: app.zoomControl) == nil && chrome.surface(for: app.status) == nil && chrome.surface(for: app.canvas) == nil, "Zoom, status and the canvas stay outside glass")
         try expect((app.status.font?.pointSize ?? 0) >= 18 && (app.zoomControl.font?.pointSize ?? 0) >= 18, "Text stays at its readable sizes")
         try expect(app.widthControl.target === app && app.widthControl.action == #selector(AppDelegate.changeWidth(_:)) && app.widthControl.onBegin != nil && app.widthControl.onEnd != nil,
                    "The size slider keeps its undo-grouping callbacks")
         try expect(app.zoomControl.target === app && app.zoomControl.action == #selector(AppDelegate.changeZoom(_:)) && app.zoomControl.titleOfSelectedItem == "100%", "Zoom keeps its action and 100% default")
-        try expect(app.dragFormatControl.target === app && app.dragFormatControl.numberOfItems == 12 && app.dragOriginalControl.target === app, "Drag format and original-size controls keep their actions")
+        try expect(app.dragFormatToggle.target === app && app.dragFormatToggle.segmentCount == 2 && app.dragOriginalControl.target === app, "Drag format and original-size controls keep their actions")
         try expect(app.paletteButton.target === app && app.paletteButton.action == #selector(AppDelegate.showDrawingColors(_:)) && app.paletteButton.onHover != nil, "Color keeps its click and hover routes")
         try expect(app.colorWell.target === app && app.colorWell.action == #selector(AppDelegate.changeColor(_:)), "The hidden color well keeps its route")
         let drag = try (app.dragExportView).unwrap("Drag Me view")
@@ -361,12 +418,12 @@ extension AppSafetyTests {
         let modern = controlFacts(app)
         try expect(classic.controls.count >= 40 && modern.count == classic.controls.count, "Both windows report the same set of facts (\(classic.controls.count) vs \(modern.count))")
         // Modern tooltips lead with the command name (and Size shows its live value), so only these tips may differ; every label, title and the rest still match.
-        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip"]
+        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip", "format.label"]
         let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] && !modernTips.contains($0) }
             .map { "\($0): classic '\(classic.controls[$0] ?? "")' vs modern '\(modern[$0] ?? "")'" }
         try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool"
-                   && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me", "The strings are the recovered ones, not merely equal to each other")
+                   && modern["toolbox.label"] == "Toolbox" && modern["drag.label"] == "Drag Me" && modern["format.label"] == "Image format", "The strings are the recovered ones, not merely equal to each other")
         // At launch the rail Wipe reads its Blank stage; every other command reads its title (the icon-only upload button is checked on its own).
         let spoken = ["hide": "Hide", "photos": "Photos", "save": "Save", "history": "History", "snap": "Snap", "cancel": "Cancel", "font": "Font",
                       "undo": "Undo", "wipe": "Blank", "resize": "Resize…"]

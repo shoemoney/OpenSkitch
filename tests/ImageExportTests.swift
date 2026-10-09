@@ -160,6 +160,37 @@ enum ImageExportTests {
                     }
                 }
             }),
+            ("PNG keeps alpha: a transparent canvas with a drawn shape and a translucent snapshot stays transparent where empty", {
+                var document = SketchDocument(size: CGSize(width: 40, height: 30))
+                document.backgroundColor = .clear
+                var shape = SketchElement(kind: .rectangle)
+                shape.rect = CGRect(x: 10, y: 10, width: 20, height: 10); shape.filled = true
+                shape.color = SketchColor(NSColor(deviceRed: 0, green: 0, blue: 1, alpha: 1))
+                document.elements = [shape]
+                let rep = try required(NSBitmapImageRep(data: bytes(document, document.size, "png")), "PNG decodes")
+                try expect(rep.hasAlpha && rep.colorAt(x: 1, y: 1)!.alphaComponent < 0.01 && rep.colorAt(x: 20, y: 15)!.alphaComponent > 0.99, "PNG flattened transparency")
+                // A captured window: opaque body, fully transparent corner, translucent shadow edge.
+                let snap = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: 40, pixelsHigh: 30, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+                for y in 0..<30 { for x in 0..<40 { snap.setColor(x < 4 ? .clear : NSColor(deviceRed: 0, green: 1, blue: 0, alpha: x < 8 ? 0.5 : 1), atX: x, y: y) } }
+                var windowDoc = SketchDocument(size: CGSize(width: 40, height: 30))
+                windowDoc.backgroundColor = .clear
+                windowDoc.backgroundPNG = snap.representation(using: .png, properties: [:])
+                let out = try required(NSBitmapImageRep(data: bytes(windowDoc, windowDoc.size, "png")), "window PNG decodes")
+                let corner = out.colorAt(x: 1, y: 15)!.alphaComponent, edge = out.colorAt(x: 6, y: 15)!.alphaComponent, body = out.colorAt(x: 30, y: 15)!.alphaComponent
+                try expect(corner < 0.02 && abs(edge - 0.5) < 0.05 && body > 0.99, "Snapshot alpha not preserved: \(corner) \(edge) \(body)")
+            }),
+            ("The footer toggle maps stored rows to PNG/JPG and JPG is always 0.75", {
+                try expect(FormatToggle.titles == ["PNG", "JPG"] && FormatToggle.jpgQuality == 0.75, "Toggle constants")
+                try expect(FormatToggle.segment(forStoredChoice: 0) == 0 && (1...5).allSatisfy { FormatToggle.segment(forStoredChoice: $0) == 1 }
+                           && [6, 7, 11, -1, 40].allSatisfy { FormatToggle.segment(forStoredChoice: $0) == 0 }, "Stored row mapping")
+                try expect(FormatToggle.storedChoice(forSegment: 1, current: 0) == 2 && FormatToggle.storedChoice(forSegment: 1, current: 4) == 4
+                           && FormatToggle.storedChoice(forSegment: 0, current: 4) == 0, "Stored row writing")
+                let jpg = FormatToggle.payload(forSegment: 1), png = FormatToggle.payload(forSegment: 0)
+                try expect(jpg.format == "jpeg" && jpg.quality == 0.75 && png.format == "png", "Payload parameters")
+                let document = fixture()
+                let data = try bytes(document, document.size, jpg.format, quality: jpg.quality)
+                try expect(data.prefix(3) == Data([0xFF, 0xD8, 0xFF]) && data == (try bytes(document, document.size, "jpeg", quality: 0.75)), "JPG payload is JPEG at 0.75")
+            }),
             ("JPEG quality controls detailed-gradient bytes and defaults to 0.7", {
                 let document = try gradient()
                 let low = try bytes(document, document.size, "jpeg", quality: 0.1)

@@ -31,7 +31,7 @@ private final class ControlHolderView: NSView {
 final class ModernEditorChrome: NSView {
     struct SharedControls {
         let canvas: NSView, canvasBorder: NSView, status: NSTextField, sizeLabel: NSTextField
-        let widthControl: NSControl, paletteButton: NSButton, zoomControl: NSPopUpButton, dragFormatControl: NSPopUpButton
+        let widthControl: NSControl, paletteButton: NSButton, zoomControl: NSPopUpButton, dragFormatControl: NSControl
         let dragOriginalControl: NSButton, dragSizeLabel: NSTextField, dragExportView: NSView, toolbox: NSPopUpButton
     }
 
@@ -340,11 +340,14 @@ final class ModernEditorChrome: NSView {
         let formatControl = controls.dragFormatControl
         let formatInset: CGFloat = 4
         let formatHolder = ControlHolderView(formatControl, inset: formatInset)
-        formatControl.isBordered = false
+        (formatControl as? NSPopUpButton)?.isBordered = false
         // A popup sizes to its selected title, so measure every title and size the capsule once for the widest: it hugs the content and never jumps.
-        let selectedFormat = formatControl.indexOfSelectedItem
-        let widestFormat = (0..<formatControl.numberOfItems).map { index -> CGFloat in formatControl.selectItem(at: index); return formatControl.fittingSize.width }.max() ?? 0
-        formatControl.selectItem(at: selectedFormat)
+        let widestFormat: CGFloat
+        if let popup = formatControl as? NSPopUpButton {
+            let selectedFormat = popup.indexOfSelectedItem
+            widestFormat = (0..<popup.numberOfItems).map { index -> CGFloat in popup.selectItem(at: index); return popup.fittingSize.width }.max() ?? 0
+            popup.selectItem(at: selectedFormat)
+        } else { widestFormat = formatControl.fittingSize.width }
         let formatSurface = GlassChrome.surface(formatHolder, shape: .capsule, accessibility: accessibility,
                                                 size: NSSize(width: ceil(widestFormat) + 2 * formatInset, height: Metrics.commandHeight))
         register(formatSurface, for: controls.dragFormatControl, formatHolder)

@@ -220,6 +220,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var customDrawingColor = NSColor(calibratedRed: 0, green: 1, blue: 1, alpha: 1)
     let zoomControl = NSPopUpButton(frame: .zero, pullsDown: false)
     let dragFormatControl = NSPopUpButton(frame: .zero, pullsDown: false)
+    let dragFormatToggle = NSSegmentedControl(labels: FormatToggle.titles, trackingMode: .selectOne, target: nil, action: nil)
     let dragOriginalControl = NSButton(checkboxWithTitle: "Export at original size", target: nil, action: nil)
     let dragSizeLabel = NSTextField(labelWithString: "")
     var dragExportView: DragExportView?
@@ -1210,15 +1211,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         else { status.stringValue = "\(canvas.tool.rawValue.capitalized) · \(dirty ? "Unsaved changes" : "Saved")" }
         updateViewportChrome(); scheduleDragPreview() }
     var dragFormat: String {
+        if modernChrome != nil { return FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).format }
         let formats = ["png", "jpeg", "jpeg", "jpeg", "jpeg", "jpeg", "tiff", "gif", "bmp", "pdf", "svg", "skitch"]
         return formats.indices.contains(dragFormatControl.indexOfSelectedItem) ? formats[dragFormatControl.indexOfSelectedItem] : "png"
     }
     var dragQuality: Double {
+        if modernChrome != nil { return FormatToggle.payload(forSegment: dragFormatToggle.selectedSegment).quality }
         let values = [1.0, 1.0, 0.8, 0.6, 0.3, 0.1]
         return values.indices.contains(dragFormatControl.indexOfSelectedItem) ? values[dragFormatControl.indexOfSelectedItem] : 0.6
     }
     @objc func changeDragOptions(_ sender: Any?) {
-        UserDefaults.standard.set(dragFormatControl.indexOfSelectedItem, forKey: "DragFormatChoice")
+        if modernChrome != nil {
+            let current = UserDefaults.standard.integer(forKey: FormatToggle.defaultsKey)
+            UserDefaults.standard.set(FormatToggle.storedChoice(forSegment: dragFormatToggle.selectedSegment, current: current), forKey: FormatToggle.defaultsKey)
+        } else { UserDefaults.standard.set(dragFormatControl.indexOfSelectedItem, forKey: "DragFormatChoice") }
         UserDefaults.standard.set(dragOriginalControl.state == .on, forKey: "DragOriginalSize")
         scheduleDragPreview()
     }
@@ -1554,9 +1560,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func exportFile() {
         let panel = NSSavePanel()
         panel.title = "Export"; panel.nameFieldLabel = "Export As:"; panel.prompt = "Export"
-        let options = ExportAccessory(format: UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
+        let modern = modernChrome != nil
+        let options = ExportAccessory(format: modern ? dragFormat : UserDefaults.standard.string(forKey: "ExportFormat") ?? "png",
             originalSize: UserDefaults.standard.bool(forKey: "ExportOriginalSize"),
             jpegQuality: UserDefaults.standard.object(forKey: "ExportQuality") as? Double ?? 0.7)
+        if modern { options.fixedJPEGQuality = FormatToggle.jpgQuality }
         panel.accessoryView = options.view; panel.allowsOtherFileTypes = false
         let refresh = { [weak self, weak panel, weak options] in
             guard let self, let panel, let options else { return }
@@ -1569,7 +1577,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             let stem = (panel.nameFieldStringValue as NSString).deletingPathExtension
             panel.nameFieldStringValue = (stem.isEmpty ? self.safeName() : stem) + "." + options.format
             let size = options.originalSize && self.canvas.document.backgroundPNG != nil ? self.canvas.canvasSize : self.canvas.outputSize
-            let data = try? self.exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.jpegQuality)
+            let data = try? self.exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.effectiveJPEGQuality)
             options.updateByteCount(data?.count, size: size)
         }
         options.onChange = refresh
@@ -1577,7 +1585,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         refresh()
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
-            let data = try exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.jpegQuality)
+            let data = try exportData(format: options.format, originalSize: options.originalSize, jpegQuality: options.effectiveJPEGQuality)
             try data.write(to: url, options: .atomic)
             UserDefaults.standard.set(options.format, forKey: "ExportFormat")
             UserDefaults.standard.set(options.originalSize, forKey: "ExportOriginalSize")
@@ -1733,15 +1741,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     @objc func shortcutSettings() { hotkeys.showSettings(attachedTo: window) }
     @objc func sharingSettings() { publishing.showSettings(relativeTo: window) }
+    /// Modern uploads in the footer toggle's format; Classic keeps uploading PNG.
+    var uploadEncoding: (format: String, quality: Double, fileExtension: String) {
+        guard modernChrome != nil else { return ("png", 0.7, "png") }
+        return (dragFormat, dragQuality, dragFormat == "jpeg" ? "jpg" : "png")
+    }
     @objc func publishImage() {
         guard !terminationStarted else { return }
         if publishing.isBusy { status.stringValue = "An upload is already running…"; return }
         guard publishing.isConfigured else {
             openDestinationSettings(); return
         }
-        guard let data = canvas.imageData(format: "png"), let snapshot = try? historySnapshot() else { return }
+        let encoding = uploadEncoding
+        guard let data = canvas.imageData(format: encoding.format, jpegQuality: encoding.quality), let snapshot = try? historySnapshot() else { return }
         let name = safeName(), generation = documentGeneration
-        let fileName = name+"-"+UUID().uuidString.lowercased()+".png"
+        let fileName = name+"-"+UUID().uuidString.lowercased()+"."+encoding.fileExtension
         let binding = try? historyRemoteDeletion.captureBinding(fileName: fileName)
         uploadStatus = "Uploading \(name)…"; status.stringValue = uploadStatus!
         publishing.publish(data: data, fileName: fileName) { [weak self] result in
