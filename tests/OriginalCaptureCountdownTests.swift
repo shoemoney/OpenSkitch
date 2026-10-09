@@ -3,7 +3,6 @@
 //   Sources/OriginalCaptureTiming.swift Sources/OriginalCaptureCountdown.swift \
 //   tests/OriginalCaptureCountdownTests.swift -o build/original-capture-countdown-tests
 // rtk proxy build/original-capture-countdown-tests
-// Numeral checks need the git-ignored original/ archive; without it they print a SKIP line and the rest still run.
 #if ORIGINAL_CAPTURE_COUNTDOWN_TESTS
 import AppKit
 import CoreGraphics
@@ -95,18 +94,9 @@ private final class Harness {
     var factoryHook: (() -> Void)?
     var imageHook: ((Int) -> Void)?
     var screenHook: (() -> Void)?
-    /// The git-ignored original/ archive; absent on a fresh clone.
-    static var artworkDirectory: URL {
-        URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
-            .appendingPathComponent("original/Skitch.app/Contents/Resources", isDirectory: true)
-    }
-    /// `artwork: false` is only for checks that never need a numeral; every other test requires the original PNGs.
     init(artwork: Bool = true) {
         guard artwork else { return }
-        for number in 1...3 {
-            resources[number] = NSImage(contentsOf: Self.artworkDirectory.appendingPathComponent("SkitchCount\(number).png"))
-            precondition(resources[number]?.size == NSSize(width: 138, height: 140), "Original PNG fixture missing")
-        }
+        for number in 1...3 { resources[number] = OriginalCaptureCountdown.numeral(number) }
     }
     func make() -> OriginalCaptureCountdown {
         OriginalCaptureCountdown(panelFactory: { [self] rect in
@@ -133,19 +123,15 @@ enum OriginalCaptureCountdownTests {
         // NSApplication initializes AppKit only; no activation, run, or window ordering.
         _ = NSApplication.shared
         let _: any CaptureCountdownPresenting = OriginalCaptureCountdown()
-        let artwork = FileManager.default.fileExists(atPath: Harness.artworkDirectory.path)
-        if artwork {
-            sequence(delay: 3, ticks: 31, cues: [1, 11, 21])
-            sequence(delay: 6, ticks: 61, cues: [1, 21, 41])
-            cancellationAndAttachment()
-            reentrantCallbacks()
-            registrationAndProviderReentry()
-        } else {
-            print("SKIP OriginalCaptureCountdownTests numeral, attachment and reentry checks: SkitchCount1-3.png not present in \(Harness.artworkDirectory.path) (original/ is git-ignored)")
-        }
-        boundaryInputs(artwork: artwork)
+        sequence(delay: 3, ticks: 31, cues: [1, 11, 21])
+        sequence(delay: 6, ticks: 61, cues: [1, 21, 41])
+        cancellationAndAttachment()
+        reentrantCallbacks()
+        registrationAndProviderReentry()
+        boundaryInputs(artwork: true)
+        drawnNumerals()
         geometry()
-        print("OriginalCaptureCountdownTests: \(checks) checks passed (no window ordering)" + (artwork ? "" : "; original-artwork checks skipped"))
+        print("OriginalCaptureCountdownTests: \(checks) checks passed (no window ordering)")
     }
 
     private static func sequence(delay: Double, ticks: Int, cues: [Int]) {
@@ -285,21 +271,37 @@ enum OriginalCaptureCountdownTests {
             complete += 1; expect(!countdown.isRunning, "Immediate completion has cleared state")
         })
         expect(complete == 1 && h.clock.entries.isEmpty && h.panels.isEmpty, "Zero delay requires no timer or panel")
-        // Without the originals every start already takes the missing-PNG path, so only they can prove the no-screens path.
-        if artwork {
-            h.screens = []
-            countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
-            h.clock.fire(); h.clock.fire()
-            expect(complete == 2 && h.panels.isEmpty && h.clock.activeCount == 0, "No screens cannot strand expiry")
-        } else {
-            print("SKIP OriginalCaptureCountdownTests no-screens expiry: needs the original SkitchCount PNGs, else the missing-PNG path masks it")
-        }
+        h.screens = []
+        countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
+        h.clock.fire(); h.clock.fire()
+        expect(complete == 2 && h.panels.isEmpty && h.clock.activeCount == 0, "No screens cannot strand expiry")
         let timer = h.clock.entries.count, expected = complete + 1
         h.screens = [NSRect(x: 0, y: 0, width: 1000, height: 1000)]
         h.resources = [:]
         countdown.start(rect: rect, parent: nil, delay: 0.1, cue: {}, completion: { complete += 1 })
         h.clock.fire(timer); h.clock.fire(timer)
-        expect(complete == expected && h.panels.isEmpty && h.clock.activeCount == 0, "Missing PNG cannot strand expiry or invent artwork")
+        expect(complete == expected && h.panels.isEmpty && h.clock.activeCount == 0, "A missing numeral cannot strand expiry")
+    }
+
+    private static func drawnNumerals() {
+        expect(OriginalCaptureCountdown.numeralFontSize >= 18, "Numeral text is at least 18pt")
+        expect(OriginalCaptureCountdown.numeral(0) == nil && OriginalCaptureCountdown.numeral(4) == nil, "Only 1 to 3 draw")
+        var signatures: [Data] = []
+        for number in 1...3 {
+            guard let image = OriginalCaptureCountdown.numeral(number),
+                  let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else {
+                expect(false, "Numeral \(number) draws"); return
+            }
+            expect(image.size == OriginalCaptureCountdown.numeralSize, "Numeral \(number) uses the shared size")
+            var white = 0, dark = 0
+            for y in 0..<rep.pixelsHigh { for x in 0..<rep.pixelsWide {
+                guard let c = rep.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB), c.alphaComponent > 0.5 else { continue }
+                if c.redComponent > 0.9 { white += 1 } else if c.redComponent < 0.2 { dark += 1 }
+            } }
+            expect(white > 500 && dark > white, "Numeral \(number) is white text on a dark backing")
+            signatures.append(tiff)
+        }
+        expect(Set(signatures).count == 3, "Each numeral draws differently")
     }
 
     private static func geometry() {

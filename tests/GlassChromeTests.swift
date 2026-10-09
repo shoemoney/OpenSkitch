@@ -331,7 +331,6 @@ private enum GlassChromeTests {
         window.appearance = NSAppearance(named: .aqua)
         content.addSubview(slider)
         slider.frame = NSRect(x: 10, y: 9, width: 40, height: 82)
-        expect(slider.style == .classic, "The slider is classic unless the chrome asks otherwise")
 
         func raster() -> NSBitmapImageRep {
             let rep = slider.bitmapImageRepForCachingDisplay(in: slider.bounds)!
@@ -355,13 +354,6 @@ private enum GlassChromeTests {
         let accent = swatchRep.colorAt(x: swatchRep.pixelsWide / 2, y: swatchRep.pixelsHigh / 2)?.usingColorSpace(.deviceRGB) ?? .black
         swatch.removeFromSuperview()
 
-        // The classic branch paints only the recovered PNGs, which a bare test binary does not carry.
-        expect(opaquePixels(raster()) == 0, "Classic drawing is the PNG path only: nothing is painted without the artwork")
-        slider.doubleValue = 12
-        expect(opaquePixels(raster()) == 0, "Classic stays PNG-only at every value")
-        slider.doubleValue = OriginalDrawingControls.initialSize
-
-        slider.style = .modern
         let modern = raster()
         expect(opaquePixels(modern) > 200, "Modern paints a vector track, ticks and knob")
         let knob = slider.pointForValue(slider.doubleValue)
@@ -383,10 +375,8 @@ private enum GlassChromeTests {
         let old = pixel(moved, at: NSPoint(x: knob.x + 7, y: knob.y + 7))
         expect(!sameColor(old, accent, tolerance: 0.1), "The knob left its previous position")
 
-        // Style never changes the value mapping, the points or what a gesture does.
-        for style in [BezelSizeSlider.Style.classic, .modern] {
-            slider.style = style
-            expect(slider.pointForValue(12).y == 0 && abs(slider.pointForValue(1.5).y - 64) < 0.0001 && slider.pointForValue(6.75).x == 13, "Geometry is identical in \(style)")
+        do {
+            expect(slider.pointForValue(12).y == 0 && abs(slider.pointForValue(1.5).y - 64) < 0.0001 && slider.pointForValue(6.75).x == 13, "Slider geometry is fixed")
             slider.doubleValue = 6.75
             var changes = 0
             slider.target = nil
@@ -394,7 +384,7 @@ private enum GlassChromeTests {
             changes += slider.doubleValue == 12 ? 1 : 0
             slider.performValueChange(1.5, continuous: false)
             changes += slider.doubleValue == 1.5 ? 1 : 0
-            expect(changes == 2, "Value changes behave the same in \(style)")
+            expect(changes == 2, "Value changes behave")
             slider.doubleValue = 6.75
         }
     }

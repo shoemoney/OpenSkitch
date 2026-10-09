@@ -2353,30 +2353,6 @@ enum AppSafetyTests {
         app.redo()
         try expect(app.canvas.document == framedModel, "Committed-typing drawing Redo survives both capture and Frame cancellation")
     }
-    static func originalSoundRouting() throws {
-        let key = "disableSounds", defaults = UserDefaults.standard, previous = UserDefaults.standard.object(forKey: "disableSounds")
-        defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) } }
-        let fixture = try Fixture(), app = fixture.app
-        var played: [String] = []
-        app.soundEffects = OriginalSoundEffects(resource: { URL(fileURLWithPath: "/test-only/" + $0 + ".m4a") }, playback: { played.append($0.deletingPathExtension().lastPathComponent) })
-        defaults.set(false, forKey: key)
-        var drawing = SketchElement(kind: .rectangle); drawing.rect = CGRect(x: 10, y: 10, width: 30, height: 20)
-        app.canvas.document.elements = [drawing]
-        app.canvas.wipe(); try expect(played == ["wipe_brushlayer"], "Canvas Wipe routes the original brush sound through the live shell")
-        app.canvas.undo(); defaults.set(true, forKey: key); app.canvas.wipe()
-        try expect(played == ["wipe_brushlayer"], "The original inverse preference disables actual playback routing")
-        defaults.set(false, forKey: key); app.canvas.editingUndoManager.removeAllActions(); app.dirty = false; app.window.isDocumentEdited = false
-        app.showPreferences()
-        let preferences = app.preferencesWindow as! AppSafetyWindow
-        preferences.simulatesVisibility = true; preferences.shown = true
-        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
-        try expect(preferences.isVisible, "Cancelled capture retains Preferences")
-        app.receiveCapture(.success(try image()))
-        try expect(played == ["wipe_brushlayer", "snap"], "Accepted valid capture routes the original completion sound")
-        try expect(!preferences.isVisible, "Accepted Snap dismisses Preferences before showing the replacement drawing")
-        app.receiveCapture(.failure(AppSafetyCaptureCoordinator.cancellation))
-        try expect(played == ["wipe_brushlayer", "snap"], "Cancelled capture does not play success feedback")
-    }
     static func arrowHeadDefaults() throws {
         let key = OriginalArrowGeometry.preferenceKey, defaults = UserDefaults.standard
         let previous = defaults.object(forKey: key)
@@ -3283,7 +3259,6 @@ enum AppSafetyTests {
             ("Snap preferences manual Option global origin timed modal and Frame routing", capturePreferenceRouting),
             ("Original screen timing, sticky Frame Shift, crosshair routing and cancellation", captureTimingRouting),
             ("Actual Snap secondary Fullscreen, primary crosshair, Frame cancellation and pending typing Undo", snapSecondaryCaptureRouting),
-            ("Original sound toggle controls Wipe and accepted Snap feedback", originalSoundRouting),
             ("Arrow head native choices preserve original tags and persist without dirtying artwork", arrowHeadDefaults),
             ("Text context/font/default/shadow actions and original spelling responder routes", textStyleCommands),
             ("Modeless Fonts follows mixed selections scale pending editors and document replacement", fontPanelContextAndPending),

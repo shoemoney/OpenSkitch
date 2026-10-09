@@ -170,13 +170,7 @@ private final class SketchTextGrip: NSView {
             }
     }
     deinit { if let frameObserver { NotificationCenter.default.removeObserver(frameObserver) } }
-    private static let moveCursor: NSCursor = {
-        if let url = Bundle.main.url(forResource: "CursorMove", withExtension: "png"),
-           let image = NSImage(contentsOf: url) {
-            return NSCursor(image: image, hotSpot: CGPoint(x: 1, y: 1))
-        }
-        return .closedHand
-    }()
+    private static let moveCursor: NSCursor = .closedHand
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { false }
     override var canBecomeKeyView: Bool { false }

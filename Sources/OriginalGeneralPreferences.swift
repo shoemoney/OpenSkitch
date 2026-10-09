@@ -59,23 +59,3 @@ struct OriginalGeneralPreferences {
         return state.includeSkitch != manualOption
     }
 }
-
-@MainActor
-final class OriginalSoundEffects {
-    static let names: Set<String> = ["wipe_snap", "wipe_brushlayer", "wipe_already_blank", "snap",
-        "PTW_complete", "PTW_error", "PTW_commence", "archive_1st", "pre-snap-countdown"]
-    private let resource: (String) -> URL?
-    private let testPlayback: ((URL) -> Void)?
-    private var sounds: [String: NSSound] = [:]
-    init(resource: @escaping (String) -> URL? = { Bundle.main.url(forResource: $0, withExtension: "m4a") },
-         playback: ((URL) -> Void)? = nil) {
-        self.resource = resource; self.testPlayback = playback
-    }
-    func play(_ name: String, enabled: Bool) {
-        guard enabled, Self.names.contains(name), let url = resource(name) else { return }
-        if let testPlayback { testPlayback(url); return }
-        if sounds[name] == nil { sounds[name] = NSSound(contentsOf: url, byReference: false) }
-        sounds[name]?.play()
-    }
-    func stop() { sounds.values.forEach { $0.stop() } }
-}

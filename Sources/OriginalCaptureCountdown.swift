@@ -51,8 +51,7 @@ final class OriginalCaptureCountdown: CaptureCountdownPresenting {
                                    backing: .buffered, defer: true)
         }
         self.images = images ?? { number in
-            NSImage(named: NSImage.Name("SkitchCount\(number)"))
-                ?? Bundle.main.image(forResource: NSImage.Name("originalSkitchCount\(number)"))
+            Self.numeral(number)
         }
         self.scheduler = scheduler ?? Self.schedule
         self.screenFrames = screenFrames ?? { NSScreen.screens.map(\.visibleFrame) }
@@ -117,6 +116,23 @@ final class OriginalCaptureCountdown: CaptureCountdownPresenting {
             request.cancelTimer = cancellation
             if request.completionPending { finish(request, complete: true) }
         } else { cancellation() }
+    }
+
+    /// Plain drawn digit: bold system font, white, on a dark rounded backing. No artwork files.
+    static let numeralSize = NSSize(width: 200, height: 200)
+    static let numeralFontSize: CGFloat = 140
+    static func numeral(_ number: Int) -> NSImage? {
+        guard (1...3).contains(number) else { return nil }
+        return NSImage(size: numeralSize, flipped: false) { bounds in
+            NSColor(white: 0.08, alpha: 0.78).setFill()
+            NSBezierPath(roundedRect: bounds, xRadius: 44, yRadius: 44).fill()
+            let text = NSAttributedString(string: String(number), attributes: [
+                .font: NSFont.systemFont(ofSize: numeralFontSize, weight: .bold),
+                .foregroundColor: NSColor.white])
+            let size = text.size()
+            text.draw(at: NSPoint(x: bounds.midX - size.width / 2, y: bounds.midY - size.height / 2))
+            return true
+        }
     }
 
     func cancel() {

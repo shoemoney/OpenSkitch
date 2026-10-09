@@ -101,15 +101,10 @@ final class BezelColorButton: NSButton {
 /// The recovered vertical Size control: native artwork and point mapping,
 /// five ordinary steps, and Shift-continuous updates throughout a drag.
 final class BezelSizeSlider: NSControl {
-    /// `.classic` paints the recovered PNG artwork; `.modern` paints the same geometry as vectors for the glass chrome.
-    enum Style { case classic, modern }
-    var style: Style = .classic { didSet { needsDisplay = true } }
     var onBegin: (() -> Bool)?
     var onEnd: (() -> Void)?
     private var tracking = false
     private var value = OriginalDrawingControls.initialSize
-    private lazy var trackImage = Bundle.main.url(forResource: "sizeSlider", withExtension: "png").flatMap(NSImage.init(contentsOf:))
-    private lazy var indicatorImage = Bundle.main.url(forResource: "sizeSlider-indicator", withExtension: "png").flatMap(NSImage.init(contentsOf:))
     override var acceptsFirstResponder: Bool { true }
     override var doubleValue: Double {
         get { value }
@@ -148,13 +143,7 @@ final class BezelSizeSlider: NSControl {
         NSBezierPath(ovalIn: NSRect(origin: pointForValue(value), size: NSSize(width: 14, height: 14))).fill()
     }
     override func draw(_ dirtyRect: NSRect) {
-        if style == .modern {
-            drawModern()
-        } else {
-            trackImage?.draw(in: NSRect(x: (bounds.width-10)/2, y: 7, width: 10, height: 63))
-            let point = pointForValue(value)
-            indicatorImage?.draw(in: NSRect(origin: point, size: NSSize(width: 14, height: 14)))
-        }
+        drawModern()
         if window?.firstResponder === self {
             NSColor.keyboardFocusIndicatorColor.setStroke()
             let focus = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 4, yRadius: 4)

@@ -40,6 +40,11 @@ python3 "$ROOT/tools/check-no-fonts.py" "$STAGE/OpenSkitch.app" || {
   exit 1
 }
 
+python3 "$ROOT/tools/check-no-original.py" "$STAGE/OpenSkitch.app" || {
+  echo "release: original Skitch assets or sounds found in the bundle" >&2
+  exit 1
+}
+
 codesign --verify --deep --strict --verbose=2 "$STAGE/OpenSkitch.app"
 SIGNATURE=$(codesign -dvvv "$STAGE/OpenSkitch.app" 2>&1 | sed -n 's/^Signature=//p')
 [ -n "$SIGNATURE" ] || SIGNATURE=unknown

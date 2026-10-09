@@ -8,19 +8,14 @@ SNAPSHOT=$(mktemp -d "$ROOT/build/source-snapshot.XXXXXX")
 cp "$ROOT"/Sources/*.swift "$SNAPSHOT/"
 cp "$ROOT/Info.plist" "$SNAPSHOT/Info.plist"
 for ARCH in arm64; do
-  xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx13.0" -framework AppKit -framework WebKit -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
+  xcrun swiftc -swift-version 5 -O -sdk "$SDK" -target "$ARCH-apple-macosx26.0" -framework AppKit -framework WebKit -framework ImageIO "$SNAPSHOT"/*.swift -o "$ROOT/build/objects/OpenSkitch-$ARCH"
 done
 cp "$ROOT/build/objects/OpenSkitch-arm64" "$APP/Contents/MacOS/OpenSkitch"
-cp "$ROOT"/original/Skitch.app/Contents/Resources/ToolOff*.png "$ROOT"/original/Skitch.app/Contents/Resources/ToolOn*.png "$APP/Contents/Resources/"
-for NAME in SnapCrosshair Font ActualSizeToggleOff ActualSizeToggleOn Resize SaveToHistoryArrow Hide SnapSnap SnapCancel; do
-  cp "$ROOT/original/Skitch.app/Contents/Resources/$NAME.png" "$APP/Contents/Resources/"
-done
-cp "$ROOT/original/Skitch.app/Contents/Resources/CursorMove.png" "$APP/Contents/Resources/"
 # The Icon Composer document compiles to a Liquid Glass Assets.car plus a
-# flattened OpenSkitch.icns for macOS 13-25. Older Xcodes cannot read .icon.
+# flattened OpenSkitch.icns fallback for Xcodes that cannot read .icon.
 ICON_PARTIAL="$ROOT/build/icon-partial.plist"
 if ! xcrun actool "$ROOT/Resources/OpenSkitch.icon" --compile "$APP/Contents/Resources" --platform macosx \
-    --minimum-deployment-target 13.0 --target-device mac --app-icon OpenSkitch \
+    --minimum-deployment-target 26.0 --target-device mac --app-icon OpenSkitch \
     --output-partial-info-plist "$ICON_PARTIAL" >/dev/null 2>&1; then
   rm -f "$APP/Contents/Resources/Assets.car"
   ICONSET="$ROOT/build/OpenSkitch.iconset"
@@ -33,14 +28,6 @@ if ! xcrun actool "$ROOT/Resources/OpenSkitch.icon" --compile "$APP/Contents/Res
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/OpenSkitch.icns"
 fi
 cp "$ROOT/Resources/OpenSkitch.png" "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/menu.png" "$ROOT/original/Skitch.app/Contents/Resources/menu-sel.png" "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_ShowSkitch_mouseover.png" "$ROOT/original/Skitch.app/Contents/Resources/Skitch_Cancel_DragMe.png" "$APP/Contents/Resources/"
-cp "$ROOT"/original/Skitch.app/Contents/Resources/docWin_*.png "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/SkitchTitle.png" "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider.png" "$ROOT/original/Skitch.app/Contents/Resources/sizeSlider-indicator.png" "$APP/Contents/Resources/"
-cp "$ROOT"/original/Skitch.app/Contents/Resources/SkitchCount*.png "$APP/Contents/Resources/"
-cp "$ROOT"/original/Skitch.app/Contents/Resources/*.m4a "$APP/Contents/Resources/"
-cp "$ROOT/original/Skitch.app/Contents/Resources/firstlaunch.skitch" "$APP/Contents/Resources/"
 # Font Awesome Pro is optional and never committed: with your own token the
 # fetch step builds glyph subsets under build/fonts; without them Modern
 # falls back to SF Symbols. A failed fetch must not fail the build.
@@ -67,7 +54,7 @@ import hashlib, json, sys
 root, snapshot, app = map(Path, sys.argv[1:])
 manifest = {
     "architectures": ["arm64"],
-    "minimum_macos": "13.0",
+    "minimum_macos": "26.0",
     "source_snapshot": str(snapshot),
     "source_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(snapshot.iterdir()) if p.is_file()},
     "resource_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((app / "Contents/Resources").iterdir()) if p.is_file()},

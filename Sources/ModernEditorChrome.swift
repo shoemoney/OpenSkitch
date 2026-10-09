@@ -95,7 +95,6 @@ final class ModernEditorChrome: NSView {
             GlassChrome.useExtraLarge(button)
             button.iconPointSize = pointSize
             button.icon = icon
-            button.classicArtworkName = ChromeIcons.classicArtworkName(for: icon)
             button.makeIconOnly(name: name, shortcut: shortcut, derivesToolTip: toolTip == nil)
             if let toolTip { button.toolTip = toolTip }
             return button
@@ -183,7 +182,6 @@ final class ModernEditorChrome: NSView {
     /// The app re-titles and re-tips Snap itself when entering or leaving Frame mode; this puts the Modern icon, name and tooltip back.
     func syncSnapPresentation() {
         snapButton.icon = frameMode ? .frameViewfinder : .crosshairs
-        snapButton.classicArtworkName = ChromeIcons.classicArtworkName(for: frameMode ? .frameViewfinder : .crosshairs)
         snapButton.title = frameMode ? "Snap Frame" : "Snap"
         snapButton.iconPointSize = GlassChrome.Metrics.primaryIconPointSize
         snapButton.toolTip = frameMode ? Self.snapFrameToolTip : Self.snapToolTip
@@ -233,7 +231,6 @@ final class ModernEditorChrome: NSView {
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
         controls.status.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        (controls.widthControl as? BezelSizeSlider)?.style = .modern
 
         backdrop.material = .underWindowBackground
         backdrop.blendingMode = .behindWindow
@@ -253,7 +250,7 @@ final class ModernEditorChrome: NSView {
 
         // Header: [Hide][Toolbox][Photos] · brand · [Save][History]
         header.identifier = NSUserInterfaceItemIdentifier("OpenSkitchHeader")
-        let toolboxIcon = ChromeIcons.resolve(.toolbox, family: .regular, pointSize: Metrics.iconPointSize, classic: nil)
+        let toolboxIcon = ChromeIcons.resolve(.toolbox, family: .regular, pointSize: Metrics.iconPointSize)
         if let image = toolboxIcon.image, let first = controls.toolbox.itemArray.first {
             first.image = image
             controls.toolbox.imagePosition = .imageOnly
@@ -280,7 +277,6 @@ final class ModernEditorChrome: NSView {
             button.setButtonType(.toggle)
             button.iconPointSize = Metrics.iconPointSize
             button.icon = icon
-            button.classicArtworkName = ChromeIcons.classicArtworkName(for: icon)
             button.setAccessibilityLabel(id.capitalized)
             button.toolTip = id.capitalized + " tool"
             let surface = GlassChrome.surface(button, shape: .rounded(Metrics.toolRadius), accessibility: accessibility, size: Metrics.toolButton)

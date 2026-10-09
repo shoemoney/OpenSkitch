@@ -17,15 +17,13 @@ private enum FontAwesomeIconsTests {
     }
 
     private static let sizes: [CGFloat] = [14, 18, 20, 22, 24.4, 30]
-    private static let toolArtwork = ["ToolOffCursor", "ToolOffBrush", "ToolOffLine", "ToolOffCircle", "ToolOffRect", "ToolOffFill", "ToolOffEraser", "ToolOffText", "ToolOffArrow"]
-    private static let buildScriptArtwork = ["SnapCrosshair", "Font", "ActualSizeToggleOff", "ActualSizeToggleOn", "Resize", "SaveToHistoryArrow", "Hide", "SnapSnap", "SnapCancel"]
 
     static func main() {
         _ = NSApplication.shared
         FontAwesomeFont.resetForTesting()
         table()
         withoutFonts()
-        fallbackToArtwork()
+        symbolFallback()
         if let directory = ProcessInfo.processInfo.environment["OPENSKITCH_FA_FONT_DIR"], !directory.isEmpty {
             withFonts(URL(fileURLWithPath: directory, isDirectory: true))
         } else {
@@ -48,14 +46,6 @@ private enum FontAwesomeIconsTests {
     private static func sourceText(_ name: String) -> String? {
         for root in searchRoots() {
             if let text = try? String(contentsOf: root.appendingPathComponent(name), encoding: .utf8) { return text }
-        }
-        return nil
-    }
-
-    private static func originalArtwork(_ name: String) -> URL? {
-        for root in searchRoots() {
-            let url = root.appendingPathComponent("original/Skitch.app/Contents/Resources/\(name).png")
-            if FileManager.default.fileExists(atPath: url.path) { return url }
         }
         return nil
     }
@@ -163,36 +153,16 @@ private enum FontAwesomeIconsTests {
         expect(FontAwesomeIcons.glyphIndex(0xD800, in: CTFontCreateWithName("Helvetica" as CFString, 20, nil)) == nil, "Surrogate scalars never resolve")
     }
 
-    // MARK: classic artwork
+    // MARK: symbol fallback
 
-    private static func fallbackToArtwork() {
-        let (bundle, root) = temporaryBundle(files: [])
-        let resources = bundle.bundleURL.appendingPathComponent("Contents/Resources", isDirectory: true)
-        try! pngData(24).write(to: resources.appendingPathComponent("ToolOffBrush.png"))
+    private static func symbolFallback() {
         let original = ChromeIcons.symbolName
-        defer { ChromeIcons.symbolName = original; try? FileManager.default.removeItem(at: root) }
-
-        expect(ChromeIcons.resolve(.paintbrush, classic: "ToolOffBrush", bundle: bundle).source == .sfSymbol("paintbrush"),
-               "SF Symbol outranks classic artwork")
+        defer { ChromeIcons.symbolName = original }
+        let symbol = ChromeIcons.resolve(.paintbrush)
+        expect(symbol.source == .sfSymbol("paintbrush") && symbol.image?.isTemplate == true, "Without Font Awesome the SF Symbol is used as a template")
         ChromeIcons.symbolName = { _ in "no.such.symbol.anywhere" }
-        let png = ChromeIcons.resolve(.paintbrush, classic: "ToolOffBrush", bundle: bundle)
-        expect(png.source == .classicArtwork("ToolOffBrush"), "Classic artwork is used when FA and SF both miss")
-        expect(png.image?.isTemplate == false && png.image?.size == NSSize(width: 24, height: 24),
-               "Classic artwork keeps its original colors (not a template)")
-        let missing = ChromeIcons.resolve(.paintbrush, classic: "NoSuchArtwork", bundle: bundle)
-        expect(missing.source == .none && missing.image == nil, "A missing PNG falls through to text-only")
-        let unnamed = ChromeIcons.resolve(.toolbox, bundle: bundle)
-        expect(unnamed.source == .none && unnamed.image == nil, "Without classic artwork the chain ends at none")
-
-        let buildScript = sourceText("tools/build.sh") ?? sourceText("../tools/build.sh")
-        for icon in FAIcon.allCases {
-            guard let name = ChromeIcons.classicArtworkName(for: icon) else { continue }
-            expect(name.hasPrefix("ToolOff") ? toolArtwork.contains(name) : buildScriptArtwork.contains(name), "\(name) is artwork build.sh copies")
-            if let buildScript, !name.hasPrefix("ToolOff") { expect(buildScript.contains(name), "tools/build.sh still copies \(name)") }
-            if let url = originalArtwork(name) { expect(NSImage(contentsOf: url) != nil, "Recovered artwork \(name) decodes") }
-            else if icon == .eyeSlash { skipped.append("original artwork lookup (original/Skitch.app not found)") }
-        }
-        expect(ChromeIcons.classicArtworkName(for: .toolbox) == nil && ChromeIcons.classicArtworkName(for: .cropSimple) == nil, "Icons without artwork map to nil")
+        let none = ChromeIcons.resolve(.paintbrush)
+        expect(none.source == .none && none.image == nil, "When Font Awesome and SF Symbols both miss the chain ends at none")
     }
 
     // MARK: fonts registered
@@ -251,7 +221,7 @@ private enum FontAwesomeIconsTests {
         let original = ChromeIcons.symbolName
         ChromeIcons.symbolName = { _ in "no.such.symbol.anywhere" }
         defer { ChromeIcons.symbolName = original }
-        expect(ChromeIcons.resolve(.font, classic: "Missing", bundle: bundle).source == .fontAwesome(.regular), "Font Awesome outranks every fallback")
+        expect(ChromeIcons.resolve(.font).source == .fontAwesome(.regular), "Font Awesome outranks every fallback")
         expect(FontAwesomeIcons.glyphIndex(0x1F600, in: FontAwesomeFont.font(.regular, pointSize: 20)! as CTFont) == nil, "Codepoints outside the subset have no glyph")
     }
 }

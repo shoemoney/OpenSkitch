@@ -6,32 +6,33 @@ import argparse, hashlib, json, os, platform, re, subprocess, sys, tempfile
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--arch", choices=["arm64", "x86_64"], default=platform.machine())
-parser.add_argument("--concurrent-app-safety", action="store_true",
-                    help="also run Classic and Modern app-safety in parallel and require both to pass")
 options = parser.parse_args()
 root = Path(__file__).resolve().parent.parent
 build = root / "build"
 build.mkdir(exist_ok=True)
 
+REAL_STORE_FOLDERS = [Path(os.path.expanduser("~")) / "Library/Application Support/SkitchRedux/Publishing",
+                      Path(os.path.expanduser("~")) / "Library/Application Support/OpenSnap"]
+
 def real_store_snapshot():
-    """(path, size, mtime, sha256) of every file in the owner's real Publishing folder. Contents are hashed, never printed."""
-    folder = Path(os.path.expanduser("~")) / "Library/Application Support/SkitchRedux/Publishing"
+    """(path, size, mtime, sha256) of every file in the owner's real stores. Contents are hashed, never printed."""
     entries = {}
-    if folder.exists():
-        for path in sorted(folder.rglob("*")):
-            if path.is_file():
-                info = path.stat()
-                entries[str(path)] = (info.st_size, info.st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
-    return folder, entries
+    for folder in REAL_STORE_FOLDERS:
+        if folder.exists():
+            for path in sorted(folder.rglob("*")):
+                if path.is_file():
+                    info = path.stat()
+                    entries[str(path)] = (info.st_size, info.st_mtime_ns, hashlib.sha256(path.read_bytes()).hexdigest())
+    return REAL_STORE_FOLDERS, entries
 
 def check_real_store(before):
-    folder, after = real_store_snapshot()
+    folders, after = real_store_snapshot()
     changed = [f"{kind} {name}" for name in sorted(before.keys() | after.keys())
                for kind in ["changed" if name in before and name in after else "appeared" if name in after else "disappeared"]
                if before.get(name) != after.get(name)]
     if changed:
-        raise SystemExit(f"FAIL real-store-guard: the owner's {folder} was touched by this run:\n" + "\n".join(changed))
-    print("PASS real-store-guard (", len(after), "files in", folder, "unchanged )", flush=True)
+        raise SystemExit(f"FAIL real-store-guard: the owner's real stores {[str(f) for f in folders]} were touched by this run:\n" + "\n".join(changed))
+    print("PASS real-store-guard (", len(after), "files in", len(folders), "real-store folders unchanged )", flush=True)
 
 real_store_folder, real_store_before = real_store_snapshot()
 
@@ -73,7 +74,7 @@ def suite(name, sources, test, define=None, arguments=(), environment=None, opti
             if not (snapshot / needed).exists():
                 return "SKIP", f"{name}: {needed} not present"
     binary = snapshot / name
-    command = ["xcrun", "swiftc", "-swift-version", "5", "-target", options.arch + "-apple-macosx13.0"]
+    command = ["xcrun", "swiftc", "-swift-version", "5", "-target", options.arch + "-apple-macosx26.0"]
     if define:
         command += ["-D", define]
     command += [str(snapshot / source) for source in sources]
@@ -150,6 +151,9 @@ with ThreadPoolExecutor(max_workers=len(suites) + len(optional_suites)) as execu
 if failures:
     check_real_store(real_store_before)
     raise SystemExit(1)
+print("== build + check-no-original", flush=True)
+subprocess.run(["sh", str(root / "tools" / "build.sh")], cwd=root, check=True, stdout=subprocess.DEVNULL)
+subprocess.run([sys.executable, str(root / "tools" / "check-no-original.py"), str(build / "OpenSkitch.app")], cwd=root, check=True)
 # Classic is the pinned baseline everywhere; Modern needs macOS 26+ and its integration cases.
 safety_runs = ["classic"]
 if int(platform.mac_ver()[0].split(".")[0] or 0) < 26:
@@ -161,9 +165,6 @@ else:
 for style in safety_runs:
     print("== app-safety", style, flush=True)
     subprocess.run([str(root / "tools" / "test-app-safety.sh"), "--arch", options.arch, "--appearance", style], cwd=root, check=True)
-if options.concurrent_app_safety:
-    print("== app-safety concurrent", flush=True)
-    subprocess.run([str(root / "tools" / "test-app-safety-concurrent.sh"), "--arch", options.arch], cwd=root, check=True)
 check_real_store(real_store_before)
 if current_inputs() != inputs or not all(path.read_bytes() == data for path, data in contents.items()):
     raise SystemExit("Sources changed during verification; rerun before treating this result as current.")

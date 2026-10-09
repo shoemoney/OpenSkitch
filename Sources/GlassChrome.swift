@@ -21,8 +21,6 @@ class GlassChromeButton: OriginalActionButton {
     var selectedIcon: FAIcon? { didSet { refreshIcon() } }
     var iconFamily: FAFamily = .regular { didSet { refreshIcon() } }
     var selectedFamily: FAFamily = .solid { didSet { refreshIcon() } }
-    var classicArtworkName: String? { didSet { refreshIcon() } }
-    var selectedClassicArtworkName: String? { didSet { refreshIcon() } }
     var iconPointSize: CGFloat = 22 { didSet { refreshIcon() } }
     var onInteractionChange: ((GlassChromeButton) -> Void)?
     /// The single tinted command (Snap): its icon and title take the contrasting color too.
@@ -156,8 +154,7 @@ class GlassChromeButton: OriginalActionButton {
             updatePresentation()
             return
         }
-        let classic = selected ? (selectedClassicArtworkName ?? classicArtworkName) : classicArtworkName
-        let resolved = ChromeIcons.resolve(glyph, family: activeFamily, pointSize: iconPointSize, classic: classic)
+        let resolved = ChromeIcons.resolve(glyph, family: activeFamily, pointSize: iconPointSize)
         iconSource = resolved.source
         image = resolved.image
         updatePresentation()
