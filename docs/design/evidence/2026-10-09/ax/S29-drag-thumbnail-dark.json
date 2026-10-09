@@ -1,0 +1,1 @@
+{"appearance":"dark","windows":[{"initialFirstResponder":"DragThumbnailView","keyViewLoop":[],"title":"","tree":{"children":[{"class":"DragThumbnailView","enabled":false,"frame":[1654,83,128,98],"label":"Restore Skitch editor","role":"AXButton"}],"class":"NSPanel","enabled":false,"frame":[1654,83,128,98],"role":"AXWindow","subrole":"AXUnknown"}}]}

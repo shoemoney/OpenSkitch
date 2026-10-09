@@ -1,0 +1,1 @@
+{"appearance":"dark","windows":[{"initialFirstResponder":"OriginalCountdownImageView","keyViewLoop":[],"title":"","tree":{"children":[{"class":"OriginalCountdownImageView","frame":[927,591,202,202],"label":"Capture countdown: 2","role":"AXImage"}],"class":"OriginalCountdownPanel","enabled":false,"frame":[928,592,200,200],"role":"AXWindow","subrole":"AXSystemDialog"}}]}

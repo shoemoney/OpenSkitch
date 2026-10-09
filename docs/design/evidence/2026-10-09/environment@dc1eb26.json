@@ -1,0 +1,59 @@
+{
+  "accessibilityDisplayShouldDifferentiateWithoutColor" : false,
+  "accessibilityDisplayShouldIncreaseContrast" : false,
+  "accessibilityDisplayShouldReduceMotion" : false,
+  "accessibilityDisplayShouldReduceTransparency" : false,
+  "appearanceOverrideUsed" : "NSAppearance.darkAqua (in-process NSApp.appearance only)",
+  "appIsActive" : true,
+  "appleInterfaceStyleGlobal" : "Dark",
+  "boldText" : "not readable through a public API without changing nothing; recorded as a coverage gap",
+  "bundleIdentifier" : "com.shoemoney.skitch-redux.eyedump-70071",
+  "contentMinSize" : [
+    980,
+    608
+  ],
+  "defaultWindowFrame" : [
+    516,
+    411,
+    1024,
+    772
+  ],
+  "fullKeyboardAccess_AppleKeyboardUIMode" : 0,
+  "isSwitchControlEnabled" : false,
+  "isVoiceOverEnabled" : false,
+  "macOS" : "Version 27.2 (Build 26B5101f)",
+  "macOSVersion" : [
+    27,
+    2,
+    0
+  ],
+  "mainWindowIsKey" : true,
+  "mainWindowScreenScale" : 2,
+  "minSize" : [
+    980,
+    640
+  ],
+  "modernChromePresent" : true,
+  "NSApp.effectiveAppearance" : "NSAppearanceNameDarkAqua",
+  "screenCount" : 1,
+  "screens" : [
+    {
+      "backingScaleFactor" : 2,
+      "colorSpace" : "Color LCD",
+      "frame" : [
+        0,
+        0,
+        2056,
+        1329
+      ],
+      "name" : "Built-in Retina Display",
+      "visibleFrame" : [
+        0,
+        93,
+        2056,
+        1197
+      ]
+    }
+  ],
+  "systemAppearanceBeforeOverride" : "NSAppearanceNameDarkAqua"
+}

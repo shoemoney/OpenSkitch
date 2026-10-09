@@ -1,0 +1,140 @@
+[
+  {
+    "appearance": "light",
+    "id": "S29",
+    "reason": "AppKit tooltips are drawn by the window server on real mouse hover and cannot be forced or captured without a real pointer",
+    "surface": "Native tooltips / help tags"
+  },
+  {
+    "appearance": "light",
+    "id": "S29",
+    "reason": "NSSharingServicePicker runs out of process and lists the user's real services/accounts",
+    "surface": "Share with macOS picker"
+  },
+  {
+    "appearance": "dark",
+    "id": "S10",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "export save panel / NSSavePanel with ExportAccessory (aborted, nothing written)"
+  },
+  {
+    "appearance": "light",
+    "id": "S09",
+    "reason": "menu tracking returned before the capture timer fired (menu did not open)",
+    "surface": "footer / format popup open (PNG selected)"
+  },
+  {
+    "appearance": "light",
+    "id": "S09",
+    "reason": "menu tracking returned before the capture timer fired (menu did not open)",
+    "surface": "footer / Upload (Webpost) destination menu open, no destination configured"
+  },
+  {
+    "appearance": "light",
+    "id": "S10",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "export save panel / NSSavePanel with ExportAccessory (aborted, nothing written)"
+  },
+  {
+    "appearance": "dark",
+    "id": "S29",
+    "reason": "AppKit tooltips are drawn by the window server on real mouse hover and cannot be forced or captured without a real pointer",
+    "surface": "Native tooltips / help tags"
+  },
+  {
+    "appearance": "dark",
+    "id": "S29",
+    "reason": "NSSharingServicePicker runs out of process and lists the user's real services/accounts",
+    "surface": "Share with macOS picker"
+  },
+  {
+    "appearance": "light",
+    "id": "S21",
+    "reason": "no modal alert appeared",
+    "surface": "publish error alert"
+  },
+  {
+    "appearance": "light",
+    "id": "S22",
+    "reason": "PhotoBrowserCoordinator reads the user's Photos library and Desktop (Photos TCC prompt, real private pictures); no synthetic content seam exists, so it was deliberately not opened",
+    "surface": "Photo browser"
+  },
+  {
+    "appearance": "light",
+    "id": "S26",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "alerts / sheets / Save your drawing? (Save / Cancel / Discard)"
+  },
+  {
+    "appearance": "light",
+    "id": "S26",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "alerts / sheets / Move archived drawings to Trash?"
+  },
+  {
+    "appearance": "light",
+    "id": "S26",
+    "reason": "No Wipe confirmation exists: Wipe/Undo (Canvas.wipe) acts immediately, so there is nothing to capture; recorded as a finding",
+    "surface": "Wipe confirmation"
+  },
+  {
+    "appearance": "light",
+    "id": "S29",
+    "reason": "AppKit tooltips are drawn by the window server on real mouse hover and cannot be forced or captured without a real pointer",
+    "surface": "Native tooltips / help tags"
+  },
+  {
+    "appearance": "light",
+    "id": "S29",
+    "reason": "NSSharingServicePicker runs out of process and lists the user's real services/accounts",
+    "surface": "Share with macOS picker"
+  },
+  {
+    "appearance": "dark",
+    "id": "S21",
+    "reason": "menu tracking returned before the capture timer fired (menu did not open)",
+    "surface": "publish progress / destination menu while an upload runs (Cancel Upload offered)"
+  },
+  {
+    "appearance": "dark",
+    "id": "S22",
+    "reason": "PhotoBrowserCoordinator reads the user's Photos library and Desktop (Photos TCC prompt, real private pictures); no synthetic content seam exists, so it was deliberately not opened",
+    "surface": "Photo browser"
+  },
+  {
+    "appearance": "dark",
+    "id": "S26",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "alerts / sheets / Rename\u2026 alert with text field"
+  },
+  {
+    "appearance": "dark",
+    "id": "S26",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "alerts / sheets / Hide drawings from History?"
+  },
+  {
+    "appearance": "dark",
+    "id": "S26",
+    "reason": "the modal call returned before any window could be captured (it did not block; the panel is out-of-process or was refused in this environment)",
+    "surface": "alerts / sheets / Remove \u201cExample S3\u201d? confirmation (default destination)"
+  },
+  {
+    "appearance": "dark",
+    "id": "S26",
+    "reason": "No Wipe confirmation exists: Wipe/Undo (Canvas.wipe) acts immediately, so there is nothing to capture; recorded as a finding",
+    "surface": "Wipe confirmation"
+  },
+  {
+    "appearance": "dark",
+    "id": "S29",
+    "reason": "AppKit tooltips are drawn by the window server on real mouse hover and cannot be forced or captured without a real pointer",
+    "surface": "Native tooltips / help tags"
+  },
+  {
+    "appearance": "dark",
+    "id": "S29",
+    "reason": "NSSharingServicePicker runs out of process and lists the user's real services/accounts",
+    "surface": "Share with macOS picker"
+  }
+]

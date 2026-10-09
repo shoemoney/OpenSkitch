@@ -1,0 +1,3850 @@
+{
+  "canvasContextMenuNote" : "Canvas.menu(for:) returns a menu only when right-clicking a text annotation; blank canvas and shapes return nil (Canvas.swift:1843)",
+  "canvasTextContextMenu" : {
+    "autoenablesItems" : true,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 20,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "requestTextStyle",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Skitch Text Style…"
+      },
+      {
+        "action" : "defaultTextStyle",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Default Skitch Style"
+      }
+    ],
+    "title" : "Text"
+  },
+  "dragFormatPopupMenu" : {
+    "autoenablesItems" : true,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 20,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 1,
+        "tag" : 0,
+        "title" : "PNG"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "JPEG 100%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "JPEG 80%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "JPEG 60%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "JPEG 30%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "JPEG 10%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "TIFF"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "GIF"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "BMP"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "PDF"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "SVG"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "attributedTitleFont" : {
+          "name" : ".AppleSystemUIFont",
+          "pointSize" : 20,
+          "weight" : 5
+        },
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Skitch"
+      }
+    ],
+    "title" : ""
+  },
+  "mainMenu" : {
+    "autoenablesItems" : true,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 13,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "about",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "info",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "About OpenSkitch"
+            },
+            {
+              "action" : "showPreferences",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Gear shape",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘,",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Settings…"
+            },
+            {
+              "action" : "sharingSettings",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Network nodes connected by lines",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Sharing Settings…"
+            },
+            {
+              "action" : "shortcutSettings",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "keyboard",
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  13
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Capture Shortcuts…"
+            },
+            {
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : true,
+              "state" : 0,
+              "tag" : 0,
+              "title" : ""
+            },
+            {
+              "action" : "toggleVisible",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "hide",
+                "isTemplate" : true,
+                "size" : [
+                  21,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘H",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Hide OpenSkitch"
+            },
+            {
+              "action" : "hideOtherApplications:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  15
+                ]
+              },
+              "keyEquivalent" : "⌥⌘H",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Hide Others"
+            },
+            {
+              "action" : "unhideAllApplications:",
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Show All"
+            },
+            {
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : true,
+              "state" : 0,
+              "tag" : 0,
+              "title" : ""
+            },
+            {
+              "action" : "quit",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "power",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘Q",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Quit OpenSkitch"
+            }
+          ],
+          "title" : "OpenSkitch"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "newFile",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Document page",
+                "isTemplate" : true,
+                "size" : [
+                  14,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘N",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "New Blank"
+            },
+            {
+              "action" : "openFile",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "move",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⌘O",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Open…"
+            },
+            {
+              "action" : "showPhotos",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Photo on a rectangle",
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Photos…"
+            },
+            {
+              "action" : "closeCurrentWindow",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "close",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "keyEquivalent" : "⌘W",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Close"
+            },
+            {
+              "action" : "saveFile",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "download",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  17
+                ]
+              },
+              "keyEquivalent" : "⌘S",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Save Editable Document"
+            },
+            {
+              "action" : "saveAs",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "download multiple",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  20
+                ]
+              },
+              "keyEquivalent" : "⇧⌘S",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Save As…"
+            },
+            {
+              "action" : "renameDocument",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "edit",
+                "isTemplate" : true,
+                "size" : [
+                  14,
+                  13
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Rename…"
+            },
+            {
+              "action" : "saveHistory",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "inbox",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Save to History"
+            },
+            {
+              "action" : "showHistory",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Clock with a counterclockwise triangle-headed arrow rotated 90 degrees",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "History"
+            },
+            {
+              "action" : "exportFile",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Share",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  18
+                ]
+              },
+              "keyEquivalent" : "⌘E",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Export…"
+            },
+            {
+              "action" : "publishImage",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Globe",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Publish Image…"
+            },
+            {
+              "action" : "shareFromMenu",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Share…"
+            },
+            {
+              "action" : "pageSetup",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Document with a gear badge",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  18
+                ]
+              },
+              "keyEquivalent" : "⇧⌘P",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Page Setup…"
+            },
+            {
+              "action" : "printImage",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "print",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘P",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Print…"
+            }
+          ],
+          "title" : "File"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "undo",
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "undo",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⌘Z",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Undo"
+            },
+            {
+              "action" : "redo",
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "redo",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⇧⌘Z",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Redo"
+            },
+            {
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : true,
+              "state" : 0,
+              "tag" : 0,
+              "title" : ""
+            },
+            {
+              "action" : "cut",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "cut",
+                "isTemplate" : true,
+                "size" : [
+                  20,
+                  15
+                ]
+              },
+              "keyEquivalent" : "⌘X",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Cut"
+            },
+            {
+              "action" : "copyArtwork",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Document overlapping another document",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  18
+                ]
+              },
+              "keyEquivalent" : "⌘C",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Copy"
+            },
+            {
+              "action" : "copyImage",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Document on a clipboard",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  18
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Copy Image"
+            },
+            {
+              "action" : "paste",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Clipboard",
+                "isTemplate" : true,
+                "size" : [
+                  14,
+                  19
+                ]
+              },
+              "keyEquivalent" : "⌘V",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Paste"
+            },
+            {
+              "action" : "deleteSelection",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "trash",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Delete"
+            },
+            {
+              "action" : "selectAll",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "rectangular selection",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⌘A",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Select All"
+            },
+            {
+              "action" : "duplicate",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "duplicate",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  16
+                ]
+              },
+              "keyEquivalent" : "⌘D",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Duplicate"
+            },
+            {
+              "action" : "wipe",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Clear",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Wipe"
+            },
+            {
+              "action" : "wipeSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Rectangle with a slash through it",
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  18
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Wipe Snap Only"
+            },
+            {
+              "action" : "clear",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "not editable",
+                "isTemplate" : true,
+                "size" : [
+                  13,
+                  13
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Clear Annotations"
+            }
+          ],
+          "title" : "Edit"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "toggleActualSize",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "enter full screen",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Actual Size"
+            },
+            {
+              "action" : "resize",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Ruler with measurement marks",
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  9
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Resize…"
+            },
+            {
+              "action" : "crop",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "crop",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  16
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Crop Selection"
+            },
+            {
+              "action" : "trimSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "skip slide",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  18
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Crop Snap at Current Edges"
+            },
+            {
+              "action" : "normalSize",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Set Snap to Normal Size"
+            },
+            {
+              "action" : "rotateCW",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Rotate Right",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Rotate Clockwise"
+            },
+            {
+              "action" : "rotateCCW",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Rotate Left",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Rotate Counterclockwise"
+            },
+            {
+              "action" : "flipH",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Left and right triangle-headed arrows with left and right right-triangle markers",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  16
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Flip Horizontal"
+            },
+            {
+              "action" : "flipV",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Up and down triangle-headed arrows with up and down right-triangle markers",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Flip Vertical"
+            },
+            {
+              "action" : "transparent",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Rectangle with a checkered pattern",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Transparent Background"
+            },
+            {
+              "action" : "white",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "rectangle",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "White Background"
+            },
+            {
+              "action" : "flatten",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Three layered squares in perspective receding down-right",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Flatten"
+            },
+            {
+              "action" : "addShadow",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Add Shadow"
+            },
+            {
+              "action" : "front",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Three layered squares in perspective with the top layer filled",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Bring to Front"
+            },
+            {
+              "action" : "back",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Three layered squares in perspective with the bottom layer filled",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Send to Back"
+            },
+            {
+              "action" : "group",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Group of three rectangles",
+                "isTemplate" : true,
+                "size" : [
+                  21,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Group"
+            },
+            {
+              "action" : "ungroup",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Square on a dashed square",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  16
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Ungroup"
+            }
+          ],
+          "title" : "Image"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "changeSmoothing:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Precise"
+                  },
+                  {
+                    "action" : "changeSmoothing:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 1,
+                    "tag" : 0,
+                    "title" : "Medium"
+                  },
+                  {
+                    "action" : "changeSmoothing:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Loose"
+                  }
+                ],
+                "title" : "Pencil Smoothing"
+              },
+              "tag" : 0,
+              "title" : "Pencil Smoothing"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "changeArrowHead:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 1,
+                    "title" : "At Start"
+                  },
+                  {
+                    "action" : "changeArrowHead:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 1,
+                    "tag" : 2,
+                    "title" : "At End"
+                  }
+                ],
+                "title" : "Arrow Head"
+              },
+              "tag" : 0,
+              "title" : "Arrow Head"
+            }
+          ],
+          "title" : "Drawing"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "chooseFont",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "text formatting",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  12
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Show Fonts"
+            },
+            {
+              "action" : "defaultTextStyle",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Character formatting",
+                "isTemplate" : true,
+                "size" : [
+                  25,
+                  12
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Default Skitch Style"
+            },
+            {
+              "action" : "toggleOutline",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "A Square",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Toggle Text Outline"
+            },
+            {
+              "action" : "toggleTextShadow",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Shadow effect indicator",
+                "isTemplate" : true,
+                "size" : [
+                  12,
+                  12
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Toggle Text Shadow"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "showGuessPanel:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "keyEquivalent" : "⌘:",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Show Spelling and Grammar"
+                  },
+                  {
+                    "action" : "checkSpelling:",
+                    "alternate" : false,
+                    "enabled" : false,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "keyEquivalent" : "⌘;",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Check Spelling"
+                  },
+                  {
+                    "action" : "toggleContinuousSpellChecking:",
+                    "alternate" : false,
+                    "enabled" : false,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Check Spelling as You Type"
+                  }
+                ],
+                "title" : "Spelling"
+              },
+              "tag" : 0,
+              "title" : "Spelling"
+            }
+          ],
+          "title" : "Text"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "screenSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Scope reticle",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  18
+                ]
+              },
+              "keyEquivalent" : "⌘1",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Crosshair Snapshot"
+            },
+            {
+              "action" : "fullscreenSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Filled inset in a rectangle",
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⌘2",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Fullscreen Snapshot"
+            },
+            {
+              "action" : "windowSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "keyEquivalent" : "⌘3",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Window Snapshot"
+            },
+            {
+              "action" : "frameSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "scan",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  15
+                ]
+              },
+              "keyEquivalent" : "⌘4",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Frame Snapshot"
+            },
+            {
+              "action" : "resnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Two clockwise triangle-headed arrows rotated 90 degrees",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Re-snap (Keep Pen)"
+            },
+            {
+              "action" : "cancelFrame",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Close",
+                "isTemplate" : true,
+                "size" : [
+                  14,
+                  13
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Cancel Frame"
+            },
+            {
+              "action" : "timedSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Timer",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Timed Snapshot…"
+            },
+            {
+              "action" : "cancelSnapshot",
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "close",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Cancel Snapshot"
+            },
+            {
+              "action" : "webSnap",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "link",
+                "isTemplate" : true,
+                "size" : [
+                  17,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Snap from Link…"
+            }
+          ],
+          "title" : "Capture"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "vanish",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "keyEquivalent" : "⌘M",
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Minimize"
+            },
+            {
+              "action" : "arrangeInFront:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Three layered squares in three-dimensional perspective",
+                "isTemplate" : true,
+                "size" : [
+                  16,
+                  17
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Bring All to Front"
+            },
+            {
+              "alternate" : false,
+              "enabled" : false,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : true,
+              "state" : 0,
+              "tag" : 0,
+              "title" : ""
+            },
+            {
+              "action" : "makeKeyAndOrderFront:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "isTemplate" : true,
+                "size" : [
+                  18,
+                  14
+                ]
+              },
+              "separator" : false,
+              "state" : 1,
+              "tag" : 0,
+              "title" : "Upload demo"
+            }
+          ],
+          "title" : "Window"
+        },
+        "tag" : 0,
+        "title" : "NSMenuItem"
+      }
+    ],
+    "title" : ""
+  },
+  "snapAlternate" : "Snap has no menu: left-click = region\/window snap, right-click or Control-click = Fullscreen alternate (OriginalActionButton.alternateAction); Frame mode clears the alternate",
+  "statusItem" : {
+    "action" : "showHide (toggle editor visibility)",
+    "buttonToolTip" : "Click to show\/hide Skitch",
+    "hasMenu" : false,
+    "note" : "The status item has no menu; Option-click quits"
+  },
+  "toolboxPopupMenu" : {
+    "autoenablesItems" : true,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 20,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : true,
+        "image" : {
+          "isTemplate" : true,
+          "size" : [
+            28,
+            28
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Toolbox"
+      },
+      {
+        "action" : "about",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "info",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            15
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "About OpenSkitch"
+      },
+      {
+        "action" : "showPreferences",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Gear shape",
+          "isTemplate" : true,
+          "size" : [
+            16,
+            16
+          ]
+        },
+        "keyEquivalent" : "⌘,",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Preferences…"
+      },
+      {
+        "action" : "quit",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "power",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            16
+          ]
+        },
+        "keyEquivalent" : "⌘Q",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Quit OpenSkitch"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "newFile",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Document page",
+          "isTemplate" : true,
+          "size" : [
+            14,
+            16
+          ]
+        },
+        "keyEquivalent" : "⌘N",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "New"
+      },
+      {
+        "action" : "openFile",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "move",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            14
+          ]
+        },
+        "keyEquivalent" : "⌘O",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Open..."
+      },
+      {
+        "action" : "showPhotos",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Photo on a rectangle",
+          "isTemplate" : true,
+          "size" : [
+            19,
+            15
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Browse Photos"
+      },
+      {
+        "action" : "saveHistory",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "inbox",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            17
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Save to History"
+      },
+      {
+        "action" : "exportFile",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Share",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            18
+          ]
+        },
+        "keyEquivalent" : "⌘E",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Export..."
+      },
+      {
+        "action" : "saveAs",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "download multiple",
+          "isTemplate" : true,
+          "size" : [
+            17,
+            20
+          ]
+        },
+        "keyEquivalent" : "⇧⌘S",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Save As..."
+      },
+      {
+        "action" : "printImage",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "print",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            16
+          ]
+        },
+        "keyEquivalent" : "⌘P",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Print..."
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "cut",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "cut",
+          "isTemplate" : true,
+          "size" : [
+            20,
+            15
+          ]
+        },
+        "keyEquivalent" : "⌘X",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Cut"
+      },
+      {
+        "action" : "copyArtwork",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Document overlapping another document",
+          "isTemplate" : true,
+          "size" : [
+            16,
+            18
+          ]
+        },
+        "keyEquivalent" : "⌘C",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Copy"
+      },
+      {
+        "action" : "paste",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Clipboard",
+          "isTemplate" : true,
+          "size" : [
+            14,
+            19
+          ]
+        },
+        "keyEquivalent" : "⌘V",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Paste"
+      },
+      {
+        "action" : "deleteSelection",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "trash",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            17
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Delete"
+      },
+      {
+        "action" : "selectAll",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "rectangular selection",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            14
+          ]
+        },
+        "keyEquivalent" : "⌘A",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Select All"
+      },
+      {
+        "action" : "duplicate",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "duplicate",
+          "isTemplate" : true,
+          "size" : [
+            17,
+            16
+          ]
+        },
+        "keyEquivalent" : "⌘D",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Duplicate"
+      },
+      {
+        "action" : "chooseFont",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "text formatting",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            12
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Show Fonts"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "screenSnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Scope reticle",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            18
+          ]
+        },
+        "keyEquivalent" : "⌘1",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Crosshair Snapshot"
+      },
+      {
+        "action" : "fullscreenSnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Filled inset in a rectangle",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            14
+          ]
+        },
+        "keyEquivalent" : "⌘2",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Fullscreen Snapshot"
+      },
+      {
+        "action" : "frameSnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "scan",
+          "isTemplate" : true,
+          "size" : [
+            16,
+            15
+          ]
+        },
+        "keyEquivalent" : "⌘4",
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Frame Snapshot"
+      },
+      {
+        "action" : "resnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Two clockwise triangle-headed arrows rotated 90 degrees",
+          "isTemplate" : true,
+          "size" : [
+            16,
+            15
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Re-snap (Keep Pen)"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "normalSize",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Set Snap to Normal Size"
+      },
+      {
+        "action" : "flipH",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Left and right triangle-headed arrows with left and right right-triangle markers",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            16
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Flip"
+      },
+      {
+        "action" : "rotateCW",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Rotate Right",
+          "isTemplate" : true,
+          "size" : [
+            15,
+            17
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Rotate 90° Clockwise"
+      },
+      {
+        "action" : "transparent",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Rectangle with a checkered pattern",
+          "isTemplate" : true,
+          "size" : [
+            18,
+            14
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Background Color to Transparent"
+      },
+      {
+        "action" : "trimSnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "skip slide",
+          "isTemplate" : true,
+          "size" : [
+            17,
+            18
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Crop Snap at Current View"
+      },
+      {
+        "action" : "wipeSnap",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : true,
+        "hidden" : false,
+        "image" : {
+          "accessibilityDescription" : "Rectangle with a slash through it",
+          "isTemplate" : true,
+          "size" : [
+            19,
+            18
+          ]
+        },
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Wipe Snap Only"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "submenuAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "submenu" : {
+          "autoenablesItems" : true,
+          "font" : {
+            "name" : ".AppleSystemUIFont",
+            "pointSize" : 20,
+            "weight" : 5
+          },
+          "items" : [
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "newFile",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Document page",
+                      "isTemplate" : true,
+                      "size" : [
+                        14,
+                        16
+                      ]
+                    },
+                    "keyEquivalent" : "⌘N",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "New Blank"
+                  },
+                  {
+                    "action" : "openFile",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "move",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        14
+                      ]
+                    },
+                    "keyEquivalent" : "⌘O",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Open…"
+                  },
+                  {
+                    "action" : "showPhotos",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Photo on a rectangle",
+                      "isTemplate" : true,
+                      "size" : [
+                        19,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Photos…"
+                  },
+                  {
+                    "action" : "closeCurrentWindow",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "close",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        15
+                      ]
+                    },
+                    "keyEquivalent" : "⌘W",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Close"
+                  },
+                  {
+                    "action" : "saveFile",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "download",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        17
+                      ]
+                    },
+                    "keyEquivalent" : "⌘S",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Save Editable Document"
+                  },
+                  {
+                    "action" : "saveAs",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "download multiple",
+                      "isTemplate" : true,
+                      "size" : [
+                        17,
+                        20
+                      ]
+                    },
+                    "keyEquivalent" : "⇧⌘S",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Save As…"
+                  },
+                  {
+                    "action" : "renameDocument",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "edit",
+                      "isTemplate" : true,
+                      "size" : [
+                        14,
+                        13
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Rename…"
+                  },
+                  {
+                    "action" : "saveHistory",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "inbox",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Save to History"
+                  },
+                  {
+                    "action" : "showHistory",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Clock with a counterclockwise triangle-headed arrow rotated 90 degrees",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "History"
+                  },
+                  {
+                    "action" : "exportFile",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Share",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        18
+                      ]
+                    },
+                    "keyEquivalent" : "⌘E",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Export…"
+                  },
+                  {
+                    "action" : "publishImage",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Globe",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Publish Image…"
+                  },
+                  {
+                    "action" : "shareFromMenu",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Share…"
+                  },
+                  {
+                    "action" : "pageSetup",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Document with a gear badge",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        18
+                      ]
+                    },
+                    "keyEquivalent" : "⇧⌘P",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Page Setup…"
+                  },
+                  {
+                    "action" : "printImage",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "print",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        16
+                      ]
+                    },
+                    "keyEquivalent" : "⌘P",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Print…"
+                  }
+                ],
+                "title" : "File"
+              },
+              "tag" : 0,
+              "title" : "File"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "toggleActualSize",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "enter full screen",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Actual Size"
+                  },
+                  {
+                    "action" : "resize",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Ruler with measurement marks",
+                      "isTemplate" : true,
+                      "size" : [
+                        19,
+                        9
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Resize…"
+                  },
+                  {
+                    "action" : "crop",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "crop",
+                      "isTemplate" : true,
+                      "size" : [
+                        17,
+                        16
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Crop Selection"
+                  },
+                  {
+                    "action" : "trimSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "skip slide",
+                      "isTemplate" : true,
+                      "size" : [
+                        17,
+                        18
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Crop Snap at Current Edges"
+                  },
+                  {
+                    "action" : "normalSize",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Set Snap to Normal Size"
+                  },
+                  {
+                    "action" : "rotateCW",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Rotate Right",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Rotate Clockwise"
+                  },
+                  {
+                    "action" : "rotateCCW",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Rotate Left",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Rotate Counterclockwise"
+                  },
+                  {
+                    "action" : "flipH",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Left and right triangle-headed arrows with left and right right-triangle markers",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        16
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Flip Horizontal"
+                  },
+                  {
+                    "action" : "flipV",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Up and down triangle-headed arrows with up and down right-triangle markers",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Flip Vertical"
+                  },
+                  {
+                    "action" : "transparent",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Rectangle with a checkered pattern",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        14
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Transparent Background"
+                  },
+                  {
+                    "action" : "white",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "rectangle",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        14
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "White Background"
+                  },
+                  {
+                    "action" : "flatten",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Three layered squares in perspective receding down-right",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Flatten"
+                  },
+                  {
+                    "action" : "addShadow",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Add Shadow"
+                  },
+                  {
+                    "action" : "front",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Three layered squares in perspective with the top layer filled",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Bring to Front"
+                  },
+                  {
+                    "action" : "back",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Three layered squares in perspective with the bottom layer filled",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Send to Back"
+                  },
+                  {
+                    "action" : "group",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Group of three rectangles",
+                      "isTemplate" : true,
+                      "size" : [
+                        21,
+                        14
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Group"
+                  },
+                  {
+                    "action" : "ungroup",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Square on a dashed square",
+                      "isTemplate" : true,
+                      "size" : [
+                        17,
+                        16
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Ungroup"
+                  }
+                ],
+                "title" : "Image"
+              },
+              "tag" : 0,
+              "title" : "Image"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "submenuAction:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "submenu" : {
+                      "autoenablesItems" : true,
+                      "font" : {
+                        "name" : ".AppleSystemUIFont",
+                        "pointSize" : 20,
+                        "weight" : 5
+                      },
+                      "items" : [
+                        {
+                          "action" : "changeSmoothing:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 0,
+                          "title" : "Precise"
+                        },
+                        {
+                          "action" : "changeSmoothing:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 1,
+                          "tag" : 0,
+                          "title" : "Medium"
+                        },
+                        {
+                          "action" : "changeSmoothing:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 0,
+                          "title" : "Loose"
+                        }
+                      ],
+                      "title" : "Pencil Smoothing"
+                    },
+                    "tag" : 0,
+                    "title" : "Pencil Smoothing"
+                  },
+                  {
+                    "action" : "submenuAction:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "submenu" : {
+                      "autoenablesItems" : true,
+                      "font" : {
+                        "name" : ".AppleSystemUIFont",
+                        "pointSize" : 20,
+                        "weight" : 5
+                      },
+                      "items" : [
+                        {
+                          "action" : "changeArrowHead:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 1,
+                          "title" : "At Start"
+                        },
+                        {
+                          "action" : "changeArrowHead:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 1,
+                          "tag" : 2,
+                          "title" : "At End"
+                        }
+                      ],
+                      "title" : "Arrow Head"
+                    },
+                    "tag" : 0,
+                    "title" : "Arrow Head"
+                  }
+                ],
+                "title" : "Drawing"
+              },
+              "tag" : 0,
+              "title" : "Drawing"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "chooseFont",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "text formatting",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        12
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Show Fonts"
+                  },
+                  {
+                    "action" : "defaultTextStyle",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Character formatting",
+                      "isTemplate" : true,
+                      "size" : [
+                        25,
+                        12
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Default Skitch Style"
+                  },
+                  {
+                    "action" : "toggleOutline",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "A Square",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        14
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Toggle Text Outline"
+                  },
+                  {
+                    "action" : "toggleTextShadow",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Shadow effect indicator",
+                      "isTemplate" : true,
+                      "size" : [
+                        12,
+                        12
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Toggle Text Shadow"
+                  },
+                  {
+                    "action" : "submenuAction:",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : false,
+                    "hidden" : false,
+                    "separator" : false,
+                    "state" : 0,
+                    "submenu" : {
+                      "autoenablesItems" : true,
+                      "font" : {
+                        "name" : ".AppleSystemUIFont",
+                        "pointSize" : 20,
+                        "weight" : 5
+                      },
+                      "items" : [
+                        {
+                          "action" : "showGuessPanel:",
+                          "alternate" : false,
+                          "enabled" : true,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "keyEquivalent" : "⌘:",
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 0,
+                          "title" : "Show Spelling and Grammar"
+                        },
+                        {
+                          "action" : "checkSpelling:",
+                          "alternate" : false,
+                          "enabled" : false,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "keyEquivalent" : "⌘;",
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 0,
+                          "title" : "Check Spelling"
+                        },
+                        {
+                          "action" : "toggleContinuousSpellChecking:",
+                          "alternate" : false,
+                          "enabled" : false,
+                          "hasImage" : false,
+                          "hidden" : false,
+                          "separator" : false,
+                          "state" : 0,
+                          "tag" : 0,
+                          "title" : "Check Spelling as You Type"
+                        }
+                      ],
+                      "title" : "Spelling"
+                    },
+                    "tag" : 0,
+                    "title" : "Spelling"
+                  }
+                ],
+                "title" : "Text"
+              },
+              "tag" : 0,
+              "title" : "Text"
+            },
+            {
+              "action" : "submenuAction:",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : false,
+              "hidden" : false,
+              "separator" : false,
+              "state" : 0,
+              "submenu" : {
+                "autoenablesItems" : true,
+                "font" : {
+                  "name" : ".AppleSystemUIFont",
+                  "pointSize" : 20,
+                  "weight" : 5
+                },
+                "items" : [
+                  {
+                    "action" : "screenSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Scope reticle",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        18
+                      ]
+                    },
+                    "keyEquivalent" : "⌘1",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Crosshair Snapshot"
+                  },
+                  {
+                    "action" : "fullscreenSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Filled inset in a rectangle",
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        14
+                      ]
+                    },
+                    "keyEquivalent" : "⌘2",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Fullscreen Snapshot"
+                  },
+                  {
+                    "action" : "windowSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "isTemplate" : true,
+                      "size" : [
+                        18,
+                        14
+                      ]
+                    },
+                    "keyEquivalent" : "⌘3",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Window Snapshot"
+                  },
+                  {
+                    "action" : "frameSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "scan",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        15
+                      ]
+                    },
+                    "keyEquivalent" : "⌘4",
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Frame Snapshot"
+                  },
+                  {
+                    "action" : "resnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Two clockwise triangle-headed arrows rotated 90 degrees",
+                      "isTemplate" : true,
+                      "size" : [
+                        16,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Re-snap (Keep Pen)"
+                  },
+                  {
+                    "action" : "cancelFrame",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Close",
+                      "isTemplate" : true,
+                      "size" : [
+                        14,
+                        13
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Cancel Frame"
+                  },
+                  {
+                    "action" : "timedSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "Timer",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Timed Snapshot…"
+                  },
+                  {
+                    "action" : "cancelSnapshot",
+                    "alternate" : false,
+                    "enabled" : false,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "close",
+                      "isTemplate" : true,
+                      "size" : [
+                        15,
+                        15
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Cancel Snapshot"
+                  },
+                  {
+                    "action" : "webSnap",
+                    "alternate" : false,
+                    "enabled" : true,
+                    "hasImage" : true,
+                    "hidden" : false,
+                    "image" : {
+                      "accessibilityDescription" : "link",
+                      "isTemplate" : true,
+                      "size" : [
+                        17,
+                        17
+                      ]
+                    },
+                    "separator" : false,
+                    "state" : 0,
+                    "tag" : 0,
+                    "title" : "Snap from Link…"
+                  }
+                ],
+                "title" : "Capture"
+              },
+              "tag" : 0,
+              "title" : "Capture"
+            },
+            {
+              "action" : "sharingSettings",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "Network nodes connected by lines",
+                "isTemplate" : true,
+                "size" : [
+                  15,
+                  15
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Sharing Settings…"
+            },
+            {
+              "action" : "shortcutSettings",
+              "alternate" : false,
+              "enabled" : true,
+              "hasImage" : true,
+              "hidden" : false,
+              "image" : {
+                "accessibilityDescription" : "keyboard",
+                "isTemplate" : true,
+                "size" : [
+                  19,
+                  13
+                ]
+              },
+              "separator" : false,
+              "state" : 0,
+              "tag" : 0,
+              "title" : "Capture Shortcuts…"
+            }
+          ],
+          "title" : "More Commands"
+        },
+        "tag" : 0,
+        "title" : "More Commands"
+      },
+      {
+        "action" : "toggleBezelFill:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Filled Shapes"
+      },
+      {
+        "action" : "toggleBezelShadow:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 1,
+        "tag" : 0,
+        "title" : "Shadow"
+      }
+    ],
+    "title" : "Toolbox"
+  },
+  "uploadDestinationMenu" : {
+    "autoenablesItems" : false,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 20,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "cancelUpload",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Cancel Upload"
+      },
+      {
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "chooseUploadDestination:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 1,
+        "tag" : 0,
+        "title" : "Example S3"
+      },
+      {
+        "action" : "chooseUploadDestination:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Example SFTP"
+      },
+      {
+        "action" : "chooseUploadDestination:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Example WebDAV"
+      },
+      {
+        "alternate" : false,
+        "enabled" : false,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : true,
+        "state" : 0,
+        "tag" : 0,
+        "title" : ""
+      },
+      {
+        "action" : "openDestinationSettings",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Destination Settings…"
+      },
+      {
+        "action" : "shareFromMenu",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "Share with macOS…"
+      }
+    ],
+    "title" : ""
+  },
+  "zoomPopupMenu" : {
+    "autoenablesItems" : true,
+    "font" : {
+      "name" : ".AppleSystemUIFont",
+      "pointSize" : 18,
+      "weight" : 5
+    },
+    "items" : [
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 1,
+        "tag" : 999,
+        "title" : "Output · 100%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "25%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "50%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "75%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "100%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "150%"
+      },
+      {
+        "action" : "_popUpItemAction:",
+        "alternate" : false,
+        "enabled" : true,
+        "hasImage" : false,
+        "hidden" : false,
+        "separator" : false,
+        "state" : 0,
+        "tag" : 0,
+        "title" : "200%"
+      }
+    ],
+    "title" : ""
+  }
+}

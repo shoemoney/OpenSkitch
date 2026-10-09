@@ -1,0 +1,755 @@
+{
+  "appearance" : "light",
+  "note" : "PROTOTYPE MOCK, audit process only; stroke width pill is a mock horizontal NSSlider; Original size checkbox and size label hidden (see layout budget for their widths)",
+  "samples" : [
+    {
+      "bottom" : {
+        "availableWidth" : 964,
+        "bottomOverflowIfStatusFullyShown" : -7.5,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              12,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupUndoWipe"
+          },
+          {
+            "class" : "NSStackView",
+            "fitting" : [
+              219.5,
+              36
+            ],
+            "fittingWidth" : 219.5,
+            "frame" : [
+              126,
+              724,
+              219.5,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupZoomResize"
+          },
+          {
+            "class" : "NSTextField",
+            "fitting" : [
+              4,
+              21
+            ],
+            "fittingWidth" : 4,
+            "frame" : [
+              355.5,
+              731.5,
+              231.5,
+              21
+            ],
+            "hidden" : false,
+            "id" : "NSTextField"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              597,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupSaveHistory"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              265,
+              36
+            ],
+            "fittingWidth" : 265,
+            "frame" : [
+              711,
+              724,
+              265,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupOutput"
+          }
+        ],
+        "rowFittingWidth" : 736.5,
+        "rowFrameWidth" : 964,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 223.5,
+        "statusLabelWidthIfEverythingElseFixed" : 215.5,
+        "statusNeedsAt18pt" : 208,
+        "sumOfGroupFittingPlusSpacing" : 740.5
+      },
+      "frameMode" : false,
+      "scrollView" : {
+        "class" : "NSScrollView",
+        "fitting" : [
+          17,
+          17
+        ],
+        "frame" : [
+          12,
+          88,
+          964,
+          624
+        ],
+        "hidden" : false
+      },
+      "scrollViewTrailingGapToWindowEdge" : 12,
+      "slug" : "w980-normal",
+      "top" : {
+        "availableWidth" : 964,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              168,
+              36
+            ],
+            "fittingWidth" : 168,
+            "frame" : [
+              12,
+              40,
+              168,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupHidePhotos"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              56,
+              44
+            ],
+            "fittingWidth" : 56,
+            "frame" : [
+              192,
+              36,
+              56,
+              44
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupCapture"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              476,
+              40
+            ],
+            "fittingWidth" : 476,
+            "frame" : [
+              260,
+              38,
+              476,
+              40
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupTools"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              228,
+              36
+            ],
+            "fittingWidth" : 228,
+            "frame" : [
+              748,
+              40,
+              228,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupDrawing"
+          }
+        ],
+        "rowFittingWidth" : 964,
+        "rowFrameWidth" : 964,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 0,
+        "sumOfGroupFittingPlusSpacing" : 964
+      },
+      "windowWidth" : 988
+    },
+    {
+      "bottom" : {
+        "availableWidth" : 1018,
+        "bottomOverflowIfStatusFullyShown" : -61.5,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              12,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupUndoWipe"
+          },
+          {
+            "class" : "NSStackView",
+            "fitting" : [
+              219.5,
+              36
+            ],
+            "fittingWidth" : 219.5,
+            "frame" : [
+              126,
+              724,
+              219.5,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupZoomResize"
+          },
+          {
+            "class" : "NSTextField",
+            "fitting" : [
+              4,
+              21
+            ],
+            "fittingWidth" : 4,
+            "frame" : [
+              355.5,
+              731.5,
+              285.5,
+              21
+            ],
+            "hidden" : false,
+            "id" : "NSTextField"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              651,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupSaveHistory"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              265,
+              36
+            ],
+            "fittingWidth" : 265,
+            "frame" : [
+              765,
+              724,
+              265,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupOutput"
+          }
+        ],
+        "rowFittingWidth" : 736.5,
+        "rowFrameWidth" : 1018,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 277.5,
+        "statusLabelWidthIfEverythingElseFixed" : 269.5,
+        "statusNeedsAt18pt" : 208,
+        "sumOfGroupFittingPlusSpacing" : 740.5
+      },
+      "frameMode" : true,
+      "scrollView" : {
+        "class" : "NSScrollView",
+        "fitting" : [
+          17,
+          17
+        ],
+        "frame" : [
+          12,
+          88,
+          1018,
+          624
+        ],
+        "hidden" : false
+      },
+      "scrollViewTrailingGapToWindowEdge" : 12,
+      "slug" : "w980-frame",
+      "top" : {
+        "availableWidth" : 1018,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              168,
+              36
+            ],
+            "fittingWidth" : 168,
+            "frame" : [
+              12,
+              40,
+              168,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupHidePhotos"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              110,
+              44
+            ],
+            "fittingWidth" : 110,
+            "frame" : [
+              192,
+              36,
+              110,
+              44
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupCapture"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              476,
+              40
+            ],
+            "fittingWidth" : 476,
+            "frame" : [
+              314,
+              38,
+              476,
+              40
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupTools"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              228,
+              36
+            ],
+            "fittingWidth" : 228,
+            "frame" : [
+              802,
+              40,
+              228,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupDrawing"
+          }
+        ],
+        "rowFittingWidth" : 1018,
+        "rowFrameWidth" : 1018,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 0,
+        "sumOfGroupFittingPlusSpacing" : 1018
+      },
+      "windowWidth" : 1042
+    },
+    {
+      "bottom" : {
+        "availableWidth" : 1256,
+        "bottomOverflowIfStatusFullyShown" : -299.5,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              12,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupUndoWipe"
+          },
+          {
+            "class" : "NSStackView",
+            "fitting" : [
+              219.5,
+              36
+            ],
+            "fittingWidth" : 219.5,
+            "frame" : [
+              126,
+              724,
+              219.5,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupZoomResize"
+          },
+          {
+            "class" : "NSTextField",
+            "fitting" : [
+              4,
+              21
+            ],
+            "fittingWidth" : 4,
+            "frame" : [
+              355.5,
+              731.5,
+              523.5,
+              21
+            ],
+            "hidden" : false,
+            "id" : "NSTextField"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              889,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupSaveHistory"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              265,
+              36
+            ],
+            "fittingWidth" : 265,
+            "frame" : [
+              1003,
+              724,
+              265,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupOutput"
+          }
+        ],
+        "rowFittingWidth" : 736.5,
+        "rowFrameWidth" : 1256,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 515.5,
+        "statusLabelWidthIfEverythingElseFixed" : 507.5,
+        "statusNeedsAt18pt" : 208,
+        "sumOfGroupFittingPlusSpacing" : 740.5
+      },
+      "frameMode" : false,
+      "scrollView" : {
+        "class" : "NSScrollView",
+        "fitting" : [
+          17,
+          17
+        ],
+        "frame" : [
+          12,
+          88,
+          1256,
+          624
+        ],
+        "hidden" : false
+      },
+      "scrollViewTrailingGapToWindowEdge" : 12,
+      "slug" : "w1280-normal",
+      "top" : {
+        "availableWidth" : 1256,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              168,
+              36
+            ],
+            "fittingWidth" : 168,
+            "frame" : [
+              12,
+              40,
+              168,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupHidePhotos"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              56,
+              44
+            ],
+            "fittingWidth" : 56,
+            "frame" : [
+              289.5,
+              36,
+              56,
+              44
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupCapture"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              476,
+              40
+            ],
+            "fittingWidth" : 476,
+            "frame" : [
+              454.5,
+              38,
+              476,
+              40
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupTools"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              228,
+              36
+            ],
+            "fittingWidth" : 228,
+            "frame" : [
+              1040,
+              40,
+              228,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupDrawing"
+          }
+        ],
+        "rowFittingWidth" : 964,
+        "rowFrameWidth" : 1256,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 292,
+        "sumOfGroupFittingPlusSpacing" : 964
+      },
+      "windowWidth" : 1280
+    },
+    {
+      "bottom" : {
+        "availableWidth" : 1256,
+        "bottomOverflowIfStatusFullyShown" : -299.5,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              12,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupUndoWipe"
+          },
+          {
+            "class" : "NSStackView",
+            "fitting" : [
+              219.5,
+              36
+            ],
+            "fittingWidth" : 219.5,
+            "frame" : [
+              126,
+              724,
+              219.5,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupZoomResize"
+          },
+          {
+            "class" : "NSTextField",
+            "fitting" : [
+              4,
+              21
+            ],
+            "fittingWidth" : 4,
+            "frame" : [
+              355.5,
+              731.5,
+              523.5,
+              21
+            ],
+            "hidden" : false,
+            "id" : "NSTextField"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              102,
+              36
+            ],
+            "fittingWidth" : 102,
+            "frame" : [
+              889,
+              724,
+              102,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupSaveHistory"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              265,
+              36
+            ],
+            "fittingWidth" : 265,
+            "frame" : [
+              1003,
+              724,
+              265,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupOutput"
+          }
+        ],
+        "rowFittingWidth" : 736.5,
+        "rowFrameWidth" : 1256,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 515.5,
+        "statusLabelWidthIfEverythingElseFixed" : 507.5,
+        "statusNeedsAt18pt" : 208,
+        "sumOfGroupFittingPlusSpacing" : 740.5
+      },
+      "frameMode" : true,
+      "scrollView" : {
+        "class" : "NSScrollView",
+        "fitting" : [
+          17,
+          17
+        ],
+        "frame" : [
+          12,
+          88,
+          1256,
+          624
+        ],
+        "hidden" : false
+      },
+      "scrollViewTrailingGapToWindowEdge" : 12,
+      "slug" : "w1280-frame",
+      "top" : {
+        "availableWidth" : 1256,
+        "groups" : [
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              168,
+              36
+            ],
+            "fittingWidth" : 168,
+            "frame" : [
+              12,
+              40,
+              168,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupHidePhotos"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              110,
+              44
+            ],
+            "fittingWidth" : 110,
+            "frame" : [
+              271.5,
+              36,
+              110,
+              44
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupCapture"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              476,
+              40
+            ],
+            "fittingWidth" : 476,
+            "frame" : [
+              472.5,
+              38,
+              476,
+              40
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupTools"
+          },
+          {
+            "class" : "NSGlassEffectContainerView",
+            "fitting" : [
+              228,
+              36
+            ],
+            "fittingWidth" : 228,
+            "frame" : [
+              1040,
+              40,
+              228,
+              36
+            ],
+            "hidden" : false,
+            "id" : "ProtoGroupDrawing"
+          }
+        ],
+        "rowFittingWidth" : 1018,
+        "rowFrameWidth" : 1256,
+        "rowMaxXBeyondParent" : 0,
+        "slackOrOverflow" : 238,
+        "sumOfGroupFittingPlusSpacing" : 1018
+      },
+      "windowWidth" : 1280
+    }
+  ],
+  "sourceSha" : "dc1eb26"
+}

@@ -1,0 +1,17 @@
+Safety proof for the visual audit runs (hashes only; no store contents were read, printed or copied).
+
+Method: every run copies the built app to a temp dir, sets CFBundleIdentifier to com.shoemoney.skitch-redux.eyedump-<pid>, ad-hoc re-signs it,
+and launches the bundle binary with CFFIXED_USER_HOME=<temp>/home, SKITCH_APP_SUPPORT=<temp>/support-<run> (fresh each run, secrets in memory) and
+SKITCH_APPEARANCE=modern. The harness refuses to run unless all three isolation conditions hold and the bundle id is not the installed app's.
+
+before (identical at the start of every run):
+  SkitchRedux files hash (find -type f stat name/size/mtime | shasum)  1a388426cc6e209295d62975a3eadd41897e4a75
+  com.shoemoney.skitch-redux defaults hash (defaults export | shasum)  56fed48e39b705ec21c42dc36bbc55c93b47e0b7
+after (taken again after the very last GUI run, 2026-10-09):
+  SkitchRedux files hash                                               1a388426cc6e209295d62975a3eadd41897e4a75
+  com.shoemoney.skitch-redux defaults hash                             56fed48e39b705ec21c42dc36bbc55c93b47e0b7
+RESULT store unchanged, defaults unchanged.
+Per-run before/after checks printed "RESULT store unchanged / defaults unchanged" for every run that completed its script; runs whose script was edited mid-flight or killed by a watchdog were covered by the final check above.
+
+Cleanup: throwaway defaults domains (com.shoemoney.skitch-redux.eyedump-*) and ~/Library/Preferences plists: none remain; temp dirs eye-dump-audit.*: none remain.
+No network access, no real uploads (stubbed uploader, in-memory secrets), no Keychain reads/writes, no screen capture (own windows only), no CGEvent/AppleScript, no system settings changed.

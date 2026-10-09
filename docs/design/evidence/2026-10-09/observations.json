@@ -1,0 +1,836 @@
+{
+ "S01-editor-empty": {
+  "observed": "Blank 800x600 white canvas, centred; yellow corner handles; 10 tools + Resize in the glass header; Snap/Color/Font/size/Undo/Wipe stacked on the right; zoom, size, status, PNG popup, hand and upload in the footer.",
+  "issues": [
+   "Right column: Snap, Color, Font, size slider, Undo and Wipe stop about 55% of the way down; the rest of that column is empty window-grey.",
+   "Wipe is greyed out on the blank canvas; its disabled state differs from enabled only by a fainter glyph.",
+   "The zoom popup is a flat grey rounded rectangle while every other control is a white glass pill.",
+   "A thin yellow outline with square yellow corner handles surrounds the canvas, repeating the accent yellow already used on the selected tool and Snap."
+  ]
+ },
+ "S02-populated": {
+  "observed": "1200x800 synthetic background with all annotation kinds drawn over it; rail unchanged.",
+  "issues": [
+   "Right column: Snap, Color, Font, size slider, Undo and Wipe stop about 55% of the way down; the rest of that column is empty window-grey.",
+   "The highlighter stroke starts with a darker olive/grey round cap that does not match the pale yellow body.",
+   "Zoom label reads 'Output · 100%' and a checked 'Original size' box appears; both are jargon beside a plain footer.",
+   "Window title shows the document name but the text is small system title text (13 pt)."
+  ]
+ },
+ "S03-topbar": {
+  "observed": "Header crop: eye-slash, briefcase menu, photos | 10 tool glyphs + ruler | save, history.",
+  "issues": [
+   "Every command is icon-only; the Hide glyph (eye with a slash) and the briefcase with a chevron do not say what they do.",
+   "Unselected tool glyphs are mid-grey on pale glass; selected Arrow is solid yellow with a black glyph, a much larger jump than the other tools make.",
+   "Resize (ruler corner) sits in the tool capsule but is a different kind of command from the ten tools."
+  ]
+ },
+ "S03-rail": {
+  "observed": "Right-rail crop: Snap, red colour swatch, 'A', vertical slider, Undo, Wipe.",
+  "issues": [
+   "The size slider is a tall vertical glass pill with tiny dots; its value is not visible anywhere.",
+   "Right column: Snap, Color, Font, size slider, Undo and Wipe stop about 55% of the way down; the rest of that column is empty window-grey."
+  ]
+ },
+ "S04-tool-select": {
+  "observed": "Header crop with the select tool selected.",
+  "issues": [
+   "Selected state is a solid yellow pill with a black glyph; all other tools are identical pale pills, so the only cue is colour."
+  ]
+ },
+ "S04-tool-line": {
+  "observed": "Header crop with the line tool selected.",
+  "issues": []
+ },
+ "S04-tool-ellipse": {
+  "observed": "Header crop with the ellipse tool selected.",
+  "issues": []
+ },
+ "S04-tool-rectangle": {
+  "observed": "Header crop with the rectangle tool selected.",
+  "issues": []
+ },
+ "S04-tool-fill": {
+  "observed": "Header crop with the fill tool selected.",
+  "issues": []
+ },
+ "S04-tool-eraser": {
+  "observed": "Header crop with the eraser tool selected.",
+  "issues": []
+ },
+ "S04-tool-text": {
+  "observed": "Header crop with the text tool selected.",
+  "issues": []
+ },
+ "S04-tool-crop": {
+  "observed": "Header crop with the crop tool selected.",
+  "issues": []
+ },
+ "S04-tool-arrow": {
+  "observed": "Header crop with the arrow tool selected.",
+  "issues": []
+ },
+ "S04-tool-brush": {
+  "observed": "Header crop with the brush tool selected.",
+  "issues": [
+   "Selected state is a solid yellow pill with a black glyph; all other tools are identical pale pills, so the only cue is colour."
+  ]
+ },
+ "S04-tool-hover": {
+  "observed": "Rectangle hovered via GlassSurfaceView.setHovered, Brush selected.",
+  "issues": [
+   "The hover tint on neutral glass is not visibly different from the resting pill in this capture."
+  ]
+ },
+ "S04-tool-pressed": {
+  "observed": "Rectangle pressed via GlassSurfaceView.isPressed, Brush selected.",
+  "issues": [
+   "The pressed tint on neutral glass is barely visible next to unselected pills."
+  ]
+ },
+ "S04-controls-disabled": {
+  "observed": "Resize and Undo forced disabled.",
+  "issues": [
+   "Disabled controls differ from enabled ones only by a faded glyph; no label explains why they are unavailable."
+  ]
+ },
+ "S04-snap-hover": {
+  "observed": "Snap (primary) hovered.",
+  "issues": [
+   "Snap is already solid accent yellow, so the hover state is indistinguishable from rest."
+  ]
+ },
+ "S05-selection-rect": {
+  "observed": "Rectangle selected: dashed box with square handles at corners and edges.",
+  "issues": [
+   "Selection handles are small yellow squares with a pale outline, easy to lose against the yellow/white annotations."
+  ]
+ },
+ "S05-selection-multi": {
+  "observed": "Ellipse and arrow selected together.",
+  "issues": [
+   "Both elements share one large selection box; per-element handles are not shown."
+  ]
+ },
+ "S05-text-editing": {
+  "observed": "Text tool field editor active with typed text and the move grip.",
+  "issues": [
+   "The editor shows a red outlined box plus a small pill grip at its left edge; the grip is a custom shape unlike any other control."
+  ]
+ },
+ "S06-color-palette": {
+  "observed": "Palette popover requested; the composite did not include the popover window.",
+  "issues": [
+   "Capture limitation: this composite omits the popover; see color-palette-popover."
+  ]
+ },
+ "S06-color-palette-popover": {
+  "observed": "Popover alone: 'Drawing colors' title, 2x5 swatches, full-width 'Custom color…'.",
+  "issues": [
+   "The popover is a heavy translucent grey with an arrow; 'Custom color…' is set larger than the 'Drawing colors' title.",
+   "Translucent gray and Highlighter are shown as checkerboards, the only swatches that look different in kind."
+  ]
+ },
+ "S06-color-panel": {
+  "observed": "System colour panel opened by Custom color….",
+  "issues": [
+   "Panel labels such as 'Opacity' and the tab names measure 11 pt in the view tree: system-owned text under the 18 pt floor."
+  ]
+ },
+ "S06-size-min": {
+  "observed": "Right-rail crop with the size slider at its min position.",
+  "issues": [
+   "The slider knob moves but no number or preview of the stroke width is shown."
+  ]
+ },
+ "S06-size-mid": {
+  "observed": "Right-rail crop with the size slider at its mid position.",
+  "issues": [
+   "The slider knob moves but no number or preview of the stroke width is shown."
+  ]
+ },
+ "S06-size-max": {
+  "observed": "Right-rail crop with the size slider at its max position.",
+  "issues": [
+   "The slider knob moves but no number or preview of the stroke width is shown."
+  ]
+ },
+ "S06-fonts-panel": {
+  "observed": "Shared NSFontPanel with the Text outline / Text shadow / Default Skitch Style accessory.",
+  "issues": [
+   "The panel's left (collections/family) pane is captured blank white next to a dark right pane in both appearances; probably out-of-process rendering, treat as a capture limitation.",
+   "The accessory button reads 'Default Skitch Style' (Skitch wording)."
+  ]
+ },
+ "S07-large-fit": {
+  "observed": "4800x3000-point synthetic image fitted to the window.",
+  "issues": [
+   "Right column: Snap, Color, Font, size slider, Undo and Wipe stop about 55% of the way down; the rest of that column is empty window-grey."
+  ]
+ },
+ "S07-zoom-200": {
+  "observed": "Zoom 200%: image overflows, scroll bars appear.",
+  "issues": [
+   "A heavy dark vertical scroller appears at the right of the canvas, wider and darker than the rest of the chrome."
+  ]
+ },
+ "S07-zoom-50": {
+  "observed": "Zoom 50%.",
+  "issues": []
+ },
+ "S07-zoom-25": {
+  "observed": "Zoom 25%: small image floats in the middle of a large grey area.",
+  "issues": [
+   "The centred small image has no drop shadow or edge against the grey; it reads as a floating thumbnail."
+  ]
+ },
+ "S07-actual-size": {
+  "observed": "Actual Size on: Overview navigator panel docked at the left of the window.",
+  "issues": [
+   "The navigator is a separate white panel with a black strip above it in the composite; it overlaps nothing but sits outside the window frame.",
+   "Resize and the zoom popup are greyed while Actual Size is on."
+  ]
+ },
+ "S07-small-centred": {
+  "observed": "'Small image' fixture; the document had been inflated by the preceding Actual Size state, so this is NOT a valid small-image centring test.",
+  "issues": [
+   "Harness fixture flaw (fixed for the delta set by shooting this case first)."
+  ]
+ },
+ "S08-crop-mode": {
+  "observed": "Crop tool with a dashed yellow crop rectangle; outside the crop the image is dimmed.",
+  "issues": [
+   "The dashed crop rectangle has no visible handles in this capture."
+  ]
+ },
+ "S08-resize-panel": {
+  "observed": "Resize sheet alone: 'Resize or Crop', preset popup, name, Add/Save/Remove, Resize|Crop|Limit, Width/Height, Lock proportions, Cancel/Apply/OK.",
+  "issues": [
+   "Width shows a fractional value ('1516.5') in a field labelled pixels.",
+   "Roughly a fifth of the sheet below 'Lock proportions' is empty before the buttons.",
+   "Save Preset and Remove are greyed with low contrast."
+  ]
+ },
+ "S08-resize-panel-in-context": {
+  "observed": "Resize sheet composited over its (dimmed) parent window.",
+  "issues": []
+ },
+ "S09-footer": {
+  "observed": "Footer crop: zoom popup, Original size, size label, status, PNG popup, hand, upload.",
+  "issues": [
+   "The footer packs seven text and control elements in one row; the PNG popup and the two glass buttons are the only glass items."
+  ]
+ },
+ "S09-footer-long-status": {
+  "observed": "Footer with a very long status line.",
+  "issues": [
+   "The long status truncates with an ellipsis at the PNG popup edge instead of wrapping or tooltip-only disclosure."
+  ]
+ },
+ "S09-format-popup-open": {
+  "observed": "Format popup open: composite shows only the editor; the menu window is not in the image.",
+  "issues": [
+   "Capture limitation: menu window absent."
+  ]
+ },
+ "S09-upload-menu-open": {
+  "observed": "Webpost destination menu open at the bottom right.",
+  "issues": [
+   "The captured menu is clipped on its left side by the composite bounds (harness limitation); items read 'Destination Settings…' and 'Share with macOS…'."
+  ]
+ },
+ "S10-export-accessory-alone": {
+  "observed": "ExportAccessory rendered in its own window (the real save panel is out of process and was not captured).",
+  "issues": [
+   "'Dimensions: Not available / Encoded size: Not available' appear because the accessory was rendered stand-alone without the exporter callbacks (harness artifact)."
+  ]
+ },
+ "S11-size-contentmin": {
+  "observed": "Window at contentMinSize.",
+  "issues": [
+   "A dark vertical scroller shows at the right of the canvas even though the 800x600 canvas nearly fits."
+  ]
+ },
+ "S11-size-default": {
+  "observed": "Default window 1024 wide.",
+  "issues": [
+   "Right column: Snap, Color, Font, size slider, Undo and Wipe stop about 55% of the way down; the rest of that column is empty window-grey."
+  ]
+ },
+ "S11-width-980": {
+  "observed": "Window 980 pt wide.",
+  "issues": [
+   "At 980 pt the header has ~14 pt between the left group and the tool capsule; there is no spare room for another header control."
+  ]
+ },
+ "S11-width-1024": {
+  "observed": "Window 1024 pt wide.",
+  "issues": []
+ },
+ "S11-width-1280": {
+  "observed": "Window 1280 pt wide.",
+  "issues": []
+ },
+ "S11-width-1440": {
+  "observed": "Window 1440 pt wide.",
+  "issues": []
+ },
+ "S11-size-wide": {
+  "observed": "Window about 1900 pt wide and 640 pt tall with the 800x600 canvas.",
+  "issues": [
+   "The canvas does not fit the 640 pt height, so a dark vertical scroller appears while wide grey margins surround the canvas left and right.",
+   "The rail stays pinned to the right edge, far from the header tools."
+  ]
+ },
+ "S11-size-tall": {
+  "observed": "Tall window with the 800x600 canvas.",
+  "issues": [
+   "Large grey bands above and below the centred canvas; the rail stack stays at the top, leaving the lower rail column empty."
+  ]
+ },
+ "S11-size-maximized": {
+  "observed": "Maximised to the screen's visible frame.",
+  "issues": [
+   "The small canvas floats in a very large grey area and the empty rail column spans the full height."
+  ]
+ },
+ "S12-frame-mode": {
+  "observed": "Frame mode: transparent canvas hole with yellow border, Snap becomes the frame glyph, Cancel (X) appears.",
+  "issues": [
+   "The canvas hole is bounded by a thin yellow line and a horizontal scroll bar overlaps its bottom edge.",
+   "The window is semi-transparent (alpha 0.8) so the title bar and rail look washed out."
+  ]
+ },
+ "S12-frame-resnap": {
+  "observed": "Re-snap Frame mode over existing annotations.",
+  "issues": [
+   "Annotations are drawn pale/translucent inside the hole."
+  ]
+ },
+ "S12-frame-w980": {
+  "observed": "Frame mode at 980 pt.",
+  "issues": [
+   "Status reads 'Frame: position the win…' truncated at 980 pt."
+  ]
+ },
+ "S12-frame-w1024": {
+  "observed": "Frame mode at 1024 pt.",
+  "issues": [
+   "Status reads 'Frame: position the window, t…' truncated at 1024 pt."
+  ]
+ },
+ "S13-picker-no-recording-grant": {
+  "observed": "Crosshair overlay with the magnifier lens grey (no Screen Recording grant).",
+  "issues": [
+   "Without pixels the lens is a flat grey square with a tiny '1028x664' coordinate label."
+  ]
+ },
+ "S13-picker-no-recording-grant-dragging": {
+  "observed": "Mid-drag selection with dimmed surround.",
+  "issues": [
+   "The size badge '499x300px' is a small grey tag at the selection corner; text is small."
+  ]
+ },
+ "S13-picker-synthetic-lens": {
+  "observed": "Overlay with synthetic pixels in the lens.",
+  "issues": []
+ },
+ "S13-picker-synthetic-lens-dragging": {
+  "observed": "Mid-drag selection, lens showing synthetic purple pixels.",
+  "issues": [
+   "The coordinate label '1028x664' sits across the lens's lower edge and is partly covered by the lens."
+  ]
+ },
+ "S14-countdown-1": {
+  "observed": "Capture countdown digit 1.",
+  "issues": [
+   "Original Skitch artwork: a grey circular badge with a white digit and a pie sweep; the digit images are bundled originals."
+  ]
+ },
+ "S14-countdown-2": {
+  "observed": "Capture countdown digit 2.",
+  "issues": [
+   "Original Skitch artwork: a grey circular badge with a white digit and a pie sweep; the digit images are bundled originals."
+  ]
+ },
+ "S14-countdown-3": {
+  "observed": "Capture countdown digit 3.",
+  "issues": [
+   "Original Skitch artwork: a grey circular badge with a white digit and a pie sweep; the digit images are bundled originals."
+  ]
+ },
+ "S15-flash-full": {
+  "observed": "Flash panel at full alpha (pure white).",
+  "issues": []
+ },
+ "S15-flash-half": {
+  "observed": "Composite of the editor and a half-alpha flash window.",
+  "issues": [
+   "Capture limitation: the composite omitted the flash window; only the editor is visible."
+  ]
+ },
+ "S16-permission-alert": {
+  "observed": "The Screen Recording alert built in-process.",
+  "issues": [
+   "The alert offers only 'OK'; there is no button to open System Settings.",
+   "Warning triangle plus camera badge, and the text says 'this app' rather than naming OpenSkitch."
+  ]
+ },
+ "S17-preferences-general": {
+  "observed": "Preferences window (tabs General / Drawing / Snapping).",
+  "issues": [
+   "'Show Skitch in:' uses the old brand name.",
+   "An 'Appearance: Modern / Classic' row and 'Relaunch OpenSkitch' button are present at this baseline.",
+   "The window is shown inactive (grey traffic lights) in Light; the lower third of the pane is empty."
+  ]
+ },
+ "S17-preferences-alt-values": {
+  "observed": "Preferences with alternate values selected.",
+  "issues": []
+ },
+ "S18-hotkeys-sheet": {
+  "observed": "Global Capture Shortcuts sheet alone: 6 actions, all None, modifier checkboxes disabled.",
+  "issues": [
+   "Disabled modifier checkboxes (Command/Option/Control/Shift) are very pale grey and hard to read.",
+   "The row label 'Show Skitch' uses the old brand name.",
+   "Explanatory paragraphs run at the same size as the controls."
+  ]
+ },
+ "S18-hotkeys-sheet-in-context": {
+  "observed": "The same sheet composited with its parent.",
+  "issues": []
+ },
+ "S19-destinations-empty": {
+  "observed": "Upload Destinations sheet with nothing saved.",
+  "issues": [
+   "A large empty list area and a 'Done' button far below it."
+  ]
+ },
+ "S19-destinations-list": {
+  "observed": "Three synthetic destinations; Example S3 marked (Default).",
+  "issues": [
+   "Rows read 'Example S3 · S3 (Default)': the protocol name repeats the destination name.",
+   "Edit…, Remove and Make Default are greyed until a row is selected, with low contrast.",
+   "Over half of the sheet below the buttons is blank."
+  ]
+ },
+ "S19-destinations-edit-form": {
+  "observed": "Edit form for Example S3.",
+  "issues": [
+   "The label 'Endpoint (blank = AWS)' wraps to two lines.",
+   "The Protocol and Credentials popups are narrower than the text fields above and below them.",
+   "About a quarter of the sheet below the buttons is blank."
+  ]
+ },
+ "S19-destinations-form-focus": {
+  "observed": "Edit form with the first field focused.",
+  "issues": []
+ },
+ "S19-destinations-empty-in-context": {
+  "observed": "Destinations sheet (empty) composited over its parent.",
+  "issues": []
+ },
+ "S19-destinations-list-in-context": {
+  "observed": "Destinations sheet (list) composited over its parent.",
+  "issues": []
+ },
+ "S19-destinations-edit-form-in-context": {
+  "observed": "Destinations sheet (edit-form) composited over its parent.",
+  "issues": []
+ },
+ "S19-destinations-form-focus-in-context": {
+  "observed": "Destinations sheet (form-focus) composited over its parent.",
+  "issues": []
+ },
+ "S20-history-empty": {
+  "observed": "History window with no entries.",
+  "issues": [
+   "Metadata labels (Name/Date/Size/Action/Destination) sit in a centred block with a large empty gap to their left."
+  ]
+ },
+ "S20-history-populated": {
+  "observed": "Six synthetic entries across dates.",
+  "issues": [
+   "One 330-pt-wide thumbnail per section row leaves most of the window width empty.",
+   "Action buttons (Open, Copy, Copy Link…) are all disabled with no selection and low contrast.",
+   "The window is shown inactive (grey traffic lights)."
+  ]
+ },
+ "S20-history-selected": {
+  "observed": "One entry selected.",
+  "issues": []
+ },
+ "S21-publish-progress": {
+  "observed": "Upload in progress (stub uploader).",
+  "issues": []
+ },
+ "S21-publish-progress-footer": {
+  "observed": "Footer during upload.",
+  "issues": []
+ },
+ "S21-publish-success": {
+  "observed": "Status after a stubbed success.",
+  "issues": [
+   "The status reads 'Link copied: https://cdn.example.com/pics/Upload-demo-<uuid>.png'; the long URL is cut off by an ellipsis before the format control."
+  ]
+ },
+ "S21-publish-success-footer": {
+  "observed": "Footer after success.",
+  "issues": [
+   "The 'Link copied: https://cdn.example.com/pics/…' status is truncated at the format control, so the file name is not visible."
+  ]
+ },
+ "S21-publish-error-footer": {
+  "observed": "Footer after the error alert.",
+  "issues": []
+ },
+ "S21-upload-menu-busy": {
+  "observed": "Destination menu while uploading.",
+  "issues": [
+   "The menu is clipped on its left in the composite (harness limitation); it lists Cancel Upload, three destinations, Destination Settings…, Share with macOS…."
+  ]
+ },
+ "ZZ-unexpected-modal-1-light": {
+  "observed": "Error alert after a stubbed failed upload.",
+  "issues": [
+   "Large warning triangle with app-icon badge; message text is bold with no secondary line; single OK button."
+  ],
+  "id": "S21",
+  "surface": "publish error",
+  "state": "error alert after a stubbed failed upload (captured by the unexpected-modal guard)"
+ },
+ "ZZ-unexpected-modal-2-light": {
+  "observed": "Save your drawing? alert (Save / Discard / Cancel stacked).",
+  "issues": [
+   "The three buttons are stacked full width with the destructive 'Discard' between 'Save' and 'Cancel'."
+  ],
+  "id": "S26",
+  "surface": "alerts / sheets",
+  "state": "close-unsaved: Save your drawing?"
+ },
+ "ZZ-unexpected-modal-3-light": {
+  "observed": "Move archived drawings to Trash? alert.",
+  "issues": [
+   "Alert title wraps to two lines; the primary 'Move to Trash' button is yellow like a safe action."
+  ],
+  "id": "S26",
+  "surface": "alerts / sheets",
+  "state": "history Move to Trash? alert"
+ },
+ "ZZ-unexpected-modal-1-dark": {
+  "observed": "Rename… alert with a name field.",
+  "issues": [
+   "Its buttons use smaller text than the other alerts' buttons."
+  ],
+  "id": "S26",
+  "surface": "alerts / sheets",
+  "state": "Rename… alert (captured by the unexpected-modal guard)"
+ },
+ "ZZ-unexpected-modal-2-dark": {
+  "observed": "Hide drawings from History? alert.",
+  "issues": [],
+  "id": "S26",
+  "surface": "alerts / sheets",
+  "state": "Hide drawings from History? alert (captured by the unexpected-modal guard)"
+ },
+ "ZZ-unexpected-modal-3-dark": {
+  "observed": "Remove “Example S3”? alert.",
+  "issues": [
+   "Four-line explanatory text; 'Remove' is yellow primary though destructive."
+  ],
+  "id": "S26",
+  "surface": "alerts / sheets",
+  "state": "Remove destination confirmation (captured by the unexpected-modal guard)"
+ },
+ "S21-publish-error": {
+  "observed": "Error alert after a stubbed failed upload.",
+  "issues": [
+   "Large warning triangle with app-icon badge; message text is bold with no secondary line; single OK button."
+  ]
+ },
+ "S26-close-unsaved": {
+  "observed": "Save your drawing? alert.",
+  "issues": [
+   "The three buttons are stacked full width with the destructive 'Discard' between 'Save' and 'Cancel'."
+  ]
+ },
+ "S26-history-trash": {
+  "observed": "Move archived drawings to Trash? alert.",
+  "issues": [
+   "Alert title wraps to two lines; the primary 'Move to Trash' button is yellow like a safe action."
+  ]
+ },
+ "S23-canvas-text-context-open": {
+  "observed": "Canvas text context menu requested; no menu window in the image.",
+  "issues": []
+ },
+ "S23-toolbox-menu-open": {
+  "observed": "Toolbox pull-down requested; no menu window in the image.",
+  "issues": []
+ },
+ "S24-statusitem-normal": {
+  "observed": "Menu-bar button view: the original Skitch menu icon with a disclosure triangle.",
+  "issues": [
+   "Original Skitch artwork, a low-resolution bitmap that looks blurry at 2x."
+  ]
+ },
+ "S24-statusitem-highlighted": {
+  "observed": "Highlighted status button.",
+  "issues": [
+   "The highlighted icon is nearly identical to the normal one in this render."
+  ]
+ },
+ "S25-about-panel": {
+  "observed": "Standard About panel.",
+  "issues": [
+   "Credits read 'Native 64-bit reconstruction for personal use. Feature parity with Skitch 1.0.12 is still in progress.' (Skitch branding).",
+   "Traffic lights are grey and the panel is plain; no link, licence or website."
+  ]
+ },
+ "S26-rename": {
+  "observed": "Rename… alert with a name field.",
+  "issues": [
+   "Its buttons use smaller text than the other alerts' buttons."
+  ]
+ },
+ "S26-error-generic": {
+  "observed": "Generic NSAlert(error:).",
+  "issues": [
+   "Warning triangle with app badge for a non-warning message."
+  ]
+ },
+ "S26-history-hide": {
+  "observed": "Hide drawings from History? alert.",
+  "issues": []
+ },
+ "S26-remove-destination": {
+  "observed": "Remove “Example S3”? alert.",
+  "issues": [
+   "Four-line explanatory text; 'Remove' is yellow primary though destructive."
+  ]
+ },
+ "S27-first-launch-welcome": {
+  "observed": "App opened with an empty support folder: the bundled welcome document.",
+  "issues": [
+   "Original Skitch welcome artwork ('Snap your screen' with an arrow) is shown on a small white canvas.",
+   "Title reads 'Welcome'; zoom reads 'Fit · 100%'."
+  ]
+ },
+ "S28-focus-topbar-tool": {
+  "observed": "Brush tool button focused.",
+  "issues": [
+   "The focus ring is a thin pale-yellow outline, faint against the pale glass."
+  ]
+ },
+ "S28-focus-topbar-hide": {
+  "observed": "Hide button focused.",
+  "issues": [
+   "Thin pale-yellow ring around the pill; low contrast."
+  ]
+ },
+ "S28-focus-rail-snap": {
+  "observed": "Snap focused (crop of the rail).",
+  "issues": []
+ },
+ "S28-focus-footer-zoom": {
+  "observed": "Zoom popup focused.",
+  "issues": [
+   "A pale-yellow ring around the popup, low contrast on the grey footer."
+  ]
+ },
+ "S28-focus-footer-format": {
+  "observed": "Format popup focused.",
+  "issues": []
+ },
+ "S28-focus-footer-upload": {
+  "observed": "Upload button focused.",
+  "issues": []
+ },
+ "S29-help-bevel": {
+  "observed": "Help bevel HUD forced on.",
+  "issues": []
+ },
+ "S29-drag-thumbnail": {
+  "observed": "Editor shrunk into the drag thumbnail panel.",
+  "issues": [
+   "The thumbnail is a screenshot of the whole editor, so all chrome appears as tiny unreadable detail."
+  ]
+ },
+ "S29-drag-thumbnail-expand": {
+  "observed": "Thumbnail with the click-to-expand overlay.",
+  "issues": [
+   "Original Skitch artwork: a large grey 'Show Skitch' plate with corner triangles covers most of the thumbnail."
+  ]
+ },
+ "_drop": [
+  "S23-canvas-text-context-open",
+  "S23-toolbox-menu-open",
+  "S09-format-popup-open",
+  "S06-color-palette",
+  "S15-flash-half"
+ ],
+ "_extraGaps": [
+  {
+   "id": "S09",
+   "surface": "Format popup open (b9319c4)",
+   "reason": "The popup menu window was not present in the composite; capture dropped. Replaced by the PNG|JPG toggle at later SHAs."
+  },
+  {
+   "id": "S23",
+   "surface": "Toolbox menu open; canvas text context menu open",
+   "reason": "Menu tracking ran but the menu windows were not present in the own-window composites; captures dropped. Menu contents are in menus.json."
+  },
+  {
+   "id": "S06",
+   "surface": "Color palette popover composited with its parent",
+   "reason": "The composite omitted the popover; the popover window alone is captured instead."
+  },
+  {
+   "id": "S15",
+   "surface": "Flash at half alpha over the editor",
+   "reason": "The composite omitted the flash window; flash-full (white panel alone) is kept."
+  },
+  {
+   "id": "S10",
+   "surface": "NSSavePanel with ExportAccessory",
+   "reason": "runModal returned immediately in this environment (out-of-process panel); only the accessory view alone was captured."
+  },
+  {
+   "id": "S13/S14",
+   "surface": "Picker and countdown over the live desktop",
+   "reason": "Only the overlay windows are captured (transparent where nothing is drawn); the desktop behind them is never captured."
+  }
+ ],
+ "_protoBanner": "> **PROTOTYPE MOCKS — these are NOT product.** They are built inside the audit process by re-parenting the live controls into a rail-less layout (stroke-width pill is a mock horizontal slider; Original size checkbox and size label are hidden). They exist only to test fit.",
+ "_footer": "_Menu-open captures: the popup/context menus were requested but their windows did not appear in own-window composites, so only the destination menus are shown (partly clipped). Full menu text is in `menus.json`._",
+ "S09-format-toggle-png@dc1eb26": {
+  "observed": "Footer crop with the PNG | JPG segmented toggle, PNG selected (yellow segment).",
+  "issues": [
+   "The toggle is a wide capsule (about 150 pt) that replaced the narrow popup; the footer is now PNG|JPG + hand + upload."
+  ]
+ },
+ "S09-format-toggle-jpg@dc1eb26": {
+  "observed": "Footer crop with JPG selected.",
+  "issues": [
+   "Selected segment is solid yellow with black text; the unselected word reads grey-black on white glass."
+  ]
+ },
+ "S09-footer@dc1eb26": {
+  "observed": "Footer crop at dc1eb26: zoom popup, Original size, size label, status, PNG|JPG toggle, hand, upload.",
+  "issues": [
+   "The zoom popup is still a flat grey rounded rectangle next to white glass pills."
+  ]
+ },
+ "S09-footer-long-status@dc1eb26": {
+  "observed": "Long status line next to the wider PNG|JPG toggle.",
+  "issues": [
+   "The status truncates with an ellipsis before reaching the toggle."
+  ]
+ },
+ "S14-countdown-1@dc1eb26": {
+  "observed": "Capture countdown digit 1: dark grey rounded tile with a large white digit.",
+  "issues": [
+   "The new drawn digit tile has no ring or sweep; at 3/2/1 only the digit changes, so progress is conveyed by nothing but the number."
+  ]
+ },
+ "S14-countdown-2@dc1eb26": {
+  "observed": "Capture countdown digit 2.",
+  "issues": []
+ },
+ "S14-countdown-3@dc1eb26": {
+  "observed": "Capture countdown digit 3.",
+  "issues": []
+ },
+ "S17-preferences-general@dc1eb26": {
+  "observed": "Preferences at dc1eb26 (tabs General / Drawing / Snapping): two tip-overlay checkboxes and 'Show Skitch in: Dock / Menu bar / Both'.",
+  "issues": [
+   "Verified: no Appearance (Modern/Classic) row, no Relaunch button and no Play sounds row remain.",
+   "'Show Skitch in:' still uses the old brand name.",
+   "More than half of the pane below the last row is empty."
+  ]
+ },
+ "S17-preferences-alt-values@dc1eb26": {
+  "observed": "Preferences with alternate values selected.",
+  "issues": []
+ },
+ "S24-statusitem-normal@dc1eb26": {
+  "observed": "Status-bar button view rendered alone (SF template glyph).",
+  "issues": [
+   "Rendered outside the menu bar the glyph is almost invisible (near-white on white); this may be an artifact of drawing a template image without menu-bar tinting, not a confirmed product defect."
+  ]
+ },
+ "S24-statusitem-highlighted@dc1eb26": {
+  "observed": "Status-bar button, highlighted.",
+  "issues": [
+   "Same near-invisible glyph; highlight is not distinguishable in this render."
+  ]
+ },
+ "S25-about-panel@dc1eb26": {
+  "observed": "Standard About panel with the new app icon.",
+  "issues": [
+   "Credits still read 'Native 64-bit reconstruction for personal use. Feature parity with Skitch 1.0.12 is still in progress.'",
+   "Credits are set in larger system text than the version line; the panel has no link or licence line."
+  ]
+ },
+ "S29-drag-thumbnail@dc1eb26": {
+  "observed": "Editor shrunk into the drag thumbnail panel.",
+  "issues": [
+   "The thumbnail is a screenshot of the whole editor, so the chrome is tiny and unreadable."
+  ]
+ },
+ "S29-drag-thumbnail-expand@dc1eb26": {
+  "observed": "Thumbnail with the click-to-expand overlay: a translucent dark circle with two diagonal arrows.",
+  "issues": [
+   "The overlay circle covers about a third of the thumbnail; the new drawn icon replaces the old 'Show Skitch' plate (no Skitch artwork visible)."
+  ]
+ },
+ "S29-help-bevel@dc1eb26": {
+  "observed": "Help bevel HUD forced on: a dark bar along the top edge of the window composite.",
+  "issues": [
+   "The HUD text is cut off at the top of the capture."
+  ]
+ },
+ "S11-size-fullscreen": {
+  "observed": "True full screen (toggleFullScreen): the editor fills the display with no title bar.",
+  "issues": [
+   "The 800x600 canvas floats in a very large grey field and the rail stays at the far right edge, about 1400 pt from the header tools.",
+   "Chrome (36-48 pt pills, 18 pt footer text) looks tiny against the display; the empty rail column spans the full height."
+  ]
+ },
+ "S11-size-fullscreen@dc1eb26": {
+  "observed": "True full screen (toggleFullScreen): the editor fills the display with no title bar.",
+  "issues": [
+   "The 800x600 canvas floats in a very large grey field and the rail stays at the far right edge, about 1400 pt from the header tools.",
+   "Chrome (36-48 pt pills, 18 pt footer text) looks tiny against the display; the empty rail column spans the full height."
+  ]
+ },
+ "PROTO-w980-normal": {
+  "observed": "PROTOTYPE MOCK (not product). Rail-less layout, requested width 980 (the window settled at 988 pt wide): top row Hide/Toolbox/Photos, Snap, ten 44-pt tools, Color, mock stroke-width slider, Font; bottom row Undo/Wipe, zoom, Resize, status, Save/History, PNG|JPG, drag, upload; canvas runs to the trailing margin.",
+  "issues": [
+   "The top row needs 988 pt of window (964 pt of groups + 24 pt margins), 8 pt more than the 980 pt minimum: at a requested 980 pt the window was pushed to 988 pt.",
+   "Bottom row needs 740.5 pt plus status; the status gets about 223 pt, enough for 'Brush · Unsaved changes' (208 pt)."
+  ],
+  "prototype": true
+ },
+ "PROTO-w980-frame": {
+  "observed": "PROTOTYPE MOCK (not product). Same mock in Frame mode: Cancel appears beside Snap.",
+  "issues": [
+   "Frame mode adds the Cancel pill (54 pt): the top row then needs 1042 pt of window, 62 pt more than 980; the window was pushed to 1042 pt wide. Overflowing element: the top row as a whole; Cancel is what tips it."
+  ],
+  "prototype": true
+ },
+ "PROTO-w1280-normal": {
+  "observed": "PROTOTYPE MOCK (not product). Mock at 1280 pt.",
+  "issues": [
+   "Top row has about 292 pt of free space; bottom row about 515 pt (status can show its full text)."
+  ],
+  "prototype": true
+ },
+ "PROTO-w1280-frame": {
+  "observed": "PROTOTYPE MOCK (not product). Mock at 1280 pt in Frame mode.",
+  "issues": [
+   "Top row has about 238 pt free with Cancel shown."
+  ],
+  "prototype": true
+ }
+}
