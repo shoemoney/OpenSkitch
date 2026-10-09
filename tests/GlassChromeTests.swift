@@ -745,6 +745,11 @@ private enum GlassChromeTests {
                && rect(chrome.resizeButton, in: rig).maxX < rect(chrome.saveButton, in: rig).minX, "\(label): top bar order is Hide, Toolbox, Photos, tools, Resize, Save, History")
         let footerOrder = [rig.controls.zoomControl, rig.controls.status, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton].map { rect($0, in: rig).minX }
         expect(footerOrder == footerOrder.sorted(), "\(label): the one footer row runs zoom, status, format, drag, upload")
+        let formatControl = rig.controls.dragFormatControl, formatSelected = formatControl.indexOfSelectedItem
+        let formatFit = (0..<formatControl.numberOfItems).map { formatControl.selectItem(at: $0); return formatControl.fittingSize.width }.max() ?? 0
+        formatControl.selectItem(at: formatSelected)
+        let formatWidth = rect(chrome.surface(for: formatControl)!, in: rig).width
+        expect(formatWidth >= formatFit && formatWidth <= formatFit + 12, "\(label): the format popup hugs its widest item (\(formatWidth) pt for a \(formatFit) pt popup)")
         let footerY = rect(chrome.shareButton, in: rig).midY
         expect(abs(footerY - rect(rig.controls.dragExportView, in: rig).midY) < 0.5 && abs(footerY - rect(rig.controls.zoomControl, in: rig).midY) < 3, "\(label): footer controls share a baseline")
         let sliderBottom = rect(chrome.surface(for: rig.controls.widthControl)!, in: rig).minY, undoTop = rect(chrome.surface(for: chrome.undoButton)!, in: rig).maxY

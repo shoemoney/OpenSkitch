@@ -337,12 +337,16 @@ final class ModernEditorChrome: NSView {
         for group in [captureGroup, drawingGroup, historyGroup] { rightRail.addSubview(group) }
 
         // One footer row: [zoom][status text] ········ [format][drag][upload]
-        let formatFont = controls.dragFormatControl.font ?? .systemFont(ofSize: Metrics.labelPointSize)
-        let widestFormat = controls.dragFormatControl.itemTitles.map { ($0 as NSString).size(withAttributes: [.font: formatFont]).width }.max() ?? 0
-        let formatHolder = ControlHolderView(controls.dragFormatControl, inset: 8)
-        controls.dragFormatControl.isBordered = false
+        let formatControl = controls.dragFormatControl
+        let formatInset: CGFloat = 4
+        let formatHolder = ControlHolderView(formatControl, inset: formatInset)
+        formatControl.isBordered = false
+        // A popup sizes to its selected title, so measure every title and size the capsule once for the widest: it hugs the content and never jumps.
+        let selectedFormat = formatControl.indexOfSelectedItem
+        let widestFormat = (0..<formatControl.numberOfItems).map { index -> CGFloat in formatControl.selectItem(at: index); return formatControl.fittingSize.width }.max() ?? 0
+        formatControl.selectItem(at: selectedFormat)
         let formatSurface = GlassChrome.surface(formatHolder, shape: .capsule, accessibility: accessibility,
-                                                size: NSSize(width: ceil(widestFormat) + 44, height: Metrics.commandHeight))
+                                                size: NSSize(width: ceil(widestFormat) + 2 * formatInset, height: Metrics.commandHeight))
         register(formatSurface, for: controls.dragFormatControl, formatHolder)
         let dragSurface = GlassChrome.surface(controls.dragExportView, shape: .capsule, accessibility: accessibility,
                                               size: Metrics.iconButton)
