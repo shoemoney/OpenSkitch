@@ -66,16 +66,18 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     private var activeProvider: ObjectIdentifier?
     /// Modern lets the glass surface behind the view be the plate.
     var drawsBackground = true { didSet { needsDisplay = true } }
-    /// Modern shows the drawing itself as the well and drops the "Drag Me" text once there is a thumbnail.
-    var showsThumbnailOnly = false { didSet { needsDisplay = true } }
+    /// Modern shows only an open-hand icon: no thumbnail and no text. The thumbnail still feeds the drag image and the canvas bleed.
+    var showsHandIconOnly = false { didSet { needsDisplay = true } }
+    static let handSymbolName = "hand.raised"
     override func draw(_ dirtyRect: NSRect) {
         if drawsBackground { NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill() }
-        if showsThumbnailOnly, let overview, overview.size.width > 0, overview.size.height > 0 {
-            let area = bounds.insetBy(dx: 6, dy: 4)
-            let scale = min(area.width / overview.size.width, area.height / overview.size.height)
-            let fitted = NSSize(width: overview.size.width * scale, height: overview.size.height * scale)
-            overview.draw(in: NSRect(x: area.midX - fitted.width / 2, y: area.midY - fitted.height / 2, width: fitted.width, height: fitted.height),
-                          from: .zero, operation: .sourceOver, fraction: 1)
+        if showsHandIconOnly {
+            let configuration = NSImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+            guard let hand = NSImage(systemSymbolName: Self.handSymbolName, accessibilityDescription: nil)?.withSymbolConfiguration(configuration) else { return }
+            let tinted = NSImage(size: hand.size, flipped: false) { rect in
+                hand.draw(in: rect); NSColor.labelColor.setFill(); rect.fill(using: .sourceAtop); return true
+            }
+            tinted.draw(in: NSRect(x: bounds.midX - hand.size.width / 2, y: bounds.midY - hand.size.height / 2, width: hand.size.width, height: hand.size.height))
             return
         }
         if let overview { overview.draw(in: bounds.insetBy(dx: 4, dy: 4), from: .zero, operation: .sourceOver, fraction: 0.2) }

@@ -25,11 +25,73 @@ extension AppSafetyTests {
             ("writeLayoutEvidence reports the Modern style and finds the header and brand one level deeper", modernLayoutEvidence),
             ("Main menu items carry symbols in Modern only and keep validating", modernMenus),
             ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover),
+            ("Modern centres a small canvas in the editor area at default and minimum size and leaves a larger one at today's origin", modernCanvasCentred),
+            ("A click at the visual centre of the centred canvas selects the element at the document centre", modernCanvasCentredHitTest),
             ("Modern canvas border corner and edge mouse drags resize and crop like Classic with one Undo each, and Escape cancels", modernBorderGestures)
         ]
     }
 
     // MARK: fixtures and walkers
+
+    @available(macOS 26, *)
+    private static func canvasMargins(_ app: AppDelegate, _ chrome: ModernEditorChrome) -> (left: CGFloat, right: CGFloat, top: CGFloat, bottom: CGFloat) {
+        let area = chrome.scrollView.contentView.frame
+        let rect = chrome.scrollView.convert(app.canvas.bounds, from: app.canvas)
+        return (rect.minX - area.minX, area.maxX - rect.maxX, rect.minY - area.minY, area.maxY - rect.maxY)
+    }
+
+    @available(macOS 26, *)
+    private static func modernCanvasCentred() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        try viewportFixture(app)
+        let defaultFrame = app.window.frame
+        for (name, frame) in [("default", defaultFrame), ("minimum", CGRect(origin: defaultFrame.origin, size: app.window.minSize))] {
+            app.setWindowFrame(frame)
+            app.window.contentView?.layoutSubtreeIfNeeded(); app.updateViewportChrome()
+            let m = canvasMargins(app, chrome)
+            try expect(app.canvas.frame.width < chrome.scrollView.contentView.frame.width - 100 && app.canvas.frame.height < chrome.scrollView.contentView.frame.height - 100,
+                       "Fixture canvas is smaller than the \(name) editor area")
+            try expect(abs(m.left - m.right) <= 1 && abs(m.top - m.bottom) <= 1 && m.left > 20 && m.top > 20,
+                       "At \(name) size the canvas has equal margins: \(m)")
+            let border = app.canvasBorder.frame, canvasInBorderSpace = app.canvas.convert(app.canvas.bounds, to: app.canvasBorder.superview)
+            try expect(abs(border.midX - canvasInBorderSpace.midX) <= 1 && abs(border.midY - canvasInBorderSpace.midY) <= 1, "The border follows the centred canvas at \(name) size")
+        }
+        // Larger than the view: today's behaviour, no centring offset.
+        app.canvas.newBlank(size: CGSize(width: 3000, height: 2000))
+        app.setCanvasDisplayZoom(1, label: "Test")
+        app.window.contentView?.layoutSubtreeIfNeeded()
+        let clip = chrome.scrollView.contentView
+        clip.scroll(to: .zero)
+        try expect(app.canvas.frame.width > clip.frame.width && clip.bounds.origin == .zero, "A larger canvas keeps the top-left scroll origin: \(clip.bounds.origin)")
+        clip.scroll(to: CGPoint(x: 120, y: 80)); chrome.scrollView.reflectScrolledClipView(clip)
+        try expect(clip.bounds.origin == CGPoint(x: 120, y: 80), "Panning a larger canvas is unchanged: \(clip.bounds.origin)")
+        app.window.contentView?.layoutSubtreeIfNeeded()
+        try expect(clip.bounds.origin == CGPoint(x: 120, y: 80), "A layout pass does not move a panned larger canvas: \(clip.bounds.origin)")
+    }
+
+    @available(macOS 26, *)
+    private static func modernCanvasCentredHitTest() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        app.canvas.newBlank(size: CGSize(width: 150, height: 90))
+        app.setCanvasDisplayZoom(1, label: "Test")
+        app.window.contentView?.layoutSubtreeIfNeeded()
+        var element = SketchElement(kind: .rectangle)
+        element.rect = CGRect(x: 65, y: 35, width: 20, height: 20)
+        element.color = SketchColor(.red)
+        app.canvas.document.elements = [element]; app.canvas.selection = []
+        app.canvas.tool = .select
+        let area = chrome.scrollView.convert(chrome.scrollView.contentView.frame, to: nil)
+        let point = CGPoint(x: area.midX, y: area.midY)
+        func event(_ type: NSEvent.EventType) throws -> NSEvent {
+            guard let e = NSEvent.mouseEvent(with: type, location: point, modifierFlags: [], timestamp: 0, windowNumber: app.window.windowNumber,
+                                             context: nil, eventNumber: 1, clickCount: 1, pressure: 1) else { throw Failure(description: "mouse event") }
+            return e
+        }
+        app.canvas.mouseDown(with: try event(.leftMouseDown)); app.canvas.mouseUp(with: try event(.leftMouseUp))
+        try expect(app.canvas.selection == [element.id], "A click at the visual centre selects the element at the document centre: \(app.canvas.selection)")
+    }
 
     @available(macOS 26, *)
     private static func modernFixture() throws -> (Fixture, ModernEditorChrome) {
@@ -183,7 +245,8 @@ extension AppSafetyTests {
         // Shared controls take the Modern treatment but keep their behavior.
         try expect(app.widthControl.style == .modern, "The size slider uses the vector style")
         try expect(app.dragExportView?.drawsBackground == false, "Drag Me lets its glass be the plate")
-        try expect(try surface(chrome, app.dragExportView).shape == .rounded(14), "Drag Me sits in a rounded r=14 surface")
+        try expect(try surface(chrome, app.dragExportView).shape == .capsule && (try surface(chrome, app.dragExportView).fixedSize) == NSSize(width: 48, height: 36),
+                   "Drag Me is a compact 48x36 capsule like the other icon buttons")
         try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) && chrome.surface(for: app.nameField)?.shape == .capsule
                    && chrome.surface(for: app.dragFormatControl)?.shape == .capsule, "Color, the name field and the format popup have their glass")
         try expect(chrome.surface(for: app.zoomControl) == nil && chrome.surface(for: app.status) == nil && chrome.surface(for: app.canvas) == nil, "Zoom, status and the canvas stay outside glass")
@@ -272,7 +335,23 @@ extension AppSafetyTests {
         app.canvas.strokeWidth = 3; app.syncDrawingControls()
         try expect(app.widthControl.toolTip == "Size " + String(format: "%.0f", app.widthControl.doubleValue.rounded()) && app.widthControl.toolTip != before, "The Size tooltip follows the slider (\(app.widthControl.toolTip ?? "nil"))")
         let drag = try (app.dragExportView).unwrap("drag well")
-        try expect(drag.showsThumbnailOnly && drag.toolTip == "Drag the drawing into Finder or another app" && drag.accessibilityLabel() == "Drag Me", "The drag well is a thumbnail with a tooltip and keeps its VoiceOver label")
+        try expect(drag.showsHandIconOnly && drag.toolTip == "Drag the drawing into Finder or another app" && drag.accessibilityLabel() == "Drag Me", "The drag well is an open-hand icon with a tooltip and keeps its VoiceOver label")
+        try expect(NSImage(systemSymbolName: DragExportView.handSymbolName, accessibilityDescription: nil) != nil, "The hand symbol exists")
+        try expect(drag.prepare != nil && drag.onBegin != nil && drag.onEnd != nil, "The icon-only well is still the drag source")
+        let size = NSSize(width: 48, height: 36)
+        drag.frame = NSRect(origin: .zero, size: size)
+        func inkedPixels() throws -> Int {
+            guard let rep = drag.bitmapImageRepForCachingDisplay(in: drag.bounds) else { throw Failure(description: "No bitmap for the drag well") }
+            drag.cacheDisplay(in: drag.bounds, to: rep)
+            var count = 0
+            for x in 0..<rep.pixelsWide { for y in 0..<rep.pixelsHigh where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.1 { count += 1 } }
+            return count
+        }
+        let inked = try inkedPixels()
+        try expect(inked > 20, "The well draws the hand glyph (\(inked) inked pixels)")
+        app.dragExportView?.overview = try image(size: CGSize(width: 60, height: 40))
+        let withThumb = try inkedPixels()
+        try expect(withThumb == inked, "A thumbnail never changes the icon-only well (\(withThumb) vs \(inked))")
         let logo = try collect(NSImageView.self, in: chrome.header).first.unwrap("logo")
         try expect(logo.toolTip == "OpenSkitch" && logo.accessibilityLabel() == "OpenSkitch", "The logo has a tooltip and label instead of title text")
     }

@@ -66,7 +66,7 @@ extension AppDelegate {
         let drag = DragExportView(); dragExportView = drag
         drag.drawsBackground = false
         configureDragExport(drag)
-        drag.showsThumbnailOnly = true
+        drag.showsHandIconOnly = true
         drag.toolTip = "Drag the drawing into Finder or another app"
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20)

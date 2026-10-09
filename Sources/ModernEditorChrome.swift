@@ -213,6 +213,7 @@ final class ModernEditorChrome: NSView {
         bleed.contentView = bleedImage
         bleed.alphaValue = 0.6
         bleed.isHidden = true
+        scrollView.contentView = CenteringClipView()
         scrollView.documentView = controls.canvas
         scrollView.hasHorizontalScroller = true
         scrollView.hasVerticalScroller = true
@@ -340,8 +341,8 @@ final class ModernEditorChrome: NSView {
         let formatSurface = GlassChrome.surface(formatHolder, shape: .capsule, accessibility: accessibility,
                                                 size: NSSize(width: ceil(widestFormat) + 44, height: Metrics.commandHeight))
         register(formatSurface, for: controls.dragFormatControl, formatHolder)
-        let dragSurface = GlassChrome.surface(controls.dragExportView, shape: .rounded(Metrics.dragRadius), accessibility: accessibility,
-                                              size: NSSize(width: 96, height: Metrics.commandHeight))
+        let dragSurface = GlassChrome.surface(controls.dragExportView, shape: .capsule, accessibility: accessibility,
+                                              size: Metrics.iconButton)
         register(dragSurface, for: controls.dragExportView)
         let shareSurface = iconPill(shareButton)
         shareButton.setAccessibilityLabel("Upload to destination")
@@ -419,5 +420,43 @@ final class ModernEditorChrome: NSView {
             top: headerTop + Metrics.headerHeight + gap, left: margin + Metrics.railWidth + gap,
             bottom: footerBottom + statusHeight + rowGap + rowHeight + gap, right: margin + Metrics.rightRailWidth + gap)
         updateBackdropAndBleed()
+    }
+}
+
+
+/// Modern only: a document smaller than the visible area sits in the middle of it, per axis. A larger one is
+/// constrained exactly as NSClipView does, so scrolling, panning and the scroll origin are unchanged.
+final class CenteringClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var rect = super.constrainBoundsRect(proposedBounds)
+        guard let frame = documentView?.frame else { return rect }
+        if frame.width < rect.width { rect.origin.x = frame.minX - (rect.width - frame.width) / 2 }
+        if frame.height < rect.height { rect.origin.y = frame.minY - (rect.height - frame.height) / 2 }
+        return rect
+    }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        recentre()
+    }
+
+    override func viewFrameChanged(_ notification: Notification) {
+        super.viewFrameChanged(notification)
+        recentre()
+    }
+
+    override func layout() {
+        super.layout()
+        recentre()
+    }
+
+    override func viewBoundsChanged(_ notification: Notification) {
+        super.viewBoundsChanged(notification)
+        recentre()
+    }
+
+    private func recentre() {
+        let target = constrainBoundsRect(bounds).origin
+        if target != bounds.origin { scroll(to: target) }
     }
 }
