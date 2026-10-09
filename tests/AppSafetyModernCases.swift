@@ -25,7 +25,10 @@ extension AppSafetyTests {
             ("writeLayoutEvidence reports the Modern style and finds the header and brand one level deeper", modernLayoutEvidence),
             ("Main menu items carry symbols in Modern only and keep validating", modernMenus),
             ("Color popover follows the system appearance in Modern and stays aqua in Classic", modernPalettePopover),
-            ("Modern centres a small canvas in the editor area at default and minimum size and leaves a larger one at today's origin", modernCanvasCentred),
+            ("Modern centres a small canvas in the editor area at default and minimum size and leaves larger and wide documents panning unconstrained", modernCanvasCentred),
+            ("Hide and Undo tooltips read their shortcuts from the real menu items", modernShortcutHintsFollowMenu),
+            ("Rename is unavailable during Frame capture and termination", modernRenameAvailability),
+            ("The Frame status hint fits at the default width and carries the full text as a tooltip", modernFrameStatusFits),
             ("A click at the visual centre of the centred canvas selects the element at the document centre", modernCanvasCentredHitTest),
             ("Modern puts every tool and Resize in the top bar, drops the left rail, and keeps Undo and Wipe under the slider", modernTopBarLayout),
             ("Modern has one footer row and no file-name field; the window title is the document name and Rename changes the export name", modernDocumentNameInTitle),
@@ -58,6 +61,10 @@ extension AppSafetyTests {
             }
             for pair in zip(chrome.header.subviews.sorted { $0.frame.minX < $1.frame.minX }, chrome.header.subviews.sorted { $0.frame.minX < $1.frame.minX }.dropFirst()) {
                 try expect(pair.0.frame.maxX <= pair.1.frame.minX + 0.5, "\(name): top bar groups do not overlap")
+            }
+            if let crop = chrome.toolButtons["crop"] {
+                let separation = chrome.resizeButton.convert(chrome.resizeButton.bounds, to: content).minX - crop.convert(crop.bounds, to: content).maxX
+                try expect(separation >= 28, "\(name): Resize is set apart from the tool row (\(separation) pt after Crop)")
             }
             try expect(chrome.header.subviews.count == 3, "\(name): the top bar is Hide/Toolbox/Photos, the tools with Resize, and Save/History")
             var all: [NSView] = []
@@ -121,17 +128,34 @@ extension AppSafetyTests {
             let border = app.canvasBorder.frame, canvasInBorderSpace = app.canvas.convert(app.canvas.bounds, to: app.canvasBorder.superview)
             try expect(abs(border.midX - canvasInBorderSpace.midX) <= 1 && abs(border.midY - canvasInBorderSpace.midY) <= 1, "The border follows the centred canvas at \(name) size")
         }
-        // Larger than the view: today's behaviour, no centring offset.
+        // Larger than the view: constrained exactly like NSClipView, never centred, and the pan survives a resize.
+        app.setWindowFrame(defaultFrame)
         app.canvas.newBlank(size: CGSize(width: 3000, height: 2000))
         app.setCanvasDisplayZoom(1, label: "Test")
         app.window.contentView?.layoutSubtreeIfNeeded()
-        let clip = chrome.scrollView.contentView
-        clip.scroll(to: .zero)
-        try expect(app.canvas.frame.width > clip.frame.width && clip.bounds.origin == .zero, "A larger canvas keeps the top-left scroll origin: \(clip.bounds.origin)")
-        clip.scroll(to: CGPoint(x: 120, y: 80)); chrome.scrollView.reflectScrolledClipView(clip)
-        try expect(clip.bounds.origin == CGPoint(x: 120, y: 80), "Panning a larger canvas is unchanged: \(clip.bounds.origin)")
+        guard let clip = chrome.scrollView.contentView as? CenteringClipView else { throw Failure(description: "Modern scroll view lacks the centring clip view") }
+        let panned = CGPoint(x: 120, y: 80)
+        try expect(app.canvas.frame.width > clip.frame.width && app.canvas.frame.height > clip.frame.height, "The larger fixture exceeds the viewport on both axes")
+        try expect(clip.constrainBoundsRect(NSRect(origin: panned, size: clip.bounds.size)).origin == panned,
+                   "A larger document keeps a proposed pan origin untouched by the centring clip view")
+        app.canvas.scroll(panned); chrome.scrollView.reflectScrolledClipView(clip)
+        try expect(clip.bounds.origin == panned, "Panning through the canvas reaches the clip view unchanged: \(clip.bounds.origin)")
+        for (name, frame) in [("minimum", CGRect(origin: defaultFrame.origin, size: app.window.minSize)), ("default", defaultFrame)] {
+            app.setWindowFrame(frame)
+            app.window.contentView?.layoutSubtreeIfNeeded(); app.updateViewportChrome()
+            try expect(clip.bounds.origin == panned, "The panned origin survives a resize to \(name) size: \(clip.bounds.origin)")
+        }
+        // A wide, short document centres on y only; x keeps panning.
+        app.canvas.newBlank(size: CGSize(width: 3000, height: 200))
+        app.setCanvasDisplayZoom(1, label: "Test")
         app.window.contentView?.layoutSubtreeIfNeeded()
-        try expect(clip.bounds.origin == CGPoint(x: 120, y: 80), "A layout pass does not move a panned larger canvas: \(clip.bounds.origin)")
+        let doc = app.canvas.frame
+        try expect(doc.width > clip.bounds.width && doc.height < clip.bounds.height - 100, "The wide fixture is wider and shorter than the viewport")
+        let centredY = doc.minY - (clip.bounds.height - doc.height) / 2
+        let constrained = clip.constrainBoundsRect(NSRect(origin: CGPoint(x: 120, y: 0), size: clip.bounds.size)).origin
+        try expect(constrained.x == 120 && abs(constrained.y - centredY) < 0.5, "A wide document pans on x and centres on y: \(constrained) vs y \(centredY)")
+        app.canvas.scroll(CGPoint(x: 120, y: 0)); chrome.scrollView.reflectScrolledClipView(clip)
+        try expect(clip.bounds.origin.x == 120 && abs(clip.bounds.origin.y - centredY) < 0.5, "Panning a wide document keeps x and the y centre: \(clip.bounds.origin)")
     }
 
     @available(macOS 26, *)
@@ -337,7 +361,7 @@ extension AppSafetyTests {
         let modern = controlFacts(app)
         try expect(classic.controls.count >= 40 && modern.count == classic.controls.count, "Both windows report the same set of facts (\(classic.controls.count) vs \(modern.count))")
         // Modern tooltips lead with the command name (and Size shows its live value), so only these tips may differ; every label, title and the rest still match.
-        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip", "toolbox.tip"]
+        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip"]
         let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] && !modernTips.contains($0) }
             .map { "\($0): classic '\(classic.controls[$0] ?? "")' vs modern '\(modern[$0] ?? "")'" }
         try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
@@ -392,7 +416,7 @@ extension AppSafetyTests {
             try verify("overlay preference \(show)")
         }
         app.canvas.strokeWidth = 9.38; app.syncDrawingControls()
-        try expect(app.widthControl.toolTip == "Size 9" && (app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue == 9.375 || abs(((app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue ?? 0) - 9.38) < 0.01,
+        try expect(app.widthControl.toolTip == "Size 9" && ((app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue == 9.375 || abs(((app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue ?? 0) - 9.38) < 0.01),
                    "The slider tooltip shows the whole-number size and VoiceOver reads its value")
         let before = app.widthControl.toolTip
         app.canvas.strokeWidth = 3; app.syncDrawingControls()
@@ -415,6 +439,59 @@ extension AppSafetyTests {
         app.dragExportView?.overview = try image(size: CGSize(width: 60, height: 40))
         let withThumb = try inkedPixels()
         try expect(withThumb == inked, "A thumbnail never changes the icon-only well (\(withThumb) vs \(inked))")
+    }
+
+    @available(macOS 26, *)
+    private static func modernShortcutHintsFollowMenu() throws {
+        let (fixture, chrome) = try modernFixture()
+        _ = fixture
+        func item(_ action: Selector) throws -> NSMenuItem {
+            var found: NSMenuItem?
+            func walk(_ menu: NSMenu) { for i in menu.items { if i.action == action { found = i }; if let sub = i.submenu { walk(sub) } } }
+            walk(try NSApp.mainMenu.unwrap("main menu"))
+            return try found.unwrap("menu item for \(action)")
+        }
+        let minimize = try item(#selector(AppDelegate.vanish)), undo = try item(#selector(AppDelegate.undo))
+        let (oldKey, oldMask) = (minimize.keyEquivalent, minimize.keyEquivalentModifierMask)
+        defer { minimize.keyEquivalent = oldKey; minimize.keyEquivalentModifierMask = oldMask }
+        try expect(chrome.hideButton.toolTip == "Hide (⌘" + minimize.keyEquivalent.uppercased() + ")", "Hide's tooltip suffix is Minimize's key equivalent: \(chrome.hideButton.toolTip ?? "nil")")
+        try expect(chrome.undoButton.toolTip == "Undo (⌘" + undo.keyEquivalent.uppercased() + ")", "Undo's tooltip suffix is Undo's key equivalent: \(chrome.undoButton.toolTip ?? "nil")")
+        minimize.keyEquivalent = "h"; minimize.keyEquivalentModifierMask = [.command, .option, .shift]
+        chrome.refreshShortcutHints()
+        try expect(chrome.hideButton.toolTip == "Hide (⌥⇧⌘H)", "Changing Minimize's shortcut changes Hide's tooltip: \(chrome.hideButton.toolTip ?? "nil")")
+    }
+
+    @available(macOS 26, *)
+    private static func modernRenameAvailability() throws {
+        let (fixture, _) = try modernFixture()
+        let app = fixture.app
+        let rename = try NSApp.mainMenu.unwrap("main menu").items.compactMap(\.submenu).flatMap(\.items).first { $0.action == #selector(AppDelegate.renameDocument) }.unwrap("Rename item")
+        try expect(app.validateMenuItem(rename), "Rename is available at rest")
+        app.frameCaptureInProgress = true
+        try expect(!app.validateMenuItem(rename), "Rename is disabled during a Frame capture")
+        let name = app.nameField.stringValue
+        app.renameDocument()
+        try expect(app.nameField.stringValue == name, "renameDocument does nothing during a Frame capture")
+        app.frameCaptureInProgress = false
+        app.terminationStarted = true
+        try expect(!app.validateMenuItem(rename), "Rename is disabled while terminating")
+        app.terminationStarted = false
+        try expect(app.validateMenuItem(rename), "Rename returns after the state clears")
+    }
+
+    @available(macOS 26, *)
+    private static func modernFrameStatusFits() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        app.setWindowFrame(CGRect(origin: app.window.frame.origin, size: CGSize(width: 1024, height: app.window.frame.height)))
+        app.enterFrame(keepingAnnotations: false, manualFlags: [])
+        defer { app.cancelFrame() }
+        app.window.contentView?.layoutSubtreeIfNeeded()
+        let full = app.status.attributedStringValue.size().width
+        try expect(app.status.stringValue == "Frame: position the window, then Snap" && (app.status.toolTip ?? "").contains("Position the window, then choose Snap Frame"),
+                   "Frame status is the short hint with the full text as its tooltip: \(app.status.stringValue) / \(app.status.toolTip ?? "nil")")
+        try expect(full <= app.status.frame.width + 0.5, "The Frame hint fits at 1024 wide (\(full) vs \(app.status.frame.width))")
+        _ = chrome
     }
 
     @available(macOS 26, *)

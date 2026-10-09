@@ -7,6 +7,7 @@ extension AppDelegate {
             let chrome = modernChrome as? ModernEditorChrome
             chrome?.frameMode = on
             chrome?.syncSnapPresentation()
+            if !on { status.toolTip = nil }
         }
     }
 

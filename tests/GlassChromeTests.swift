@@ -72,6 +72,14 @@ private enum GlassChromeTests {
     static func main() {
         _ = NSApplication.shared
         NSApp.setActivationPolicy(.prohibited)
+        // The chrome reads Hide's and Undo's shortcuts from the real menu bar, so the rig has one.
+        let bar = NSMenu()
+        for (action, key) in [(#selector(ActionTarget.hide(_:)), "m"), (#selector(ActionTarget.undo(_:)), "z")] {
+            let item = NSMenuItem(), menu = NSMenu()
+            menu.addItem(NSMenuItem(title: "Item", action: action, keyEquivalent: key))
+            item.submenu = menu; bar.addItem(item)
+        }
+        NSApp.mainMenu = bar
         FontAwesomeFont.resetForTesting()
         buttonTests()
         sliderTests()
@@ -924,7 +932,7 @@ private enum GlassChromeTests {
         expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == false, "\(label): a shown Cancel returns with its glass")
         chrome.cancelFrameButton.isHidden = true
         expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == true, "\(label): a hidden Cancel leaves no empty glass")
-        for toolbox in [shared.toolbox] { expect(chrome.surface(for: toolbox)?.fixedSize == GlassChrome.Metrics.iconButton, "\(label): the Toolbox surface is the shared icon size") }
+        for toolbox in [shared.toolbox] { expect(chrome.surface(for: toolbox)?.fixedSize == GlassChrome.Metrics.toolboxButton, "\(label): the Toolbox surface is wide enough for its glyph and chevron") }
     }
 
     /// Every Modern command is icon-only, with a tooltip (name plus real shortcut) and the old title as its VoiceOver label.

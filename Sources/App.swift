@@ -989,6 +989,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             return !terminationStarted
         }
         if menuItem.action == #selector(toggleActualSize) { menuItem.state = isActualSize ? .on : .off; return canToggleActualSize }
+        if menuItem.action == #selector(renameDocument) { return !terminationStarted && !frameCaptureInProgress && window?.attachedSheet == nil }
         if menuItem.action == #selector(resize) { return !isActualSize && !frameMode }
         if menuItem.action == #selector(changeSmoothing(_:)) {
             menuItem.state = (menuItem.representedObject as? String) == canvas.strokeSmoothing.rawValue ? .on : .off
@@ -1884,7 +1885,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         snapButton.toolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
         cancelFrameButton.isHidden = false
         setModernFrameMode(true)
-        status.stringValue = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
+        let fullStatus = keepingAnnotations ? "Frame preview · Snap Frame replaces the picture and keeps your drawing" : "Frame preview · Position the window, then choose Snap Frame"
+        if modernChrome != nil {
+            status.stringValue = keepingAnnotations ? "Frame: Snap keeps your drawing" : "Frame: position the window, then Snap"
+            status.toolTip = fullStatus
+        } else { status.stringValue = fullStatus }
     }
     @objc func cancelFrame() {
         guard !frameCaptureInProgress else { return }
@@ -1989,7 +1994,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     /// Modern has no file-name field, so the document name lives in the window title and changes here.
     @objc func renameDocument() {
-        guard !terminationStarted, window.attachedSheet == nil else { return }
+        guard !terminationStarted, !frameCaptureInProgress, window.attachedSheet == nil else { return }
         if let name = prompt("Rename", text: "Document name", value: nameField.stringValue) { applyDocumentName(name) }
     }
     func applyDocumentName(_ name: String) {

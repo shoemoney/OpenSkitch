@@ -407,6 +407,10 @@ enum GlassChrome {
         static let toolButton = NSSize(width: 48, height: 40)
         /// Every icon-only command shares this glass; Snap, the primary one, is the larger `primaryButton`.
         static let iconButton = NSSize(width: 48, height: 36)
+        /// The Toolbox glyph plus its chevron needs more room than a plain icon.
+        static let toolboxButton = NSSize(width: 60, height: 36)
+        /// Resize is an image command, not a drawing tool: it sits well apart from the tool row.
+        static let resizeSeparation: CGFloat = 28
         static let primaryButton = NSSize(width: 56, height: 44)
         static let commandHeight: CGFloat = 36
         static let railWidth: CGFloat = 64, rightRailWidth: CGFloat = 64, headerHeight: CGFloat = 44

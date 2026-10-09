@@ -47,8 +47,8 @@ final class ModernEditorChrome: NSView {
         "fill": .fillDrip, "eraser": .eraser, "text": .text, "arrow": .arrowUpRight, "crop": .cropSimple
     ]
 
-    /// Narrowest window the one-row top bar fits in without clipping (measured 934 pt, rounded up).
-    static let minimumWindowWidth: CGFloat = 940
+    /// Narrowest window the one-row top bar fits in without clipping (measured 976 pt, rounded up).
+    static let minimumWindowWidth: CGFloat = 980
 
     let scrollView = NSScrollView()
     let header = NSView()
@@ -71,6 +71,7 @@ final class ModernEditorChrome: NSView {
     }
 
     private let controls: SharedControls
+    private let hideAction: Selector, undoAction: Selector
     private let toolOrder: [String]
     private let accessibilityProvider: @MainActor () -> ChromeAccessibility
     private let backdrop = NSVisualEffectView()
@@ -82,6 +83,8 @@ final class ModernEditorChrome: NSView {
     init(controls: SharedControls, actions: Actions, toolOrder: [String],
          accessibility: @escaping @MainActor () -> ChromeAccessibility = { .live }) {
         self.controls = controls
+        self.hideAction = actions.hide
+        self.undoAction = actions.undo
         self.toolOrder = toolOrder
         self.accessibilityProvider = accessibility
         self.accessibility = accessibility()
@@ -97,14 +100,14 @@ final class ModernEditorChrome: NSView {
             if let toolTip { button.toolTip = toolTip }
             return button
         }
-        hideButton = make("Hide", .eyeSlash, actions.hide, shortcut: "⌘M")
+        hideButton = make("Hide", .eyeSlash, actions.hide, shortcut: Self.menuShortcut(for: actions.hide))
         photosButton = make("Photos", .images, actions.photos)
         saveButton = make("Save", .floppyDisk, actions.saveHistory, toolTip: "Save to History")
         historyButton = make("History", .clockRotateLeft, actions.showHistory)
         snapButton = make("Snap", .crosshairs, actions.snap, toolTip: Self.snapToolTip, pointSize: GlassChrome.Metrics.primaryIconPointSize)
         cancelFrameButton = make("Cancel", .xmark, actions.cancelFrame)
         fontButton = make("Font", .font, actions.font)
-        undoButton = make("Undo", .arrowRotateLeft, actions.undo, shortcut: "⌘Z")
+        undoButton = make("Undo", .arrowRotateLeft, actions.undo, shortcut: Self.menuShortcut(for: actions.undo))
         wipeButton = make("Wipe", .broom, actions.wipe)
         resizeButton = make("Resize…", .rulerCombined, actions.resize)
         // Icon-only upload command: a native SF Symbol, no title, so nothing but the explicit label is read aloud.
@@ -122,6 +125,32 @@ final class ModernEditorChrome: NSView {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    /// The key equivalent the main menu gives an action, written the way menus show it (⌃⌥⇧⌘ then the key); nil when no item has one.
+    static func menuShortcut(for action: Selector) -> String? {
+        func find(_ menu: NSMenu) -> NSMenuItem? {
+            for item in menu.items {
+                if item.action == action, !item.keyEquivalent.isEmpty { return item }
+                if let submenu = item.submenu, let found = find(submenu) { return found }
+            }
+            return nil
+        }
+        guard let item = (NSApp as NSApplication?)?.mainMenu.flatMap(find) else { return nil }
+        var mask = item.keyEquivalentModifierMask
+        if item.keyEquivalent != item.keyEquivalent.lowercased() { mask.insert(.shift) }
+        var text = ""
+        if mask.contains(.control) { text += "⌃" }
+        if mask.contains(.option) { text += "⌥" }
+        if mask.contains(.shift) { text += "⇧" }
+        if mask.contains(.command) { text += "⌘" }
+        return text + item.keyEquivalent.uppercased()
+    }
+
+    /// Re-reads Hide's and Undo's shortcuts from the menu bar, so a changed key equivalent changes the tooltip.
+    func refreshShortcutHints() {
+        hideButton.shortcutHint = Self.menuShortcut(for: hideAction)
+        undoButton.shortcutHint = Self.menuShortcut(for: undoAction)
+    }
 
     @objc private func displayOptionsChanged(_ notification: Notification) {
         accessibility = accessibilityProvider()
@@ -232,9 +261,9 @@ final class ModernEditorChrome: NSView {
         controls.toolbox.isBordered = false
         controls.toolbox.contentTintColor = .labelColor
         let hideSurface = iconPill(hideButton)
-        let toolboxHolder = ControlHolderView(controls.toolbox, inset: 6)
+        let toolboxHolder = ControlHolderView(controls.toolbox, inset: 8)
         let toolboxSurface = GlassChrome.surface(toolboxHolder, shape: .capsule, accessibility: accessibility,
-                                                 size: Metrics.iconButton)
+                                                 size: Metrics.toolboxButton)
         register(toolboxSurface, for: controls.toolbox, toolboxHolder)
         let photosSurface = iconPill(photosButton)
         let saveSurface = iconPill(saveButton)
@@ -261,7 +290,7 @@ final class ModernEditorChrome: NSView {
         }
         let resizeSurface = iconPill(resizeButton)
         let toolGroup = GlassChrome.group(toolSurfaces + [resizeSurface], orientation: .horizontal, identifier: "GlassToolBar", spacing: Metrics.toolSpacing)
-        if let stack = toolGroup.contentView as? NSStackView { stack.setCustomSpacing(Metrics.groupSpacing, after: toolSurfaces.last ?? resizeSurface) }
+        if let stack = toolGroup.contentView as? NSStackView { stack.setCustomSpacing(Metrics.resizeSeparation, after: toolSurfaces.last ?? resizeSurface) }
         for view in [leadingGroup, toolGroup, trailingGroup] {
             view.translatesAutoresizingMaskIntoConstraints = false
             header.addSubview(view)

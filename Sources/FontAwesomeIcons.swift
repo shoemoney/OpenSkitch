@@ -69,7 +69,7 @@ enum FAIcon: String, CaseIterable, Sendable {
         case .xmark: return "xmark"
         case .font: return "textformat.size"
         case .arrowRotateLeft: return "arrow.uturn.backward"
-        case .broom: return "clear"
+        case .broom: return "trash"
         case .maximize: return "arrow.up.left.and.arrow.down.right"
         case .minimize: return "arrow.down.right.and.arrow.up.left"
         case .rulerCombined: return "ruler"
