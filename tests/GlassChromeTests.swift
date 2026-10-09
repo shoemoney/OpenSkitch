@@ -63,8 +63,8 @@ private enum GlassChromeTests {
     }
 
     private static let toolOrder = ["select", "brush", "line", "ellipse", "rectangle", "fill", "eraser", "text", "arrow", "crop"]
-    private static let snapToolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-    private static let snapFrameToolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
+    private static let snapToolTip = "Snap: drag an area or click a window; right-click or Control-click for Fullscreen"
+    private static let snapFrameToolTip = "Snap Frame: capture the area inside the frame; hold Shift for a six-second timer"
     private static let plain = ChromeAccessibility.none
     private static let contrast = ChromeAccessibility(reduceTransparency: false, increaseContrast: true, reduceMotion: false)
     private static let calm = ChromeAccessibility(reduceTransparency: false, increaseContrast: false, reduceMotion: true)
@@ -557,7 +557,7 @@ private enum GlassChromeTests {
         let stack = group.contentView as? NSStackView
         expect(stack?.arrangedSubviews.count == 2 && stack?.spacing == GlassChrome.Metrics.surfaceSpacing && stack?.orientation == .horizontal, "Group stacks its surfaces")
         let metrics = GlassChrome.Metrics.self
-        expect(metrics.toolButton == NSSize(width: 48, height: 40) && metrics.commandHeight == 36 && metrics.railWidth == 64 && metrics.rightRailWidth == 160 && metrics.headerHeight == 44, "Metrics match the plan with Apple's 36 pt Extra Large commands")
+        expect(metrics.toolButton == NSSize(width: 48, height: 40) && metrics.commandHeight == 36 && metrics.railWidth == 64 && metrics.rightRailWidth == 64 && metrics.headerHeight == 44, "Metrics match the plan with Apple's 36 pt Extra Large commands")
         expect(metrics.iconPointSize == 22 && metrics.labelPointSize == 20 && metrics.groupSpacing == 10 && metrics.surfaceSpacing == 6 && metrics.containerSpacing == 2, "Spacing and type metrics match the plan")
     }
 
@@ -690,7 +690,7 @@ private enum GlassChromeTests {
             if !(control is NSImageView) {
                 expect((control.font?.pointSize ?? 0) >= 18, "\(label): \(describe(control)) is at least 18 pt (\(control.font?.pointSize ?? 0))")
             }
-            if let button = control as? GlassChromeButton, !button.title.isEmpty {
+            if let button = control as? GlassChromeButton, !button.visibleTitle.isEmpty {
                 expect(button.fittingSize.width <= button.frame.width + 0.5, "\(label): \(describe(button)) title fits its surface (\(button.fittingSize.width) in \(button.frame.width))")
             }
         }
@@ -743,7 +743,7 @@ private enum GlassChromeTests {
         expect(abs(footerY - rect(chrome.shareButton, in: rig).midY) < 0.5, "\(label): footer controls share a baseline")
         expect(rect(rig.controls.status, in: rig).maxY < rect(chrome.actualButton, in: rig).minY, "\(label): the status row sits below the command row")
         expect(rect(chrome.undoButton, in: rig).minY < rect(rig.controls.widthControl, in: rig).minY, "\(label): Undo and Wipe are pinned below the drawing controls")
-        let rightEdge = [chrome.snapButton, chrome.fontButton, chrome.undoButton].map { rect($0, in: rig).maxX }
+        let rightEdge = [chrome.snapButton, chrome.fontButton, chrome.undoButton].map { rect($0, in: rig).midX.rounded() }
         expect(Set(rightEdge).count == 1 && rightEdge[0] < rig.content.bounds.maxX, "\(label): the right rail is one aligned column")
         // The canvas border lives where classic puts it, beside the scroll view and above everything.
         expect(rig.controls.canvasBorder.superview === chrome.scrollView.superview && chrome.subviews.last === rig.controls.canvasBorder, "\(label): the canvas border is a topmost sibling of the scroll view")
@@ -796,11 +796,10 @@ private enum GlassChromeTests {
         let chrome = rig.chrome
         expect(chrome.header.identifier?.rawValue == "OpenSkitchHeader", "\(label): header identifier")
         let brand = chrome.header.subviews.first { $0.identifier?.rawValue == "OpenSkitchBrand" } as? NSStackView
-        let logo = brand?.arrangedSubviews.first as? NSImageView, name = brand?.arrangedSubviews.last as? NSTextField
-        expect(logo?.accessibilityLabel() == "OpenSkitch logo" && logo?.image === rig.controls.brandLogo, "\(label): logo keeps the classic label")
-        expect(name?.stringValue == "OpenSkitch" && name?.font?.pointSize == 20, "\(label): brand name is 20 pt")
+        let logo = brand?.arrangedSubviews.first as? NSImageView
+        expect(logo?.accessibilityLabel() == "OpenSkitch" && logo?.toolTip == "OpenSkitch" && logo?.image === rig.controls.brandLogo, "\(label): the logo carries the OpenSkitch label and tooltip")
+        expect(brand?.arrangedSubviews.count == 1 && !chrome.header.subviews.contains { ($0 as? NSTextField) != nil }, "\(label): the brand is the logo alone, no title text")
         expect(abs((logo?.frame.width ?? 0) - 32) < 0.5 && abs((logo?.frame.height ?? 0) - 32) < 0.5, "\(label): logo is 32 pt")
-        expect((name?.font?.fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any])?[.weight] as? CGFloat == NSFont.Weight.semibold.rawValue, "\(label): brand name is semibold")
         expect(chrome.toolButtons.count == 10 && Set(chrome.toolButtons.keys) == Set(toolOrder), "\(label): ten tool buttons, crop included")
         for id in toolOrder {
             guard let button = chrome.toolButtons[id] else { continue }
@@ -819,14 +818,14 @@ private enum GlassChromeTests {
                                      (chrome.historyButton, "History", "showHistory"), (chrome.snapButton, "Snap", "snap"),
                                      (chrome.cancelFrameButton, "Cancel", "cancelFrame"), (chrome.fontButton, "Font", "font"), (chrome.undoButton, "Undo", "undo"),
                                      (chrome.wipeButton, "Wipe", "wipe"), (chrome.actualButton, "Actual Size", "actualSize"), (chrome.resizeButton, "Resize…", "resize")] {
-            expect(button.title == title, "\(label): \(title) keeps its classic title")
+            expect(button.title == title, "\(label): \(title) keeps its classic name")
+            expect(button.accessibilityLabel() == title, "\(label): \(title) is read by its old title")
             expect(button.controlSize == .extraLarge, "\(label): \(title) uses Apple's Extra Large control size")
-            expect(button.icon != nil && button.image != nil && button.imagePosition == .imageLeading, "\(label): \(title) shows icon and label")
-            expect((button.font?.pointSize ?? 0) == 20, "\(label): \(title) label is 20 pt")
+            expect(button.icon != nil && button.image != nil && button.imagePosition == .imageOnly && button.visibleTitle.isEmpty, "\(label): \(title) is icon-only")
             expect(button.identifier == nil, "\(label): \(title) has no identifier, as in classic")
+            let size = button === chrome.snapButton ? GlassChrome.Metrics.primaryButton : GlassChrome.Metrics.iconButton
             expect(chrome.surface(for: button)?.shape == .capsule, "\(label): \(title) is a capsule")
-            expect(chrome.surface(for: button)?.fixedSize?.height == 36 && abs(rect(button, in: rig).height - 36) < 0.5, "\(label): \(title) is a 36 pt command")
-            expect(36 - (button.font.map { $0.ascender - $0.descender + $0.leading } ?? 99) >= 8, "\(label): \(title) keeps 8 pt of vertical breathing room in its capsule")
+            expect(chrome.surface(for: button)?.fixedSize == size && abs(rect(button, in: rig).height - size.height) < 0.5 && abs(rect(button, in: rig).width - size.width) < 0.5, "\(label): \(title) is one consistent glass size \(size)")
             rig.target.hits.removeAll()
             button.performClick(nil)
             expect(rig.target.hits == [hit], "\(label): \(title) sends its action (\(rig.target.hits))")
@@ -847,11 +846,11 @@ private enum GlassChromeTests {
         expect(!controlTitles.contains { $0.lowercased().contains("cam") }, "\(label): no Cam/Camera button exists in the Modern rail (screen capture only)")
         expect(Mirror(reflecting: chrome).children.allSatisfy { $0.label?.lowercased().contains("camera") != true }, "\(label): the chrome owns no camera control")
         expect(chrome.actualButton.selectedIcon == .minimize && !chrome.actualButton.selectionTints, "\(label): Actual Size swaps its glyph without tinting")
-        expect(chrome.surface(for: chrome.actualButton)?.fixedSize?.width ?? 0 >= 160, "\(label): Actual Size is wide enough for Normal View")
         chrome.actualButton.title = "Normal View"
-        rig.content.layoutSubtreeIfNeeded()
-        expect(chrome.actualButton.fittingSize.width <= chrome.actualButton.frame.width + 0.5, "\(label): Normal View fits the Actual Size surface")
+        expect(chrome.actualButton.accessibilityLabel() == "Normal View" && chrome.actualButton.toolTip == "Normal View" && chrome.actualButton.visibleTitle.isEmpty,
+               "\(label): the Actual Size retitle lands in the tooltip and label, never as text")
         chrome.actualButton.title = "Actual Size"
+        iconOnlyChecks(rig, label)
 
         // Shared controls: re-parented, floors applied, caller-owned strings untouched.
         let shared = rig.controls
@@ -860,9 +859,9 @@ private enum GlassChromeTests {
             expect(control.controlSize == .extraLarge && (control.font?.pointSize ?? 0) >= 18, "\(label): \(describe(control)) is Extra Large and keeps its readable font")
         }
         expect(shared.toolbox.imagePosition == .imageOnly && shared.toolbox.itemArray.first?.image != nil, "\(label): Toolbox shows its icon")
-        expect(chrome.surface(for: shared.sizeLabel) === chrome.surface(for: shared.widthControl) && chrome.surface(for: shared.widthControl)?.shape == .rounded(12), "\(label): Size label and slider share one rounded surface")
+        expect(shared.sizeLabel.superview == nil && chrome.surface(for: shared.widthControl)?.shape == .rounded(12), "\(label): the slider has a rounded surface and the Size text is not shown")
         expect((shared.widthControl as? BezelSizeSlider)?.style == .modern, "\(label): the slider uses the vector style")
-        expect(abs(rect(shared.widthControl, in: rig).width - 36) < 0.5 && abs(rect(shared.widthControl, in: rig).height - 82) < 0.5, "\(label): the slider is Apple's 36 pt wide Extra Large slider, 82 pt tall")
+        expect(abs(rect(shared.widthControl, in: rig).width - 36) < 0.5 && abs(rect(shared.widthControl, in: rig).height - 96) < 0.5, "\(label): the slider is Apple's 36 pt wide Extra Large slider, 96 pt tall")
         expect(chrome.surface(for: shared.dragExportView)?.shape == .rounded(14), "\(label): Drag Me is a rounded r=14 surface")
         expect(chrome.surface(for: shared.nameField)?.shape == .capsule && !shared.nameField.drawsBackground, "\(label): the name field sits in a glass capsule")
         expect(chrome.surface(for: shared.dragFormatControl)?.shape == .capsule, "\(label): the format popup sits in a glass capsule")
@@ -901,7 +900,34 @@ private enum GlassChromeTests {
         expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == false, "\(label): a shown Cancel returns with its glass")
         chrome.cancelFrameButton.isHidden = true
         expect(chrome.surface(for: chrome.cancelFrameButton)?.isHidden == true, "\(label): a hidden Cancel leaves no empty glass")
-        for toolbox in [shared.toolbox] { expect(chrome.surface(for: toolbox)?.fixedSize?.width ?? 0 >= 64, "\(label): the Toolbox surface has room for icon and chevron") }
+        for toolbox in [shared.toolbox] { expect(chrome.surface(for: toolbox)?.fixedSize == GlassChrome.Metrics.iconButton, "\(label): the Toolbox surface is the shared icon size") }
+    }
+
+    /// Every Modern command is icon-only, with a tooltip (name plus real shortcut) and the old title as its VoiceOver label.
+    @available(macOS 26, *)
+    private static func iconOnlyChecks(_ rig: Rig, _ label: String) {
+        let chrome = rig.chrome
+        let expected: [(NSButton, String, String)] = [
+            (chrome.hideButton, "Hide", "Hide (⌘M)"), (chrome.photosButton, "Photos", "Photos"), (chrome.saveButton, "Save", "Save to History"),
+            (chrome.historyButton, "History", "History"), (chrome.snapButton, "Snap", snapToolTip), (chrome.cancelFrameButton, "Cancel", "Cancel"),
+            (chrome.fontButton, "Font", "Font"), (chrome.undoButton, "Undo", "Undo (⌘Z)"), (chrome.wipeButton, "Wipe", "Wipe"),
+            (chrome.actualButton, "Actual Size", "Actual Size"), (chrome.resizeButton, "Resize…", "Resize…"),
+            (chrome.shareButton, "Upload to destination", "Upload")]
+        for (button, name, tip) in expected {
+            expect(button.imagePosition == .imageOnly, "\(label): \(name) draws only its icon")
+            expect((button as? GlassChromeButton).map { $0.visibleTitle.isEmpty } ?? button.title.isEmpty, "\(label): \(name) shows no title text")
+            expect(button.toolTip == tip && !(button.toolTip ?? "").isEmpty, "\(label): \(name) tooltip is '\(tip)' (is '\(button.toolTip ?? "nil")')")
+            expect(button.accessibilityLabel() == name, "\(label): \(name) accessibility label (is '\(button.accessibilityLabel() ?? "nil")')")
+        }
+        let shared = rig.controls
+        expect(shared.paletteButton.imagePosition == .imageOnly && shared.paletteButton.image != nil && shared.paletteButton.accessibilityLabel() == "Drawing colors"
+               && shared.paletteButton.toolTip?.hasPrefix("Color") == true, "\(label): Color shows only its swatch, with a tooltip and label")
+        expect(shared.toolbox.imagePosition == .imageOnly && shared.toolbox.accessibilityLabel() == "Toolbox", "\(label): Toolbox is icon-only")
+        expect(shared.sizeLabel.superview == nil && shared.widthControl.toolTip == "Size", "\(label): the Size text is gone; the slider keeps a tooltip")
+        // Retitles move the tooltip and label, not drawn text.
+        chrome.wipeButton.title = "Blank"
+        expect(chrome.wipeButton.toolTip == "Blank" && chrome.wipeButton.accessibilityLabel() == "Blank" && chrome.wipeButton.visibleTitle.isEmpty, "\(label): Wipe's staged title becomes its tooltip and label")
+        chrome.wipeButton.title = "Wipe"
     }
 
     @available(macOS 26, *)
@@ -913,8 +939,9 @@ private enum GlassChromeTests {
         expect(!chrome.cancelFrameButton.isHidden && chrome.surface(for: chrome.cancelFrameButton)?.isHidden == false, "\(label): Cancel appears in Frame mode")
         expect(!chrome.backdropIsVisible && !chrome.bleedIsVisible, "\(label): backdrop and bleed give way to the Frame hole")
         let cancel = rect(chrome.cancelFrameButton, in: rig), snap = rect(chrome.snapButton, in: rig)
-        expect(abs(cancel.width - 148) < 0.5 && abs(cancel.height - 36) < 0.5 && cancel.maxY <= snap.minY, "\(label): Cancel is a full pill under Snap Frame")
-        expect(abs(snap.width - 148) < 0.5, "\(label): Snap Frame keeps the 148 pt pill")
+        expect(abs(cancel.width - 48) < 0.5 && abs(cancel.height - 36) < 0.5 && cancel.maxY <= snap.minY, "\(label): Cancel is an icon pill under Snap Frame")
+        expect(abs(snap.width - 56) < 0.5 && abs(snap.height - 44) < 0.5, "\(label): Snap Frame keeps the larger primary glass")
+        expect(chrome.snapButton.accessibilityLabel() == "Snap Frame" && chrome.snapButton.visibleTitle.isEmpty, "\(label): Snap Frame is read aloud, never drawn")
         expect(rig.controls.canvas.window === rig.window && chrome.scrollView.frame.size != .zero, "\(label): the canvas stays in place in Frame mode")
     }
 

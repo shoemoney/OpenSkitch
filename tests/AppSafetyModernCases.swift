@@ -11,6 +11,7 @@ extension AppSafetyTests {
         return [
             ("Modern chrome fills the Frame-aware content view and replaces every Classic control", modernWindowStructure),
             ("Modern shared controls keep the Classic accessibility labels, tooltips, titles and hint tracking", modernControlStrings),
+            ("Every Modern command is icon-only with a native tooltip and its old title as the VoiceOver label, whatever the overlay preference says", modernIconOnlyCommands),
             ("setTool selects one glass surface in the solid family for every path that changes the tool", modernToolSelection),
             ("Frame enter and leave swap Snap and Cancel, clear and restore the Fullscreen alternate, and dim Resize", modernFrameMode),
             ("Modern Frame mode drops the window shadow, raises the level and sets alpha 0.8, and leaving restores the pre-Frame values", modernFrameWindowShadowLevelAlpha),
@@ -183,7 +184,7 @@ extension AppSafetyTests {
         try expect(app.widthControl.style == .modern, "The size slider uses the vector style")
         try expect(app.dragExportView?.drawsBackground == false, "Drag Me lets its glass be the plate")
         try expect(try surface(chrome, app.dragExportView).shape == .rounded(14), "Drag Me sits in a rounded r=14 surface")
-        try expect(try surface(chrome, app.paletteButton).fixedSize?.width == 148 && chrome.surface(for: app.nameField)?.shape == .capsule
+        try expect(try surface(chrome, app.paletteButton).fixedSize == NSSize(width: 48, height: 36) && chrome.surface(for: app.nameField)?.shape == .capsule
                    && chrome.surface(for: app.dragFormatControl)?.shape == .capsule, "Color, the name field and the format popup have their glass")
         try expect(chrome.surface(for: app.zoomControl) == nil && chrome.surface(for: app.status) == nil && chrome.surface(for: app.canvas) == nil, "Zoom, status and the canvas stay outside glass")
         try expect((app.nameField.font?.pointSize ?? 0) >= 20 && (app.status.font?.pointSize ?? 0) >= 18 && (app.zoomControl.font?.pointSize ?? 0) >= 18, "Text stays at its readable sizes")
@@ -209,7 +210,9 @@ extension AppSafetyTests {
         let app = fixture.app
         let modern = controlFacts(app)
         try expect(classic.controls.count >= 40 && modern.count == classic.controls.count, "Both windows report the same set of facts (\(classic.controls.count) vs \(modern.count))")
-        let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] }
+        // Modern tooltips lead with the command name (and Size shows its live value), so only these tips may differ; every label, title and the rest still match.
+        let modernTips: Set<String> = ["snap.tip", "palette.tip", "size.tip", "drag.tip", "toolbox.tip"]
+        let differing = classic.controls.keys.sorted().filter { classic.controls[$0] != modern[$0] && !modernTips.contains($0) }
             .map { "\($0): classic '\(classic.controls[$0] ?? "")' vs modern '\(modern[$0] ?? "")'" }
         try expect(differing.isEmpty, "Modern strings differ from Classic: " + differing.joined(separator: "; "))
         try expect(modern["tool.arrow.label"] == "Arrow" && modern["tool.crop.tip"] == "Crop tool"
@@ -225,6 +228,53 @@ extension AppSafetyTests {
         for (name, view) in hinted {
             try expect(view?.subviews.contains { $0 is HintTrackingView } == true, "\(name) registers contextual hint tracking")
         }
+    }
+
+    @available(macOS 26, *)
+    private static func modernIconOnlyCommands() throws {
+        let (fixture, chrome) = try modernFixture()
+        let app = fixture.app
+        let content = try (app.window.contentView).unwrap("content view")
+        let wipe = try collect(NSButton.self, in: content).first { $0.action == #selector(AppDelegate.wipe) }.unwrap("rail Wipe")
+        // action -> (VoiceOver label, tooltip); shortcuts come from the real menu key equivalents (Minimize is vanish, Undo is Edit > Undo).
+        let expected: [(Selector, String, String)] = [
+            (#selector(AppDelegate.vanish), "Hide", "Hide (⌘M)"), (#selector(AppDelegate.showPhotos), "Photos", "Photos"),
+            (#selector(AppDelegate.saveHistory), "Save", "Save to History"), (#selector(AppDelegate.showHistory), "History", "History"),
+            (#selector(AppDelegate.snapButtonPressed), "Snap", ModernEditorChrome.snapToolTip), (#selector(AppDelegate.chooseFont), "Font", "Font"),
+            (#selector(AppDelegate.undo), "Undo", "Undo (⌘Z)"), (#selector(AppDelegate.wipe), "Blank", "Blank"),
+            (#selector(AppDelegate.toggleActualSize), "Actual Size", "Actual Size"), (#selector(AppDelegate.resize), "Resize…", "Resize…"),
+            (#selector(AppDelegate.share(_:)), "Upload to destination", AppDelegate.webpostHelp)]
+        func verify(_ label: String) throws {
+            let buttons = collect(NSButton.self, in: content)
+            for (action, name, tip) in expected {
+                let button = try buttons.first { $0.action == action }.unwrap("\(name) button")
+                try expect(button.imagePosition == .imageOnly && ((button as? GlassChromeButton)?.visibleTitle ?? button.title).isEmpty, "\(label): \(name) shows no title text")
+                try expect(button.toolTip == tip, "\(label): \(name) tooltip is '\(tip)', not '\(button.toolTip ?? "nil")'")
+                try expect(button.accessibilityLabel() == name, "\(label): \(name) VoiceOver label, not '\(button.accessibilityLabel() ?? "nil")'")
+            }
+            try expect(wipe.toolTip == "Blank", "\(label): Wipe's staged title is its tooltip")
+            try expect(app.paletteButton.imagePosition == .imageOnly && app.paletteButton.accessibilityLabel() == "Drawing colors" && (app.paletteButton.toolTip ?? "").hasPrefix("Color"),
+                       "\(label): Color is a swatch with a tooltip and its label")
+            try expect(app.sizeLabel.superview == nil, "\(label): the Size text is not shown")
+            try expect(chrome.header.subviews.flatMap { collect(NSTextField.self, in: $0) }.isEmpty, "\(label): the top bar has no title text")
+        }
+        try verify("default")
+        // The overlay preference governs the original overlay hints, never the native tooltips.
+        var settings = app.generalPreferences.state
+        for show in [true, false] {
+            settings.showToolTips = show; app.applyGeneralPreferences(settings)
+            try verify("overlay preference \(show)")
+        }
+        app.canvas.strokeWidth = 9.38; app.syncDrawingControls()
+        try expect(app.widthControl.toolTip == "Size 9" && (app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue == 9.375 || abs(((app.widthControl.accessibilityValue() as? NSNumber)?.doubleValue ?? 0) - 9.38) < 0.01,
+                   "The slider tooltip shows the whole-number size and VoiceOver reads its value")
+        let before = app.widthControl.toolTip
+        app.canvas.strokeWidth = 3; app.syncDrawingControls()
+        try expect(app.widthControl.toolTip == "Size " + String(format: "%.0f", app.widthControl.doubleValue.rounded()) && app.widthControl.toolTip != before, "The Size tooltip follows the slider (\(app.widthControl.toolTip ?? "nil"))")
+        let drag = try (app.dragExportView).unwrap("drag well")
+        try expect(drag.showsThumbnailOnly && drag.toolTip == "Drag the drawing into Finder or another app" && drag.accessibilityLabel() == "Drag Me", "The drag well is a thumbnail with a tooltip and keeps its VoiceOver label")
+        let logo = try collect(NSImageView.self, in: chrome.header).first.unwrap("logo")
+        try expect(logo.toolTip == "OpenSkitch" && logo.accessibilityLabel() == "OpenSkitch", "The logo has a tooltip and label instead of title text")
     }
 
     @available(macOS 26, *)

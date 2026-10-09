@@ -66,8 +66,18 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     private var activeProvider: ObjectIdentifier?
     /// Modern lets the glass surface behind the view be the plate.
     var drawsBackground = true { didSet { needsDisplay = true } }
+    /// Modern shows the drawing itself as the well and drops the "Drag Me" text once there is a thumbnail.
+    var showsThumbnailOnly = false { didSet { needsDisplay = true } }
     override func draw(_ dirtyRect: NSRect) {
         if drawsBackground { NSColor.controlBackgroundColor.setFill(); NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 8, yRadius: 8).fill() }
+        if showsThumbnailOnly, let overview, overview.size.width > 0, overview.size.height > 0 {
+            let area = bounds.insetBy(dx: 6, dy: 4)
+            let scale = min(area.width / overview.size.width, area.height / overview.size.height)
+            let fitted = NSSize(width: overview.size.width * scale, height: overview.size.height * scale)
+            overview.draw(in: NSRect(x: area.midX - fitted.width / 2, y: area.midY - fitted.height / 2, width: fitted.width, height: fitted.height),
+                          from: .zero, operation: .sourceOver, fraction: 1)
+            return
+        }
         if let overview { overview.draw(in: bounds.insetBy(dx: 4, dy: 4), from: .zero, operation: .sourceOver, fraction: 0.2) }
         let title = "Drag Me"
         let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.boldSystemFont(ofSize: 20), .foregroundColor: NSColor.labelColor]
@@ -1015,8 +1025,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         colorWell.color = canvas.strokeColor
         widthControl.doubleValue = Double(canvas.strokeWidth)
         sizeLabel.stringValue = "Size · " + String(format: "%.0f", widthControl.doubleValue.rounded())
+        // Modern has no visible Size text; the slider carries the value in its tooltip (VoiceOver reads its accessibilityValue).
+        if modernChrome != nil { widthControl.toolTip = "Size " + String(format: "%.0f", widthControl.doubleValue.rounded()) }
         let indicatorColor = canvas.strokeColor
-        paletteButton.image = NSImage(size: NSSize(width: 22, height: 18), flipped: false) { rect in
+        let swatchSize = modernChrome == nil ? NSSize(width: 22, height: 18) : NSSize(width: 28, height: 22)
+        paletteButton.image = NSImage(size: swatchSize, flipped: false) { rect in
             NSColor.white.setFill(); rect.fill()
             indicatorColor.setFill(); rect.insetBy(dx: 1, dy: 1).fill()
             NSColor.darkGray.setStroke(); NSBezierPath(rect: rect.insetBy(dx: 0.5, dy: 0.5)).stroke(); return true

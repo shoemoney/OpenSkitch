@@ -71,7 +71,37 @@ class GlassChromeButton: OriginalActionButton {
         }
     }
 
-    override var title: String { didSet { updatePresentation() } }
+    /// Icon-only commands keep their name here instead of drawing it: the name feeds the tooltip and VoiceOver, so
+    /// retitles (Snap / Snap Frame, Actual Size / Normal View, Blank / Clear / Wipe) still land without showing text.
+    private(set) var iconOnlyName: String?
+    /// Keyboard shortcut appended to the derived tooltip, e.g. "⌘Z".
+    var shortcutHint: String? { didSet { refreshDerivedToolTip() } }
+    private var derivesToolTip = true
+
+    /// What is actually drawn beside the glyph; empty for every icon-only command.
+    var visibleTitle: String { super.title }
+
+    override var title: String {
+        get { iconOnlyName ?? super.title }
+        set {
+            if iconOnlyName != nil { iconOnlyName = newValue; refreshDerivedToolTip() } else { super.title = newValue }
+            updatePresentation()
+        }
+    }
+
+    func makeIconOnly(name: String, shortcut: String? = nil, derivesToolTip: Bool = true) {
+        super.title = ""
+        iconOnlyName = name
+        self.derivesToolTip = derivesToolTip
+        shortcutHint = shortcut
+        refreshDerivedToolTip()
+        updatePresentation()
+    }
+
+    private func refreshDerivedToolTip() {
+        guard derivesToolTip, let name = iconOnlyName else { return }
+        toolTip = shortcutHint.map { "\(name) (\($0))" } ?? name
+    }
 
     private var explicitAccessibilityLabel: String?
 
@@ -134,7 +164,7 @@ class GlassChromeButton: OriginalActionButton {
     }
 
     private func updatePresentation() {
-        imagePosition = image == nil ? .noImage : (title.isEmpty ? .imageOnly : .imageLeading)
+        imagePosition = image == nil ? .noImage : (visibleTitle.isEmpty ? .imageOnly : .imageLeading)
         applyForeground()
     }
 
@@ -375,9 +405,12 @@ final class GlassSurfaceView: NSGlassEffectView {
 enum GlassChrome {
     enum Metrics {
         static let toolButton = NSSize(width: 48, height: 40)
+        /// Every icon-only command shares this glass; Snap, the primary one, is the larger `primaryButton`.
+        static let iconButton = NSSize(width: 48, height: 36)
+        static let primaryButton = NSSize(width: 56, height: 44)
         static let commandHeight: CGFloat = 36
-        static let railWidth: CGFloat = 64, rightRailWidth: CGFloat = 160, headerHeight: CGFloat = 44
-        static let iconPointSize: CGFloat = 22, labelPointSize: CGFloat = 20
+        static let railWidth: CGFloat = 64, rightRailWidth: CGFloat = 64, headerHeight: CGFloat = 44
+        static let iconPointSize: CGFloat = 22, primaryIconPointSize: CGFloat = 26, labelPointSize: CGFloat = 20
         static let groupSpacing: CGFloat = 10, surfaceSpacing: CGFloat = 6, containerSpacing: CGFloat = 2
         /// Icon beside a 20-point label is drawn at 20 points; icon-only controls use `iconPointSize`.
         static let labeledIconPointSize: CGFloat = 20

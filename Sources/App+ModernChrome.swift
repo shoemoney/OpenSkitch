@@ -3,7 +3,11 @@ import AppKit
 extension AppDelegate {
     /// Frame mode already shows and hides Cancel in AppDelegate; the chrome mirrors it into the glass layer.
     func setModernFrameMode(_ on: Bool) {
-        if #available(macOS 26, *) { (modernChrome as? ModernEditorChrome)?.frameMode = on }
+        if #available(macOS 26, *) {
+            let chrome = modernChrome as? ModernEditorChrome
+            chrome?.frameMode = on
+            chrome?.syncSnapPresentation()
+        }
     }
 
     /// The Drag Me thumbnail doubles as the canvas bleed under the rails.
@@ -62,6 +66,8 @@ extension AppDelegate {
         let drag = DragExportView(); dragExportView = drag
         drag.drawsBackground = false
         configureDragExport(drag)
+        drag.showsThumbnailOnly = true
+        drag.toolTip = "Drag the drawing into Finder or another app"
         dragFormatControl.addItems(withTitles: ["PNG", "JPEG 100%", "JPEG 80%", "JPEG 60%", "JPEG 30%", "JPEG 10%", "TIFF", "GIF", "BMP", "PDF", "SVG", "Skitch"])
         dragFormatControl.font = .systemFont(ofSize: 20)
         dragFormatControl.setAccessibilityLabel("Drag Me format")

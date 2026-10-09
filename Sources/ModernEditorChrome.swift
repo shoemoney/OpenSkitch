@@ -41,8 +41,8 @@ final class ModernEditorChrome: NSView {
         var hide, photos, saveHistory, showHistory, chooseTool, snap, cancelFrame, font, undo, wipe, actualSize, resize, share: Selector
     }
 
-    static let snapToolTip = "Drag an area or click a window; right-click or Control-click for Fullscreen"
-    static let snapFrameToolTip = "Capture the area inside the frame; hold Shift for a six-second timer"
+    static let snapToolTip = "Snap: drag an area or click a window; right-click or Control-click for Fullscreen"
+    static let snapFrameToolTip = "Snap Frame: capture the area inside the frame; hold Shift for a six-second timer"
     private static let toolIcons: [String: FAIcon] = [
         "select": .arrowPointer, "brush": .paintbrush, "line": .slashForward, "ellipse": .circle, "rectangle": .square,
         "fill": .fillDrip, "eraser": .eraser, "text": .text, "arrow": .arrowUpRight, "crop": .cropSimple
@@ -83,23 +83,26 @@ final class ModernEditorChrome: NSView {
         self.toolOrder = toolOrder
         self.accessibilityProvider = accessibility
         self.accessibility = accessibility()
-        func make(_ title: String, _ icon: FAIcon, _ action: Selector) -> GlassChromeButton {
-            let button = GlassChromeButton(title: title, target: actions.target, action: action)
+        // Every command is icon-only: the old title survives as the VoiceOver label and (with the shortcut) the native tooltip.
+        func make(_ name: String, _ icon: FAIcon, _ action: Selector, shortcut: String? = nil, toolTip: String? = nil,
+                  pointSize: CGFloat = GlassChrome.Metrics.iconPointSize) -> GlassChromeButton {
+            let button = GlassChromeButton(title: "", target: actions.target, action: action)
             GlassChrome.useExtraLarge(button)
-            button.font = .systemFont(ofSize: GlassChrome.Metrics.labelPointSize)
-            button.iconPointSize = GlassChrome.Metrics.labeledIconPointSize
+            button.iconPointSize = pointSize
             button.icon = icon
             button.classicArtworkName = ChromeIcons.classicArtworkName(for: icon)
+            button.makeIconOnly(name: name, shortcut: shortcut, derivesToolTip: toolTip == nil)
+            if let toolTip { button.toolTip = toolTip }
             return button
         }
-        hideButton = make("Hide", .eyeSlash, actions.hide)
+        hideButton = make("Hide", .eyeSlash, actions.hide, shortcut: "⌘M")
         photosButton = make("Photos", .images, actions.photos)
-        saveButton = make("Save", .floppyDisk, actions.saveHistory)
+        saveButton = make("Save", .floppyDisk, actions.saveHistory, toolTip: "Save to History")
         historyButton = make("History", .clockRotateLeft, actions.showHistory)
-        snapButton = make("Snap", .crosshairs, actions.snap)
+        snapButton = make("Snap", .crosshairs, actions.snap, toolTip: Self.snapToolTip, pointSize: GlassChrome.Metrics.primaryIconPointSize)
         cancelFrameButton = make("Cancel", .xmark, actions.cancelFrame)
         fontButton = make("Font", .font, actions.font)
-        undoButton = make("Undo", .arrowRotateLeft, actions.undo)
+        undoButton = make("Undo", .arrowRotateLeft, actions.undo, shortcut: "⌘Z")
         wipeButton = make("Wipe", .broom, actions.wipe)
         actualButton = make("Actual Size", .maximize, actions.actualSize)
         resizeButton = make("Resize…", .rulerCombined, actions.resize)
@@ -109,6 +112,7 @@ final class ModernEditorChrome: NSView {
         shareButton.image = NSImage(systemSymbolName: Self.uploadSymbolName, accessibilityDescription: "Upload")?
             .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: GlassChrome.Metrics.iconPointSize, weight: .regular))
         shareButton.imagePosition = .imageOnly
+        shareButton.toolTip = "Upload"
         super.init(frame: .zero)
         build(actions: actions)
         NSWorkspace.shared.notificationCenter.addObserver(
@@ -141,12 +145,18 @@ final class ModernEditorChrome: NSView {
     // MARK: state
 
     private func applyFrameMode() {
+        syncSnapPresentation()
+        cancelFrameButton.isHidden = !frameMode
+        updateBackdropAndBleed()
+    }
+
+    /// The app re-titles and re-tips Snap itself when entering or leaving Frame mode; this puts the Modern icon, name and tooltip back.
+    func syncSnapPresentation() {
         snapButton.icon = frameMode ? .frameViewfinder : .crosshairs
         snapButton.classicArtworkName = ChromeIcons.classicArtworkName(for: frameMode ? .frameViewfinder : .crosshairs)
         snapButton.title = frameMode ? "Snap Frame" : "Snap"
+        snapButton.iconPointSize = GlassChrome.Metrics.primaryIconPointSize
         snapButton.toolTip = frameMode ? Self.snapFrameToolTip : Self.snapToolTip
-        cancelFrameButton.isHidden = !frameMode
-        updateBackdropAndBleed()
     }
 
     private func updateBackdropAndBleed() {
@@ -163,9 +173,9 @@ final class ModernEditorChrome: NSView {
         for view in views { surfaces[ObjectIdentifier(view)] = surface }
     }
 
-    private func pill(_ control: NSView, shape: GlassShape = .capsule, width: CGFloat? = nil) -> GlassSurfaceView {
-        let size = width.map { NSSize(width: $0, height: GlassChrome.Metrics.commandHeight) }
-        let surface = GlassChrome.surface(control, shape: shape, accessibility: accessibility, size: size)
+    /// Every icon-only command shares one glass size so the rails and bars read as one set.
+    private func iconPill(_ control: NSView, size: NSSize = GlassChrome.Metrics.iconButton) -> GlassSurfaceView {
+        let surface = GlassChrome.surface(control, shape: .capsule, accessibility: accessibility, size: size)
         register(surface, for: control)
         return surface
     }
@@ -174,27 +184,21 @@ final class ModernEditorChrome: NSView {
         if (control.font?.pointSize ?? 0) < 18 { control.font = .systemFont(ofSize: size) }
     }
 
-    private static func widest(_ button: NSButton, titles: [String]) -> CGFloat {
-        let original = button.title
-        defer { button.title = original }
-        return titles.map { button.title = $0; return ceil(button.fittingSize.width) }.max() ?? 0
-    }
-
     private func build(actions: Actions) {
         typealias Metrics = GlassChrome.Metrics
         let margin: CGFloat = 12, gap: CGFloat = 8
         let headerTop: CGFloat = 4, rowHeight: CGFloat = 44, statusHeight: CGFloat = 30, rowGap: CGFloat = 4, footerBottom: CGFloat = 8
         let pillPadding = Metrics.pillPadding
-        let railPill = Metrics.railPillWidth
 
         for control in [controls.nameField, controls.dragFormatControl, controls.toolbox, controls.paletteButton] as [NSControl] { GlassChrome.useExtraLarge(control) }
         for control in [controls.nameField, controls.dragFormatControl, controls.toolbox] as [NSControl] { readable(control, 20) }
-        for control in [controls.status, controls.sizeLabel, controls.dragSizeLabel, controls.zoomControl, controls.dragOriginalControl, controls.widthControl] as [NSControl] { readable(control, 18) }
-        controls.paletteButton.font = .systemFont(ofSize: Metrics.labelPointSize)
+        for control in [controls.status, controls.dragSizeLabel, controls.zoomControl, controls.dragOriginalControl, controls.widthControl] as [NSControl] { readable(control, 18) }
+        // Color shows only its swatch: the title stays on the control (and its accessibility label) but is never drawn.
         controls.paletteButton.isBordered = false
-        controls.paletteButton.imagePosition = .imageLeading
-        controls.paletteButton.imageHugsTitle = true
-        for label in [controls.status, controls.sizeLabel, controls.dragSizeLabel] { label.textColor = .labelColor }
+        controls.paletteButton.imagePosition = .imageOnly
+        controls.paletteButton.toolTip = "Color: " + (controls.paletteButton.toolTip.map { $0.prefix(1).lowercased() + $0.dropFirst() } ?? "pick a drawing color")
+        controls.widthControl.toolTip = "Size"
+        for label in [controls.status, controls.dragSizeLabel] { label.textColor = .labelColor }
         for label in [controls.status, controls.dragSizeLabel] {
             label.lineBreakMode = .byTruncatingTail
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -226,27 +230,24 @@ final class ModernEditorChrome: NSView {
         }
         controls.toolbox.isBordered = false
         controls.toolbox.contentTintColor = .labelColor
-        let hideSurface = pill(hideButton)
+        let hideSurface = iconPill(hideButton)
         let toolboxHolder = ControlHolderView(controls.toolbox, inset: 6)
         let toolboxSurface = GlassChrome.surface(toolboxHolder, shape: .capsule, accessibility: accessibility,
-                                                 size: NSSize(width: max(64, ceil(controls.toolbox.fittingSize.width) + 12), height: Metrics.commandHeight))
+                                                 size: Metrics.iconButton)
         register(toolboxSurface, for: controls.toolbox, toolboxHolder)
-        let photosSurface = pill(photosButton)
-        let saveSurface = pill(saveButton)
-        let historySurface = pill(historyButton)
+        let photosSurface = iconPill(photosButton)
+        let saveSurface = iconPill(saveButton)
+        let historySurface = iconPill(historyButton)
         let leadingGroup = GlassChrome.group([hideSurface, toolboxSurface, photosSurface], orientation: .horizontal, identifier: "GlassHeaderLeading")
         let trailingGroup = GlassChrome.group([saveSurface, historySurface], orientation: .horizontal, identifier: "GlassHeaderTrailing")
 
         let logo = NSImageView()
         logo.image = controls.brandLogo
         logo.imageScaling = .scaleProportionallyUpOrDown
-        logo.setAccessibilityLabel("OpenSkitch logo")
-        let name = NSTextField(labelWithString: "OpenSkitch")
-        name.font = .systemFont(ofSize: Metrics.labelPointSize, weight: .semibold)
-        name.setContentCompressionResistancePriority(.required, for: .horizontal)
-        let brand = NSStackView(views: [logo, name])
+        logo.setAccessibilityLabel("OpenSkitch")
+        logo.toolTip = "OpenSkitch"
+        let brand = NSStackView(views: [logo])
         brand.orientation = .horizontal
-        brand.spacing = 8
         brand.alignment = .centerY
         brand.identifier = NSUserInterfaceItemIdentifier("OpenSkitchBrand")
         for view in [leadingGroup, brand, trailingGroup] {
@@ -286,42 +287,41 @@ final class ModernEditorChrome: NSView {
         let leftRail = NSView()
         leftRail.addSubview(toolGroup)
 
-        // Right rail: Snap / Cancel · Color / Font / Size · (flexible) · Undo / Wipe
+        // Right rail: Snap / Cancel · Color / Font / Size · (flexible) · Undo / Wipe, all icon-only
         snapButton.isPrimary = true
         snapButton.toolTip = Self.snapToolTip
         cancelFrameButton.isHidden = true
-        let snapSurface = pill(snapButton, width: railPill)
+        let snapSurface = iconPill(snapButton, size: Metrics.primaryButton)
         snapSurface.prominence = .primary
-        let cancelSurface = pill(cancelFrameButton, width: railPill)
-        let colorSurface = pill(controls.paletteButton, width: railPill)
-        let fontSurface = pill(fontButton, width: railPill)
-        let sizeStack = NSStackView(views: [controls.sizeLabel, controls.widthControl])
+        let cancelSurface = iconPill(cancelFrameButton)
+        let colorSurface = iconPill(controls.paletteButton)
+        let fontSurface = iconPill(fontButton)
+        let sizeStack = NSStackView(views: [controls.widthControl])
         sizeStack.orientation = .vertical
         sizeStack.spacing = 4
         sizeStack.alignment = .centerX
-        sizeStack.edgeInsets = NSEdgeInsets(top: 6, left: 6, bottom: 6, right: 6)
+        sizeStack.edgeInsets = NSEdgeInsets(top: 8, left: 6, bottom: 8, right: 6)
         let sliderWidth = controls.widthControl.widthAnchor.constraint(equalToConstant: 36)
-        let sliderHeight = controls.widthControl.heightAnchor.constraint(equalToConstant: 82)
+        let sliderHeight = controls.widthControl.heightAnchor.constraint(equalToConstant: 96)
         NSLayoutConstraint.activate([sliderWidth, sliderHeight])
         let sizeSurface = GlassChrome.surface(sizeStack, shape: .rounded(Metrics.toolRadius), accessibility: accessibility,
-                                              size: NSSize(width: railPill, height: ceil(sizeStack.fittingSize.height)))
-        register(sizeSurface, for: sizeStack, controls.sizeLabel, controls.widthControl)
-        let undoSurface = pill(undoButton, width: railPill)
-        let wipeSurface = pill(wipeButton, width: railPill)
+                                              size: NSSize(width: Metrics.iconButton.width, height: ceil(sizeStack.fittingSize.height)))
+        register(sizeSurface, for: sizeStack, controls.widthControl)
+        let undoSurface = iconPill(undoButton)
+        let wipeSurface = iconPill(wipeButton)
         let captureGroup = GlassChrome.group([snapSurface, cancelSurface], orientation: .vertical, identifier: "GlassCaptureGroup")
         let drawingGroup = GlassChrome.group([colorSurface, fontSurface, sizeSurface], orientation: .vertical, identifier: "GlassDrawingGroup")
         let historyGroup = GlassChrome.group([undoSurface, wipeSurface], orientation: .vertical, identifier: "GlassHistoryGroup")
         let rightRail = NSView()
         for group in [captureGroup, drawingGroup, historyGroup] { rightRail.addSubview(group) }
 
-        // Footer row 1: [Actual Size][Resize…] · name · format · Drag Me · Webpost…
+        // Footer row 1: [Actual Size][Resize…] · name · format · drag thumbnail · Upload
         actualButton.setButtonType(.toggle)
         actualButton.selectedIcon = .minimize
         actualButton.selectedClassicArtworkName = ChromeIcons.classicArtworkName(for: .minimize)
         actualButton.selectionTints = false
-        let actualWidth = Self.widest(actualButton, titles: ["Actual Size", "Normal View"]) + 2 * pillPadding
-        let actualSurface = pill(actualButton, width: actualWidth)
-        let resizeSurface = pill(resizeButton)
+        let actualSurface = iconPill(actualButton)
+        let resizeSurface = iconPill(resizeButton)
         controls.nameField.isBezeled = false
         controls.nameField.isBordered = false
         controls.nameField.drawsBackground = false
@@ -341,9 +341,9 @@ final class ModernEditorChrome: NSView {
                                                 size: NSSize(width: ceil(widestFormat) + 44, height: Metrics.commandHeight))
         register(formatSurface, for: controls.dragFormatControl, formatHolder)
         let dragSurface = GlassChrome.surface(controls.dragExportView, shape: .rounded(Metrics.dragRadius), accessibility: accessibility,
-                                              size: NSSize(width: 112, height: Metrics.commandHeight))
+                                              size: NSSize(width: 96, height: Metrics.commandHeight))
         register(dragSurface, for: controls.dragExportView)
-        let shareSurface = pill(shareButton, width: Metrics.commandHeight + 12)
+        let shareSurface = iconPill(shareButton)
         shareButton.setAccessibilityLabel("Upload to destination")
         let footerGroup = GlassChrome.group([actualSurface, resizeSurface, nameSurface, formatSurface, dragSurface, shareSurface],
                                             orientation: .horizontal, identifier: "GlassFooterRow")
