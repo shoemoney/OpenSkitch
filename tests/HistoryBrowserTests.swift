@@ -4,8 +4,8 @@ import UniformTypeIdentifiers
 
 // Standalone executable; no core files, activation, desktop input, or pasteboard writes.
 // xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete
-// -D HISTORY_BROWSER_TESTS Sources/HistoryBrowser.swift tests/HistoryBrowserTests.swift -o /tmp/skitch-history-browser-tests
-// /tmp/skitch-history-browser-tests
+// -D HISTORY_BROWSER_TESTS Sources/HistoryBrowser.swift tests/HistoryBrowserTests.swift -o /tmp/opensnap-history-browser-tests
+// /tmp/opensnap-history-browser-tests
 @main @MainActor
 struct HistoryBrowserTests {
     struct Failure: LocalizedError {
@@ -29,7 +29,7 @@ struct HistoryBrowserTests {
                             text:"editable note",destination:nil,link:link ? URL(string:"https://example.invalid/item") : nil,previewURL:nil,missing:missing)
     }
     static func browser(_ body: (HistoryBrowser,UserDefaults) throws -> Void) throws {
-        let suite = "SkitchHistoryTests."+UUID().uuidString
+        let suite = "OpenSnapHistoryTests."+UUID().uuidString
         let defaults = UserDefaults(suiteName:suite)!
         defer { defaults.removePersistentDomain(forName:suite) }
         let view = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ now })
@@ -150,7 +150,7 @@ struct HistoryBrowserTests {
             }),
             ("Moving recovered date windows expire unchanged timer entries", {
                 for filter in [HistoryBrowser.DateFilter.lastHour,.last48] {
-                    let suite = "SkitchHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
+                    let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
                     defer { defaults.removePersistentDomain(forName:suite) }
                     var clock = now
                     let browser = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ clock }); defer { browser.close() }
@@ -162,7 +162,7 @@ struct HistoryBrowserTests {
                 }
             }),
             ("Midnight refresh changes day headings despite unchanged catalog", {
-                let suite = "SkitchHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
+                let suite = "OpenSnapHistoryTests."+UUID().uuidString, defaults = UserDefaults(suiteName:suite)!
                 defer { defaults.removePersistentDomain(forName:suite) }
                 var clock = now
                 let browser = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ clock }); defer { browser.close() }
@@ -272,19 +272,19 @@ struct HistoryBrowserTests {
             }),
             ("History drag format has independent persistence and strict choices", {
                 try browser { browser,defaults in
-                    defaults.set("pdf",forKey:"SkitchRedux.ExportFormat")
+                    defaults.set("pdf",forKey:"OpenSnap.ExportFormat")
                     try expect(browser.dragFormat == "png","Default History format")
                     for format in HistoryBrowser.dragFormats { browser.setDragFormat(format); try expect(browser.dragFormat == format,"Format missing") }
-                    browser.setDragFormat("exe"); try expect(browser.dragFormat == "skitch","Unsupported format persisted")
-                    try expect(defaults.string(forKey:"SkitchRedux.ExportFormat") == "pdf","History changes editor export preference")
+                    browser.setDragFormat("exe"); try expect(browser.dragFormat == "opensnap","Unsupported format persisted")
+                    try expect(defaults.string(forKey:"OpenSnap.ExportFormat") == "pdf","History changes editor export preference")
                     let reopened = HistoryBrowser(defaults:defaults,calendar:calendar,now:{ now }); defer { reopened.close() }
-                    try expect(reopened.dragFormat == "skitch","History format not restored")
+                    try expect(reopened.dragFormat == "opensnap","History format not restored")
                 }
             }),
             ("File promise freezes export bytes name and format at drag start", {
                 try browser { browser,_ in
                     let directory = try temporaryDirectory(); defer { try? FileManager.default.removeItem(at:directory) }
-                    let a = item("Original.skitch"); browser.update(items:[a]); browser.setDragFormat("jpeg")
+                    let a = item("Original.opensnap"); browser.update(items:[a]); browser.setDragFormat("jpeg")
                     var captures: [(UUID,String)] = []
                     let expected = Data("immutable snapshot with native/pan data".utf8)
                     browser.onExport = { id,format in captures.append((id,format)); return expected }
@@ -301,11 +301,11 @@ struct HistoryBrowserTests {
             }),
             ("Promise sanitizes filenames and reports export failure without promise", {
                 try browser { browser,_ in
-                    let a = item("../../secret:bad\\name\0.png"); browser.update(items:[a]); browser.setDragFormat("skitch")
+                    let a = item("../../secret:bad\\name\0.png"); browser.update(items:[a]); browser.setDragFormat("opensnap")
                     browser.onExport = { _,_ in Data("SVG snapshot".utf8) }
                     let promise = browser.dragPromise(for:a.id) as! HistoryFilePromise
                     try expect(!promise.snapshot.filename.contains("/") && !promise.snapshot.filename.contains("\\") && !promise.snapshot.filename.contains(":"),"Filename permits path traversal")
-                    try expect(promise.snapshot.filename.hasSuffix(".skitch"),"Native promise extension")
+                    try expect(promise.snapshot.filename.hasSuffix(".opensnap"),"Native promise extension")
                     var errors = 0; browser.onError = { _ in errors += 1 }
                     browser.onExport = { _,_ in throw Failure("Export refused") }
                     try expect(browser.dragPromise(for:a.id) == nil && errors == 1,"Export error silently ignored")

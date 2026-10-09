@@ -1,7 +1,7 @@
 // Standalone native tests; no windows or desktop automation.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete \
 //   -target arm64-apple-macosx26.0 -framework AppKit -D GENERAL_PREFERENCES_FORM_TESTS \
-//   Sources/LegacySkitch.swift Sources/StrokeFitting.swift Sources/GeneralPreferencesForm.swift \
+//   Sources/SVGPath.swift Sources/StrokeFitting.swift Sources/GeneralPreferencesForm.swift \
 //   tests/GeneralPreferencesFormTests.swift -o build/general-preferences-form-tests
 // rtk proxy build/general-preferences-form-tests
 #if GENERAL_PREFERENCES_FORM_TESTS
@@ -23,12 +23,12 @@ private enum GeneralPreferencesFormTests {
     static func main() throws {
         _ = NSApplication.shared
         let initial = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
-                                              includeSkitch: true, statusMenu: 0)
+                                              includeApp: true, statusMenu: 0)
         expect(!initial.showToolTips && !initial.showKeyboardTips, "Existing initializer call sites default both tips off")
         let toolOnly = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
-                       includeSkitch: true, statusMenu: 0, showToolTips: true)
+                       includeApp: true, statusMenu: 0, showToolTips: true)
         let keyboardOnly = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
-                           includeSkitch: true, statusMenu: 0, showKeyboardTips: true)
+                           includeApp: true, statusMenu: 0, showKeyboardTips: true)
         expect(toolOnly.showToolTips && !toolOnly.showKeyboardTips, "Keyboard tips default independently")
         expect(!keyboardOnly.showToolTips && keyboardOnly.showKeyboardTips, "Tool tips default independently")
         expect(initial != toolOnly && initial != keyboardOnly && toolOnly != keyboardOnly,
@@ -55,7 +55,7 @@ private enum GeneralPreferencesFormTests {
         let precise = button("Precise"), medium = button("Medium"), loose = button("Loose")
         let end = button("End"), start = button("Start")
         let dock = button("Dock"), menu = button("Menu bar"), both = button("Both")
-        let snap = button("Show Skitch window in fullscreen and crosshairs Snap")
+        let snap = button("Show OpenSnap window in fullscreen and crosshairs Snap")
         let toolTips = button("Show tool tip overlays")
         let keyboardTips = button("Show keyboard tip overlay")
         let done = button("Done"), shortcuts = button("Capture Shortcuts…"), sharing = button("Sharing Settings…")
@@ -68,7 +68,7 @@ private enum GeneralPreferencesFormTests {
         }
         expect(!sharing.isDescendant(of: tabs) && !done.isDescendant(of: tabs), "Sharing and Done stay in footer")
         expect(buttons.count == 14, "Only the supported controls")
-        expect(!buttons.contains { $0.title == "Play sounds" || $0.title == "Modern" || $0.title == "Classic" || $0.title == "Relaunch OpenSkitch" },
+        expect(!buttons.contains { $0.title == "Play sounds" || $0.title == "Modern" || $0.title == "Classic" || $0.title == "Relaunch OpenSnap" },
                "No sound, appearance or relaunch controls remain")
         expect(precise.tag == 0 && medium.tag == 1 && loose.tag == 2, "Original precision tags")
         expect(end.tag == 2 && start.tag == 1, "Original arrow tags")
@@ -110,8 +110,8 @@ private enum GeneralPreferencesFormTests {
         click(dock) { $0.statusMenu = 2 }
         click(menu) { $0.statusMenu = 1 }
         click(both) { $0.statusMenu = 0 }
-        click(snap) { $0.includeSkitch = false }
-        click(snap) { $0.includeSkitch = true }
+        click(snap) { $0.includeApp = false }
+        click(snap) { $0.includeApp = true }
         click(toolTips) { $0.showToolTips = true }
         click(keyboardTips) { $0.showKeyboardTips = true }
         click(toolTips) { $0.showToolTips = false }
@@ -119,7 +119,7 @@ private enum GeneralPreferencesFormTests {
 
         let count = delivered.count
         expected = GeneralPreferencesState(drawingPrecision: .loose, arrowHead: 1,
-                                          includeSkitch: false, statusMenu: 1,
+                                          includeApp: false, statusMenu: 1,
                                           showToolTips: true, showKeyboardTips: true)
         reveal(precise) // Synchronize tips while the General tab is not visible.
         let selectedBeforeSync = tabs.selectedTabViewItem
@@ -147,16 +147,16 @@ private enum GeneralPreferencesFormTests {
         for invalid in [-1, 3, Int.min, Int.max] {
             let count = delivered.count
             form.synchronize(GeneralPreferencesState(drawingPrecision: .medium, arrowHead: invalid,
-                             includeSkitch: false, statusMenu: invalid))
+                             includeApp: false, statusMenu: invalid))
             expect(delivered.count == count, "Malformed tags do not publish during sync")
             expect(end.state == .on && start.state == .off && both.state == .on
                    && dock.state == .off && menu.state == .off, "Malformed tags use End and Both")
             expected = GeneralPreferencesState(drawingPrecision: .medium, arrowHead: 2,
-                         includeSkitch: false, statusMenu: 0)
-            click(snap) { $0.includeSkitch = true }
+                         includeApp: false, statusMenu: 0)
+            click(snap) { $0.includeApp = true }
         }
         let malformed = GeneralPreferencesForm(state: GeneralPreferencesState(drawingPrecision: .precise,
-                          arrowHead: -10, includeSkitch: true, statusMenu: 99))
+                          arrowHead: -10, includeApp: true, statusMenu: 99))
         let malformedTabs = descendants(malformed).compactMap { $0 as? NSTabView }.first!
         let initialButtons = malformedTabs.tabViewItems.flatMap { descendants($0.view!) }.compactMap { $0 as? NSButton }
         expect(initialButtons.first { $0.title == "End" }?.state == .on

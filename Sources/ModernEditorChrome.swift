@@ -248,7 +248,7 @@ final class ModernEditorChrome: NSView {
         scrollView.borderType = .noBorder
 
         // Header: [Hide][Toolbox][Photos] · brand · [Save][History]
-        header.identifier = NSUserInterfaceItemIdentifier("OpenSkitchHeader")
+        header.identifier = NSUserInterfaceItemIdentifier("OpenSnapHeader")
         let toolboxIcon = ChromeIcons.resolve(.toolbox, family: .regular, pointSize: Metrics.iconPointSize)
         if let image = toolboxIcon.image, let first = controls.toolbox.itemArray.first {
             first.image = image
@@ -362,10 +362,10 @@ final class ModernEditorChrome: NSView {
         statusRow.orientation = .horizontal
         statusRow.spacing = 12
         statusRow.alignment = .centerY
-        statusRow.identifier = NSUserInterfaceItemIdentifier("OpenSkitchStatusRow")
+        statusRow.identifier = NSUserInterfaceItemIdentifier("OpenSnapStatusRow")
 
         let footer = NSView()
-        footer.identifier = NSUserInterfaceItemIdentifier("OpenSkitchFooter")
+        footer.identifier = NSUserInterfaceItemIdentifier("OpenSnapFooter")
         footer.addSubview(statusRow)
         footer.addSubview(footerGroup)
         let all: [NSView] = [backdrop, bleed, scrollView, header, rightRail, footer]

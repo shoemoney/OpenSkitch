@@ -13,7 +13,7 @@ extension AppDelegate {
         var baseline: (output: CGSize, source: CGSize, frame: CGRect, zoom: CGFloat, dirty: Bool)?
         let session = ResizePanelSession(size: canvas.outputSize, onPreview: { [weak self] request in
             guard let self, !self.terminationStarted, self.documentGeneration == generation else {
-                throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image has changed. Close Resize and try again."])
+                throw NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image has changed. Close Resize and try again."])
             }
             if baseline == nil {
                 self.canvas.commitPendingTextEditing()
@@ -23,7 +23,7 @@ extension AppDelegate {
                 let first = (output: self.canvas.outputSize, source: self.canvas.canvasSize,
                              frame: self.window.frame, zoom: self.canvas.zoom, dirty: self.dirty)
                 guard self.canvas.beginViewportEdit(name: "Resize") else {
-                    throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "Finish the current edit before resizing."])
+                    throw NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "Finish the current edit before resizing."])
                 }
                 baseline = first
             }
@@ -33,7 +33,7 @@ extension AppDelegate {
             if let rect = preview.rect { accepted = self.canvas.previewViewportCrop(to: rect, outputSize: preview.output) }
             else { accepted = self.canvas.previewViewportResize(to: preview.output) }
             guard accepted else {
-                throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This size exceeds the supported source dimensions. Choose smaller dimensions or restore the image to normal size first."])
+                throw NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "This size exceeds the supported source dimensions. Choose smaller dimensions or restore the image to normal size first."])
             }
             self.sizeNormalWindowToCanvas(centered: false)
             self.updateStatus()

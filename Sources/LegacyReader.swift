@@ -1,32 +1,8 @@
-import Foundation
-import CoreGraphics
+import AppKit
+import CryptoKit
 #if canImport(FoundationXML)
 import FoundationXML
 #endif
-
-/// Absolute, editable SVG geometry. Curves are retained, never reduced to sample points.
-/// Arc parameters remain exact for a future renderer; original Skitch emits M/C/z only.
-enum SVGPathCommand: Codable, Equatable {
-    case move(to: CGPoint)
-    case line(to: CGPoint)
-    case cubic(control1: CGPoint, control2: CGPoint, to: CGPoint)
-    case quadratic(control: CGPoint, to: CGPoint)
-    case arc(radiusX: CGFloat, radiusY: CGFloat, rotation: CGFloat,
-             largeArc: Bool, sweep: Bool, to: CGPoint)
-    case close
-
-    var isFinite: Bool {
-        func finite(_ p: CGPoint) -> Bool { p.x.isFinite && p.y.isFinite }
-        switch self {
-        case .move(let p), .line(let p): return finite(p)
-        case .cubic(let c1, let c2, let p): return finite(c1) && finite(c2) && finite(p)
-        case .quadratic(let c, let p): return finite(c) && finite(p)
-        case .arc(let rx, let ry, let angle, _, _, let p):
-            return rx.isFinite && ry.isFinite && rx >= 0 && ry >= 0 && angle.isFinite && finite(p)
-        case .close: return true
-        }
-    }
-}
 
 enum LegacySkitchError: Error, LocalizedError {
     case invalidXML(String), invalidDocument(String), invalidPath(String)
@@ -43,167 +19,6 @@ enum LegacySkitchError: Error, LocalizedError {
     }
 }
 
-/// Handles SVG M/L/H/V/C/S/Q/T/A/Z, repetitions, relative coordinates and exponents.
-/// Smooth commands are normalized to explicit controls; elliptical arcs stay as arcs.
-enum SVGPathParser {
-    static func parse(_ value: String, maximumCommands: Int = 1_000_000) throws -> [SVGPathCommand] {
-        var scanner = Scanner(bytes: Array(value.utf8))
-        var result: [SVGPathCommand] = []
-        var point = CGPoint.zero, start = CGPoint.zero
-        var cubicControl: CGPoint?, quadraticControl: CGPoint?
-        var command: UInt8?
-
-        func reflected(_ control: CGPoint?, around origin: CGPoint) -> CGPoint {
-            guard let control = control else { return origin }
-            return CGPoint(x: 2 * origin.x - control.x, y: 2 * origin.y - control.y)
-        }
-
-        while !scanner.atEnd {
-            if let next = scanner.takeCommand() { command = next }
-            guard let cmd = command else { throw LegacySkitchError.invalidPath("Missing command") }
-            let absolute = cmd >= 65 && cmd <= 90
-            let upper = absolute ? cmd : cmd - 32
-            if result.isEmpty && upper != 77 { throw LegacySkitchError.invalidPath("Must start with M") }
-            guard result.count < maximumCommands else { throw LegacySkitchError.limitExceeded }
-            if upper == 90 {
-                result.append(.close); point = start
-                cubicControl = nil; quadraticControl = nil; command = nil
-                continue
-            }
-            let origin = absolute ? CGPoint.zero : point
-            func pair() throws -> CGPoint {
-                let x = try scanner.number(), y = try scanner.number()
-                let value = CGPoint(x: x + origin.x, y: y + origin.y)
-                guard value.x.isFinite && value.y.isFinite else {
-                    throw LegacySkitchError.invalidPath("Non-finite coordinate")
-                }
-                return value
-            }
-            switch upper {
-            case 77:
-                point = try pair(); start = point; result.append(.move(to: point))
-                command = absolute ? 76 : 108
-                cubicControl = nil; quadraticControl = nil
-            case 76:
-                point = try pair(); result.append(.line(to: point))
-                cubicControl = nil; quadraticControl = nil
-            case 72:
-                point.x = try scanner.number() + origin.x; result.append(.line(to: point))
-                cubicControl = nil; quadraticControl = nil
-            case 86:
-                point.y = try scanner.number() + origin.y; result.append(.line(to: point))
-                cubicControl = nil; quadraticControl = nil
-            case 67:
-                let c1 = try pair(), c2 = try pair(), end = try pair()
-                result.append(.cubic(control1: c1, control2: c2, to: end))
-                point = end; cubicControl = c2; quadraticControl = nil
-            case 83:
-                let c1 = reflected(cubicControl, around: point)
-                let c2 = try pair(), end = try pair()
-                result.append(.cubic(control1: c1, control2: c2, to: end))
-                point = end; cubicControl = c2; quadraticControl = nil
-            case 81:
-                let control = try pair(), end = try pair()
-                result.append(.quadratic(control: control, to: end))
-                point = end; quadraticControl = control; cubicControl = nil
-            case 84:
-                let control = reflected(quadraticControl, around: point), end = try pair()
-                result.append(.quadratic(control: control, to: end))
-                point = end; quadraticControl = control; cubicControl = nil
-            case 65:
-                let rx = try scanner.number(), ry = try scanner.number(), rotation = try scanner.number()
-                guard rx >= 0 && ry >= 0 else { throw LegacySkitchError.invalidPath("Negative arc radius") }
-                let large = try scanner.flag(), sweep = try scanner.flag(), end = try pair()
-                result.append(.arc(radiusX: rx, radiusY: ry, rotation: rotation,
-                                   largeArc: large, sweep: sweep, to: end))
-                point = end; cubicControl = nil; quadraticControl = nil
-            default:
-                throw LegacySkitchError.invalidPath("Unknown command \(UnicodeScalar(cmd))")
-            }
-            guard point.x.isFinite && point.y.isFinite && result.last?.isFinite == true else {
-                throw LegacySkitchError.invalidPath("Non-finite coordinate")
-            }
-        }
-        return result
-    }
-
-    /// Original M/C/z documents render without approximation. Quadratics use exact
-    /// degree elevation. A generic SVG arc is preserved by parse(), but requires a
-    /// dedicated ellipse renderer rather than silently flattening it here.
-    static func makeCGPath(_ commands: [SVGPathCommand]) throws -> CGPath {
-        let path = CGMutablePath()
-        for command in commands {
-            guard command.isFinite else { throw LegacySkitchError.invalidPath("Non-finite coordinate") }
-            switch command {
-            case .move(let p): path.move(to: p)
-            case .line(let p): path.addLine(to: p)
-            case .cubic(let c1, let c2, let p): path.addCurve(to: p, control1: c1, control2: c2)
-            case .quadratic(let control, let p): path.addQuadCurve(to: p, control: control)
-            case .close: path.closeSubpath()
-            case .arc: throw LegacySkitchError.unsupported("SVG arc rendering; parameters are retained")
-            }
-        }
-        return path
-    }
-
-    private struct Scanner {
-        let bytes: [UInt8]
-        var index = 0
-        var allowsComma = false
-        mutating func whitespace() {
-            while index < bytes.count && [9, 10, 13, 32].contains(bytes[index]) { index += 1 }
-        }
-        var atEnd: Bool { mutating get { whitespace(); return index == bytes.count } }
-        mutating func takeCommand() -> UInt8? {
-            whitespace()
-            guard index < bytes.count else { return nil }
-            let b = bytes[index]
-            guard (65...90).contains(b) || (97...122).contains(b) else { return nil }
-            index += 1; allowsComma = false; return b
-        }
-        mutating func separator() throws {
-            whitespace()
-            if index < bytes.count && bytes[index] == 44 {
-                // Commas separate numeric arguments, never follow a command/another comma.
-                guard allowsComma else {
-                    throw LegacySkitchError.invalidPath("Unexpected comma")
-                }
-                index += 1; allowsComma = false; whitespace()
-            }
-        }
-        mutating func flag() throws -> Bool {
-            try separator()
-            guard index < bytes.count, bytes[index] == 48 || bytes[index] == 49 else {
-                throw LegacySkitchError.invalidPath("Arc flag must be 0 or 1")
-            }
-            let flag = bytes[index] == 49; index += 1; allowsComma = true; return flag
-        }
-        mutating func number() throws -> CGFloat {
-            try separator()
-            let start = index
-            if index < bytes.count && (bytes[index] == 43 || bytes[index] == 45) { index += 1 }
-            var digits = 0
-            while index < bytes.count && (48...57).contains(bytes[index]) { index += 1; digits += 1 }
-            if index < bytes.count && bytes[index] == 46 {
-                index += 1
-                while index < bytes.count && (48...57).contains(bytes[index]) { index += 1; digits += 1 }
-            }
-            guard digits > 0 else { throw LegacySkitchError.invalidPath("Expected number at byte \(start)") }
-            if index < bytes.count && (bytes[index] == 69 || bytes[index] == 101) {
-                index += 1
-                if index < bytes.count && (bytes[index] == 43 || bytes[index] == 45) { index += 1 }
-                let exponent = index
-                while index < bytes.count && (48...57).contains(bytes[index]) { index += 1 }
-                guard index > exponent else { throw LegacySkitchError.invalidPath("Missing exponent") }
-            }
-            guard let value = Double(String(decoding: bytes[start..<index], as: UTF8.self)), value.isFinite else {
-                throw LegacySkitchError.invalidPath("Non-finite number")
-            }
-            allowsComma = true
-            return CGFloat(value)
-        }
-    }
-}
 
 struct LegacySkitchColor: Codable, Equatable {
     var red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat
@@ -548,5 +363,204 @@ enum LegacySkitch {
                 _ = stack.popLast()
             } catch { fail(parser, error) }
         }
+    }
+}
+
+// MARK: - Converting a legacy document (reachable only from Migration)
+
+enum LegacyBridge {
+    /// Everything the original SVG carried besides the drawing itself.
+    struct Metadata: Codable, Equatable {
+        var root: [String: String] = [:]
+        var background: [String: String] = [:]
+        var backgroundImage: [String: String] = [:]
+        var elements: [String: Record] = [:]
+        var groups: [String: Int] = [:]
+        var originalSize: CGSize?
+    }
+    struct Record: Codable, Equatable {
+        var attributes: [String: String]
+        var importedElement: SketchElement
+        var originalText: LegacySkitchText?
+    }
+    static func convert(_ original: LegacySkitchDocument) throws -> SketchDocument {
+        try convertWithMetadata(original).document
+    }
+    static func convertWithMetadata(_ original: LegacySkitchDocument) throws -> (document: SketchDocument, metadata: Metadata) {
+        func color(_ c: LegacySkitchColor) -> SketchColor { SketchColor(NSColor(deviceRed: c.red, green: c.green, blue: c.blue, alpha: c.alpha)) }
+        func transform(_ t: LegacySkitchTransform) -> SketchTransform { SketchTransform(a: t.a, b: t.b, c: t.c, d: t.d, tx: t.tx, ty: t.ty) }
+        var document = SketchDocument(size: original.size)
+        document.backgroundColor = color(original.backgroundColor)
+        var metadata = Metadata(root: original.attributes, background: original.backgroundAttributes, originalSize: original.size)
+        metadata.root.removeValue(forKey: "redux:state")
+        metadata.root.removeValue(forKey: "xmlns:redux")
+        var groups: [Int: UUID] = [:]
+        func groupID(_ id: Int) -> UUID? {
+            guard id != 0 else { return nil }
+            if let uuid = groups[id] { return uuid }
+            let uuid = UUID(); groups[id] = uuid; metadata.groups[uuid.uuidString] = id; return uuid
+        }
+        func append(_ element: SketchElement, attributes: [String: String], text: LegacySkitchText? = nil) {
+            document.elements.append(element)
+            metadata.elements[element.id.uuidString] = Record(attributes: attributes, importedElement: element, originalText: text)
+        }
+        let images = original.images.isEmpty ? original.background.map { [$0] } ?? [] : original.images
+        let order = original.paintOrder.isEmpty ? images.indices.map { LegacySkitchPaint.image($0) } + original.paths.indices.map { .path($0) } : original.paintOrder
+        for (position, paint) in order.enumerated() {
+            switch paint {
+            case .image(let index):
+                let image = images[index]
+                guard let decoded = NSImage(data: image.pngData), SketchDocument.validSize(decoded.size) else { throw SketchDocumentError.invalidImage }
+                let shadowed = (Double(image.attributes["skShadowRadius"] ?? "0") ?? 0) > 0 || image.attributes["skitchHasShadow"] == "1"
+                if position == 0 && image.rect == document.canvasRect && image.transform == .identity && !shadowed && image.attributes["skitchGroup"] == nil {
+                    document.backgroundPNG = image.pngData
+                    metadata.backgroundImage = image.attributes
+                } else {
+                    var element = SketchElement(kind: .raster)
+                    element.imagePNG = image.pngData; element.rect = image.rect; element.transform = transform(image.transform)
+                    element.groupID = groupID(Int(image.attributes["skitchGroup"] ?? "0") ?? 0); element.shadowed = shadowed
+                    append(element, attributes: image.attributes)
+                }
+            case .path(let index):
+                let path = original.paths[index]
+                _ = try SVGPathParser.makeCGPath(path.commands)
+                var element = SketchElement(kind: .path)
+                element.pathCommands = path.commands; element.color = color(path.color)
+                element.filled = true; element.strokeWidth = 0; element.shadowed = path.hasShadow
+                element.transform = transform(path.transform)
+                element.groupID = groupID(path.group); append(element, attributes: path.attributes)
+            }
+        }
+        for text in original.texts {
+            var element = SketchElement(kind: .text)
+            element.text = text.content; element.fontName = text.fontName; element.fontSize = text.fontSize
+            element.color = color(text.color); element.outlined = text.hasOutline; element.shadowed = text.hasShadow
+            let font = NSFont(name: text.fontName, size: text.fontSize) ?? .boldSystemFont(ofSize: text.fontSize)
+            let sample = NSTextStorage(string: "M", attributes: [.font: font, .paragraphStyle: SketchRenderer.textParagraphStyle])
+            let layout = NSLayoutManager(), container = NSTextContainer(size: CGSize(width: 100_000, height: 100_000))
+            container.lineFragmentPadding = 0; sample.addLayoutManager(layout); layout.addTextContainer(container); layout.ensureLayout(for: container)
+            let baseline = layout.location(forGlyphAt: 0).y
+            let position = text.lines.first?.position.map { CGPoint(x: $0.x, y: $0.y-baseline) } ?? text.anchor
+            let textSize = (text.content as NSString).boundingRect(with: NSSize(width: max(1,original.size.width-position.x+100),height: 100_000), options: [.usesLineFragmentOrigin,.usesFontLeading], attributes: [.font:font])
+            element.rect = CGRect(origin: position, size: CGSize(width: max(40,ceil(textSize.width)+16),height: max(text.fontSize*1.5,ceil(textSize.height)+8)))
+            if let frame = text.frame { element.rect = frame }
+            element.transform = transform(text.transform)
+            element.groupID = groupID(text.group); append(element, attributes: text.attributes, text: text)
+        }
+        return (try document.validated(), metadata)
+    }
+}
+
+
+/// The editing content of one legacy document, ready to be written as .opensnap.
+struct LegacyDocumentContent {
+    var document: SketchDocument
+    var canvasData: Data
+    var drawingDefaults: DrawingDefaults
+    /// Set when the stored editing state could not be trusted and the visible drawing was converted instead.
+    var note: String?
+}
+
+/// The one door into the legacy formats. Only the one-time data migration calls this: Open, drag and
+/// drop, Recent and History never read a legacy document.
+enum LegacyDocumentReader {
+    static let legacyFormatIdentifier = "com.skitch-redux.editable-document"
+    static let supplementalNamespace = "urn:skitch-redux:editable-document:1"
+
+    static func read(_ data: Data) throws -> LegacyDocumentContent {
+        guard data.count <= LegacySkitch.maximumFileBytes else { throw LegacySkitchError.limitExceeded }
+        if data.first(where: { ![9, 10, 13, 32].contains($0) }) == 123 {
+            let canvas = try canvasBytes(data)
+            return LegacyDocumentContent(document: try CanvasView.validatedDocumentData(canvas), canvasData: canvas, drawingDefaults: .init())
+        }
+        let original = try LegacySkitch.decode(data)
+        guard let encoded = original.attributes["redux:state"] else {
+            guard original.attributes["xmlns:redux"] == nil else { throw LegacySkitchError.invalidDocument("Missing editing state") }
+            return try convertVisible(original, note: nil)
+        }
+        guard original.attributes["xmlns:redux"] == supplementalNamespace, let bytes = Data(base64Encoded: encoded),
+              let envelope = try? JSONDecoder().decode(Envelope.self, from: bytes),
+              envelope.format == supplementalNamespace, envelope.version == 1 else {
+            throw LegacySkitchError.invalidDocument("Unreadable editing state")
+        }
+        guard (try? fingerprint(data)) == envelope.svgFingerprint else {
+            return try convertVisible(original, note: "the drawing was edited outside the app after it was saved; converted from the visible drawing")
+        }
+        var document = envelope.document
+        guard document.format == legacyFormatIdentifier else { throw SketchDocumentError.unsupportedFormat }
+        document.format = SketchDocument.formatIdentifier
+        document = try document.validated()
+        let canvas: Data
+        if let raw = envelope.rawCanvasData {
+            canvas = try canvasBytes(raw)
+            guard try CanvasView.validatedDocumentData(canvas) == document else {
+                throw LegacySkitchError.invalidDocument("Canvas snapshot disagrees with the editing document")
+            }
+        } else { canvas = try document.encoded() }
+        return LegacyDocumentContent(document: document, canvasData: canvas, drawingDefaults: defaults(envelope.metadata.root))
+    }
+
+    private static func convertVisible(_ original: LegacySkitchDocument, note: String?) throws -> LegacyDocumentContent {
+        let converted = try LegacyBridge.convertWithMetadata(original)
+        return LegacyDocumentContent(document: converted.document, canvasData: try converted.document.encoded(),
+                                     drawingDefaults: defaults(converted.metadata.root), note: note)
+    }
+
+    /// Canvas JSON with the retired format identifier replaced byte for byte, so every number and pixel stays exact.
+    private static func canvasBytes(_ data: Data) throws -> Data {
+        let old = Data("\"format\":\"\(legacyFormatIdentifier)\"".utf8)
+        let new = Data("\"format\":\"\(SketchDocument.formatIdentifier)\"".utf8)
+        guard let range = data.range(of: old) else { throw SketchDocumentError.unsupportedFormat }
+        var result = data; result.replaceSubrange(range, with: new)
+        _ = try CanvasView.validatedDocumentData(result)
+        return result
+    }
+
+    private static func defaults(_ root: [String: String]) -> DrawingDefaults {
+        let names = ["skitchBrushColor": "brushColor", "skitchBrushColorAlpha": "brushColorAlpha", "skitchBrushSize": "brushSize",
+                     "skitchCustomColor": "customColor", "skitchCustomColorAlpha": "customColorAlpha"]
+        var values: [String: String] = [:]
+        for (old, new) in names { if let value = root[old] { values[new] = value } }
+        return DrawingDefaults(values: values)
+    }
+
+    private struct Envelope: Codable {
+        var format: String
+        var version: Int
+        var document: SketchDocument
+        var metadata: LegacyBridge.Metadata
+        var rawCanvasData: Data?
+        var svgFingerprint: String
+    }
+
+    /// Attribute order, indentation, CDATA and XML entity spelling do not matter; every painted node does.
+    private static func fingerprint(_ data: Data) throws -> String {
+        let reader = FingerprintReader(), parser = XMLParser(data: data)
+        parser.shouldResolveExternalEntities = false; parser.delegate = reader
+        guard parser.parse(), let root = reader.root else { throw LegacySkitchError.invalidXML("Cannot fingerprint SVG") }
+        let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys]
+        return SHA256.hash(data: try encoder.encode(root)).map { String(format: "%02x", $0) }.joined()
+    }
+    private final class FingerprintNode: Encodable {
+        var name: String
+        var attributes: [String: String]
+        var children: [FingerprintNode] = []
+        var text = ""
+        init(_ name: String, _ attributes: [String: String]) {
+            self.name = name; self.attributes = attributes
+            if name == "svg" { self.attributes.removeValue(forKey: "redux:state"); self.attributes.removeValue(forKey: "xmlns:redux") }
+        }
+    }
+    private final class FingerprintReader: NSObject, XMLParserDelegate {
+        var root: FingerprintNode?
+        var stack: [FingerprintNode] = []
+        func parser(_ parser: XMLParser, didStartElement name: String, namespaceURI: String?, qualifiedName qName: String?, attributes: [String: String]) {
+            let node = FingerprintNode(name, attributes)
+            if let parent = stack.last { parent.children.append(node) } else { root = node }
+            stack.append(node)
+        }
+        func parser(_ parser: XMLParser, foundCharacters string: String) { if stack.last?.name == "text" { stack.last?.text += string } }
+        func parser(_ parser: XMLParser, foundCDATA data: Data) { if stack.last?.name == "text" { stack.last?.text += String(decoding: data, as: UTF8.self) } }
+        func parser(_ parser: XMLParser, didEndElement name: String, namespaceURI: String?, qualifiedName qName: String?) { _ = stack.popLast() }
     }
 }

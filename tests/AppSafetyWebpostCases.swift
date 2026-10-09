@@ -40,7 +40,7 @@ extension AppSafetyTests {
             ("The upload right-click menu uses the 20 pt menu font", webpostMenuFont),
             ("The right-click menu lists every destination; choosing one persists it and the next Webpost click uploads there", webpostMultipleDestinations),
             ("Destination settings: Add, Make Default and Remove round-trip through storage with an S3 profile destination", webpostDestinationSettingsRoundTrip),
-            ("--eye-dump is ignored unless SKITCH_APP_SUPPORT names an existing directory", webpostEyeDumpGate),
+            ("--eye-dump is ignored unless OPENSNAP_APP_SUPPORT names an existing directory", webpostEyeDumpGate),
             ("The upload button is icon-only with the iCloud upload symbol and an explicit label", webpostModernIconOnly)
         ]
     }
@@ -288,12 +288,12 @@ extension AppSafetyTests {
     }
 
     static func webpostEyeDumpGate() throws {
-        let args = ["OpenSkitch", "--eye-dump", "/tmp/out"]
-        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: [:]) == nil, "No SKITCH_APP_SUPPORT: ignored")
-        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": ""]) == nil, "Empty: ignored")
-        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": "/nonexistent/skitch-support"]) == nil, "Missing directory: ignored")
-        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["SKITCH_APP_SUPPORT": NSTemporaryDirectory()])?.path == "/tmp/out", "Isolated support directory: honoured")
-        try expect(AppDelegate.eyeDumpDirectory(arguments: ["OpenSkitch"], environment: ["SKITCH_APP_SUPPORT": NSTemporaryDirectory()]) == nil, "No flag: nil")
+        let args = ["OpenSnap", "--eye-dump", "/tmp/out"]
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: [:]) == nil, "No OPENSNAP_APP_SUPPORT: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["OPENSNAP_APP_SUPPORT": ""]) == nil, "Empty: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["OPENSNAP_APP_SUPPORT": "/nonexistent/opensnap-support"]) == nil, "Missing directory: ignored")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: args, environment: ["OPENSNAP_APP_SUPPORT": NSTemporaryDirectory()])?.path == "/tmp/out", "Isolated support directory: honoured")
+        try expect(AppDelegate.eyeDumpDirectory(arguments: ["OpenSnap"], environment: ["OPENSNAP_APP_SUPPORT": NSTemporaryDirectory()]) == nil, "No flag: nil")
     }
 
     static func webpostModernIconOnly() throws {

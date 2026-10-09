@@ -303,7 +303,7 @@ enum PublishingS3Operations {
     static func upload(data: Data, plan: PublishingPlan, s3: PublishingS3Plan, credentials: S3Credentials,
                        cancellation: PublishingCancellation) throws {
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchS3-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapS3-") }
         catch { throw PublishingFailure("A private temporary upload folder could not be created.") }
         let file = directory.appendingPathComponent("image"), response = directory.appendingPathComponent("response")
         do {
@@ -320,7 +320,7 @@ enum PublishingS3Operations {
     /// The Test button: a signed read-only listing. No object is written.
     static func check(plan: PublishingS3Plan, credentials: S3Credentials, cancellation: PublishingCancellation) throws -> PublishingS3Plan.CheckResult {
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchS3Check-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapS3Check-") }
         catch { throw PublishingFailure("A private temporary folder could not be created.") }
         let response = directory.appendingPathComponent("response")
         let output = try runCurl(config: try plan.checkConfig(credentials: credentials, responseFile: response), timeout: 40, cancellation: cancellation)
@@ -334,7 +334,7 @@ enum PublishingS3Operations {
     /// Signed DELETE of the planned object; S3 answers 204 (200 from some compatible servers).
     static func delete(plan: PublishingS3Plan, credentials: S3Credentials, cancellation: PublishingCancellation) throws {
         let directory: URL
-        do { directory = try cancellation.makeTemporaryDirectory(prefix: "SkitchS3Delete-") }
+        do { directory = try cancellation.makeTemporaryDirectory(prefix: "OpenSnapS3Delete-") }
         catch { throw PublishingFailure("A private temporary folder could not be created.") }
         let response = directory.appendingPathComponent("response")
         let output = try runCurl(config: try plan.deleteConfig(credentials: credentials, responseFile: response), timeout: 40, cancellation: cancellation)

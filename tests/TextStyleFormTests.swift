@@ -1,7 +1,7 @@
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D TEXT_STYLE_FORM_TESTS \
 //   Sources/TextStyleForm.swift \
-//   tests/TextStyleFormTests.swift -o /tmp/skitch-text-style-form-tests
-// /tmp/skitch-text-style-form-tests
+//   tests/TextStyleFormTests.swift -o /tmp/opensnap-text-style-form-tests
+// /tmp/opensnap-text-style-form-tests
 #if TEXT_STYLE_FORM_TESTS
 import AppKit
 
@@ -176,11 +176,11 @@ struct TextStyleFormTests {
         let callbacksBefore = (outlines, shadows, defaults)
         let accessoryActions = [form.outline.action, form.shadowControl.action, form.defaults.action]
         TextStyleForm.prepareFontPanel(panel)
-        func floors() -> [NSLayoutConstraint] { popup.constraints.filter { $0.identifier?.hasPrefix("skitch.toolbar.") == true } }
+        func floors() -> [NSLayoutConstraint] { popup.constraints.filter { $0.identifier?.hasPrefix("opensnap.toolbar.") == true } }
         expect(!popup.translatesAutoresizingMaskIntoConstraints && floors().count == 2
                && floors().allSatisfy { $0.isActive && $0.relation == .greaterThanOrEqual && $0.firstItem === popup }
-               && floors().first { $0.identifier == "skitch.toolbar.minWidth" }?.constant == 220
-               && (floors().first { $0.identifier == "skitch.toolbar.minHeight" }?.constant ?? 0) >= 32,
+               && floors().first { $0.identifier == "opensnap.toolbar.minWidth" }?.constant == 220
+               && (floors().first { $0.identifier == "opensnap.toolbar.minHeight" }?.constant ?? 0) >= 32,
                "Collection popup is floored at 220x32 by Auto Layout and never capped")
         expect(popup.frame == popupBefore, "Typography refresh does not sizeToFit a toolbar view")
         let titleFont = popup.itemArray[0].attributedTitle?.attribute(.font, at: 0, effectiveRange: nil) as? NSFont

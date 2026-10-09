@@ -17,7 +17,7 @@ extension AppDelegate {
     /// Modern has no name field: the window title is the document name.
     func showDocumentName(_ name: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        window.title = trimmed.isEmpty ? "OpenSkitch" : trimmed
+        window.title = trimmed.isEmpty ? "OpenSnap" : trimmed
     }
 
     /// What this process's window is built from, so tools/test-native-startup.py can tell the glass chrome really built.

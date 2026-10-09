@@ -99,7 +99,7 @@ final class OriginalHelpBevelView: NSView {
 /// miniaturization and termination. This controller installs no event monitors.
 @MainActor
 final class OriginalHelpBevel {
-    static let hoverDelay: TimeInterval = 0.25 // SkitchCropView_mouseEntered:.
+    static let hoverDelay: TimeInterval = 0.25 // OriginalCropView_mouseEntered:.
     static let fadeInterval: TimeInterval = 0.02
     static let showStep: CGFloat = 0.15 // Mach-O double DAT_00260af8.
     static let hideStep: CGFloat = 0.1 // Negated DAT_00260b00.

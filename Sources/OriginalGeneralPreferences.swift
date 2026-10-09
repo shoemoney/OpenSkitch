@@ -6,7 +6,7 @@ import AppKit
 struct OriginalGeneralPreferences {
     let defaults: UserDefaults
     static let precisionKey = "fittingPrecision"
-    static let captureKey = "skitchInSnap"
+    static let captureKey = "opensnapInSnap"
     static let presenceKey = "statusMenu"
     static let overlaysKey = "disableOverlay"
     static let keyboardTipsKey = "disableModtips"
@@ -25,7 +25,7 @@ struct OriginalGeneralPreferences {
         let presence = defaults.integer(forKey: Self.presenceKey)
         return GeneralPreferencesState(drawingPrecision: original ?? previous ?? .medium,
             arrowHead: defaults.integer(forKey: OriginalArrowGeometry.preferenceKey) == 1 ? 1 : 2,
-            includeSkitch: defaults.bool(forKey: Self.captureKey),
+            includeApp: defaults.bool(forKey: Self.captureKey),
             statusMenu: (0...2).contains(presence) ? presence : 0,
             showToolTips: defaults.object(forKey: Self.overlaysKey) != nil && !defaults.bool(forKey: Self.overlaysKey),
             showKeyboardTips: defaults.object(forKey: Self.keyboardTipsKey) != nil && !defaults.bool(forKey: Self.keyboardTipsKey))
@@ -40,7 +40,7 @@ struct OriginalGeneralPreferences {
         if proposed.arrowHead != current.arrowHead, [1, 2].contains(proposed.arrowHead) {
             defaults.set(proposed.arrowHead, forKey: OriginalArrowGeometry.preferenceKey)
         }
-        if proposed.includeSkitch != current.includeSkitch { defaults.set(proposed.includeSkitch, forKey: Self.captureKey) }
+        if proposed.includeApp != current.includeApp { defaults.set(proposed.includeApp, forKey: Self.captureKey) }
         if proposed.statusMenu != current.statusMenu, (0...2).contains(proposed.statusMenu) {
             defaults.set(proposed.statusMenu, forKey: Self.presenceKey)
         }
@@ -49,6 +49,6 @@ struct OriginalGeneralPreferences {
     }
     func includeApp(mode: String, manualOption: Bool) -> Bool {
         guard mode == "crosshair" || mode == "fullscreen" else { return false }
-        return state.includeSkitch != manualOption
+        return state.includeApp != manualOption
     }
 }

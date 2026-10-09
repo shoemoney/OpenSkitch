@@ -3,8 +3,8 @@ import Foundation
 import CoreGraphics
 
 // Standalone: xcrun swiftc -swift-version 5 -warnings-as-errors -D STROKE_FITTING_TESTS
-// Sources/LegacySkitch.swift Sources/StrokeFitting.swift tests/StrokeFittingTests.swift -o /tmp/skitch-stroke-fitting-tests
-// /tmp/skitch-stroke-fitting-tests
+// Sources/SVGPath.swift Sources/StrokeFitting.swift tests/StrokeFittingTests.swift -o /tmp/opensnap-stroke-fitting-tests
+// /tmp/opensnap-stroke-fitting-tests
 // No Canvas, application launch, or original runtime is used by these tests.
 @main
 struct StrokeFittingTests {
@@ -73,20 +73,6 @@ struct StrokeFittingTests {
     static func maximumSampleDistance(_ points: [CGPoint], _ commands: [SVGPathCommand]) -> CGFloat {
         let cloud = curves(commands).flatMap { curve in (0...2048).map { curve.at(CGFloat($0)/2048) } }
         return points.map { point in cloud.map { hypot(point.x-$0.x,point.y-$0.y) }.min() ?? .infinity }.max() ?? 0
-    }
-    static func svg(_ commands: [SVGPathCommand]) -> Data {
-        func point(_ p: CGPoint) -> String { "\(Double(p.x)),\(Double(p.y))" }
-        let d = commands.map { command -> String in
-            switch command {
-            case .move(let p): return "M"+point(p)
-            case .cubic(let a,let b,let p): return "C"+point(a)+" "+point(b)+" "+point(p)
-            case .close: return "z"
-            default: return "UNEXPECTED"
-            }
-        }.joined(separator:" ")
-        return Data(("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!-- Skitch 1.0 -->\n" +
-            "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"800\" height=\"600\">" +
-            "<path d=\"\(d)\" fill=\"rgb(255,0,0)\" opacity=\"0.65\"/></svg>").utf8)
     }
     // Independent pre-optimization detector. Keep the original scans here as an
     // oracle for corner selection, insufficient endpoint look, and cluster flush.
@@ -343,19 +329,17 @@ struct StrokeFittingTests {
                 try expect(StrokeFitter.outline(samples:tooMany,size:10).isEmpty, "Excess input silently truncated")
                 try expect(StrokeFitter.fit(points:[.zero,CGPoint(x:1,y:1)],squaredError:.nan).isEmpty, "NaN budget accepted")
             }),
-            ("Closed fitted outline retains editable cubic controls through native SVG and Codable", {
+            ("Closed fitted outline retains editable cubic controls through Codable", {
                 let input = (0...30).map { i in sample(80+CGFloat(i)*7,160+30*sin(CGFloat(i)/6),CGFloat(i)/30) }
                 let commands = StrokeFitter.outline(samples:input,size:9)
                 try assertOutline(commands)
-                let decoded = try LegacySkitch.decode(svg(commands))
-                try expect(decoded.paths.count == 1 && decoded.paths[0].commands == commands, "Native SVG round-trip changes cubic control points")
-                try expect(near(decoded.paths[0].color.alpha,0.65), "SVG opacity changed")
                 let encoded = try JSONEncoder().encode(commands)
-                try expect(try JSONDecoder().decode([SVGPathCommand].self,from:encoded) == commands, "Editable command Codable round-trip")
-                let before = try SVGPathParser.makeCGPath(commands), after = try SVGPathParser.makeCGPath(decoded.paths[0].commands)
+                let decoded = try JSONDecoder().decode([SVGPathCommand].self,from:encoded)
+                try expect(decoded == commands, "Editable command Codable round-trip")
+                let before = try SVGPathParser.makeCGPath(commands), after = try SVGPathParser.makeCGPath(decoded)
                 for x in stride(from:50,through:330,by:5) { for y in stride(from:110,through:220,by:5) {
                     let point = CGPoint(x:x,y:y)
-                    try expect(before.contains(point) == after.contains(point), "Filled geometry changed on SVG reopen")
+                    try expect(before.contains(point) == after.contains(point), "Filled geometry changed on reopen")
                 } }
             })
         ]

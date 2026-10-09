@@ -1,8 +1,8 @@
 // Pure standalone tests; every defaults write uses a unique disposable suite.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D RESIZE_PRESETS_TESTS Sources/ResizePresets.swift tests/ResizePresetsTests.swift \
-//   -o /tmp/skitch-resize-presets-tests
-// rtk proxy /tmp/skitch-resize-presets-tests
+//   -o /tmp/opensnap-resize-presets-tests
+// rtk proxy /tmp/opensnap-resize-presets-tests
 #if RESIZE_PRESETS_TESTS
 import Foundation
 import CoreGraphics
@@ -27,7 +27,7 @@ private enum ResizePresetsTests {
     }
 
     static func suite(_ body: (UserDefaults) throws -> Void) throws {
-        let name = "SkitchRedux.ResizePresetsTests.\(UUID().uuidString)"
+        let name = "OpenSnap.ResizePresetsTests.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: name) else { throw Failure(description: "Suite unavailable") }
         defer { defaults.removePersistentDomain(forName: name) }
         try body(defaults)
@@ -42,7 +42,6 @@ private enum ResizePresetsTests {
         try validation()
         try persistence()
         try corruption()
-        try originalEvidence()
         print("ResizePresetsTests: \(checks) checks passed")
     }
 
@@ -249,102 +248,5 @@ private enum ResizePresetsTests {
         }
     }
 
-    // Read-only independent fixture evidence. Run from the repository root.
-    // Resolves the original i386 Mach-O VM addresses used by disassembly;
-    // verifies actual CFString key literals and catalog spellings, not strings
-    // copied from the new implementation. No application or live prefs touched.
-    // Both inputs are git-ignored, so a fresh clone lacks them: only their absence skips
-    // (with a SKIP line); a present but unreadable or mismatched input still throws.
-    static func originalEvidence() throws {
-        let binaryPath = "original/Skitch.app/Contents/MacOS/Skitch", disassemblyPath = "analysis/disassembly.txt"
-        guard FileManager.default.fileExists(atPath: binaryPath) else {
-            print("SKIP original evidence: \(binaryPath) not present")
-            return
-        }
-        let data = try Data(contentsOf: URL(fileURLWithPath: binaryPath))
-        func word(_ offset: Int) -> Int {
-            (0..<4).reduce(0) { $0 | (Int(data[offset + $1]) << ($1 * 8)) }
-        }
-        try expect(word(0) == 0xfeedface, "Original i386 Mach-O fixture")
-        var segments: [(Int, Int, Int)] = []
-        var position = 28
-        for _ in 0..<word(16) {
-            if word(position) == 1 { segments.append((word(position + 24), word(position + 36), word(position + 32))) }
-            position += word(position + 4)
-        }
-        func offset(_ address: Int) throws -> Int {
-            guard let segment = segments.first(where: { address >= $0.0 && address < $0.0 + $0.1 }) else {
-                throw Failure(description: "Unmapped original address")
-            }
-            return segment.2 + address - segment.0
-        }
-        func pointer(_ address: Int) throws -> Int { word(try offset(address)) }
-        func string(_ address: Int) throws -> String {
-            let start = try offset(address)
-            guard let end = data[start...].firstIndex(of: 0),
-                  let value = String(data: data[start..<end], encoding: .utf8) else {
-                throw Failure(description: "Invalid original literal")
-            }
-            return value
-        }
-        let keys = [ResizePresetKeys.name, ResizePresetKeys.editable, ResizePresetKeys.mode,
-                    ResizePresetKeys.format, ResizePresetKeys.width, ResizePresetKeys.height,
-                    ResizePresetKeys.anchor, ResizePresetKeys.proportions,
-                    ResizePresetKeys.limitMode, ResizePresetKeys.limitSize]
-        for (index, key) in keys.enumerated() {
-            let cfstring = try pointer(0x288a38 + index * 4)
-            try expect(try string(pointer(cfstring + 8)) == key, "Original key pointer \(index)")
-        }
-        try expect(try string(pointer(0x28c68c + 8)) == ResizePresetKeys.defaults, "Original defaults key")
-        for (index, preset) in ResizePreset.builtins.enumerated() {
-            try expect(try string(pointer(0x28c69c + index * 16 + 8)) == preset.name, "Original catalog literal \(index)")
-        }
-        // Recover numeric setter arguments from the original loadPresets body.
-        guard FileManager.default.fileExists(atPath: disassemblyPath) else {
-            print("SKIP original disassembly evidence: \(disassemblyPath) not present")
-            return
-        }
-        let disassembly = try String(contentsOfFile: disassemblyPath, encoding: .utf8)
-        guard let start = disassembly.range(of: "-[SKResizeController loadPresets]:"),
-              let end = disassembly.range(of: "-[SKResizeController savePresets]:", range: start.upperBound..<disassembly.endIndex) else {
-            throw Failure(description: "Original loadPresets evidence missing")
-        }
-        let pointerPattern = try NSRegularExpression(pattern: #"(movl|leal)\s+0x([0-9a-f]+)\(%(?:ebx|esi)\)"#)
-        let argumentPattern = try NSRegularExpression(pattern: #"movl\s+\$0x([0-9a-f]+), 0x8\(%esp\)"#)
-        var recovered: [[String: Int]] = []
-        var selector: String?
-        var argument: Int?
-        for line in disassembly[start.upperBound..<end.lowerBound].components(separatedBy: .newlines) {
-            let range = NSRange(line.startIndex..<line.endIndex, in: line)
-            if let match = pointerPattern.firstMatch(in: line, range: range),
-               let kindRange = Range(match.range(at: 1), in: line),
-               let numberRange = Range(match.range(at: 2), in: line),
-               let displacement = Int(line[numberRange], radix: 16) {
-                let address = 0x75289 + displacement
-                if line[kindRange] == "movl" { selector = try? string(pointer(address)); argument = nil }
-                else if (0x28c69c...0x28c75c).contains(address) {
-                    recovered.append([:])
-                }
-            }
-            if let match = argumentPattern.firstMatch(in: line, range: range),
-               let valueRange = Range(match.range(at: 1), in: line) {
-                argument = Int(line[valueRange], radix: 16)
-            }
-            if line.contains("calll"), !recovered.isEmpty, let selector = selector,
-               selector.hasPrefix("set"), let value = argument {
-                recovered[recovered.count - 1][selector] = value
-                argument = nil
-            }
-        }
-        try expect(recovered.count == 13, "Disassembled catalog count")
-        for (index, preset) in ResizePreset.builtins.enumerated() {
-            let values = recovered[index]
-            try expect(values["setWidth:"] == preset.width && values["setHeight:"] == preset.height,
-                       "Disassembled catalog dimensions \(index)")
-            try expect(values["setMode:", default: 1] == preset.mode.rawValue
-                       && values["setConstrainProportions:", default: 1] == (preset.proportions ? 1 : 0)
-                       && values["setEditable:"] == 0, "Disassembled catalog flags \(index)")
-        }
-    }
 }
 #endif

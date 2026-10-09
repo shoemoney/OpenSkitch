@@ -8,7 +8,7 @@ private final class TextStyleContentView: NSView {
 final class TextStyleForm: NSView {
     let outline = NSButton(checkboxWithTitle: "Text outline", target: nil, action: nil)
     let shadowControl = NSButton(checkboxWithTitle: "Text shadow", target: nil, action: nil)
-    let defaults = NSButton(title: "Default Skitch Style", target: nil, action: nil)
+    let defaults = NSButton(title: "Default Text Style", target: nil, action: nil)
     private let overflow = NSScrollView()
     private let content = TextStyleContentView()
     private let stack = NSStackView()
@@ -157,8 +157,8 @@ final class TextStyleForm: NSView {
     private static func constrainToolbarView(_ view: NSView, minimum: NSSize) {
         // Frame-derived (autoresizing-mask) constraints would pin the size and make the floors inert.
         if view.translatesAutoresizingMaskIntoConstraints { view.translatesAutoresizingMaskIntoConstraints = false }
-        for (identifier, anchor, constant) in [("skitch.toolbar.minWidth", view.widthAnchor, minimum.width),
-                                               ("skitch.toolbar.minHeight", view.heightAnchor, minimum.height)] {
+        for (identifier, anchor, constant) in [("opensnap.toolbar.minWidth", view.widthAnchor, minimum.width),
+                                               ("opensnap.toolbar.minHeight", view.heightAnchor, minimum.height)] {
             if let existing = view.constraints.first(where: { $0.identifier == identifier }) {
                 if existing.constant != constant { existing.constant = constant }
             } else {

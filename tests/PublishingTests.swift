@@ -1,8 +1,8 @@
 import Foundation
 
 // Standalone, pure checks: compile this file with Sources/Publishing.swift, then run --test.
-// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift tests/PublishingTests.swift -o /tmp/skitch-publishing-tests
-// /tmp/skitch-publishing-tests --test
+// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift tests/PublishingTests.swift -o /tmp/opensnap-publishing-tests
+// /tmp/opensnap-publishing-tests --test
 // No network, Keychain, saved settings, Process, or clipboard access in these checks.
 @main
 enum PublishingTests {
@@ -188,7 +188,7 @@ enum PublishingTests {
             guard let number = Int(port) else { throw PublishingFailure("--port must be numeric.") }
             settings.sftpPort = number
         }
-        let name = "skitch-redux-backend-test-" + UUID().uuidString.lowercased() + ".png"
+        let name = "opensnap-backend-test-" + UUID().uuidString.lowercased() + ".png"
         let png = Data(base64Encoded: "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jS1cAAAAASUVORK5CYII=")!
         let plan = try PublishingPlan(settings: settings, fileName: name, capabilities: nil, sftpAvailable: PublishingTransfer.sftpAvailable)
         let worker = PublishingWorkController()

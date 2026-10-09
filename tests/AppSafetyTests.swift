@@ -312,23 +312,20 @@ enum AppSafetyTests {
     @MainActor
     final class Fixture {
         let app = AppDelegate()
-        init(nativeRecovery: Data? = nil, legacyRecovery: Data? = nil) throws {
-            let expected = ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!
+        init(nativeRecovery: Data? = nil) throws {
+            let expected = ProcessInfo.processInfo.environment["OPENSNAP_APP_SUPPORT"]!
             try expect(app.support.path == expected, "App support must be isolated")
             // Regression guard: the publishing store (migration included) must never resolve to the owner's real folder.
             let inside = URL(fileURLWithPath: expected).resolvingSymlinksInPath().path + "/"
             for (label, store) in [("coordinator", app.publishing.store), ("system", PublishingDestinationStore.system), ("app", AppDelegate.publishingStore)] {
                 try expect(store.directory.resolvingSymlinksInPath().path.hasPrefix(inside),
-                           "The \(label) publishing store must lie inside SKITCH_APP_SUPPORT, not at \(store.directory.path)")
+                           "The \(label) publishing store must lie inside OPENSNAP_APP_SUPPORT, not at \(store.directory.path)")
                 try expect(store.secrets is PublishingMemorySecrets, "The \(label) publishing store must use in-memory secrets under test")
             }
-            for name in ["Recovery.skitch", "Recovery.skitchredux"] {
-                let recovery = app.support.appendingPathComponent(name)
-                if FileManager.default.fileExists(atPath: recovery.path) { try FileManager.default.removeItem(at: recovery) }
-            }
+            let staleRecovery = app.support.appendingPathComponent("Recovery.opensnap")
+            if FileManager.default.fileExists(atPath: staleRecovery.path) { try FileManager.default.removeItem(at: staleRecovery) }
             try FileManager.default.createDirectory(at: app.support, withIntermediateDirectories: true)
-            if let nativeRecovery { try nativeRecovery.write(to: app.support.appendingPathComponent("Recovery.skitch"), options: .atomic) }
-            if let legacyRecovery { try legacyRecovery.write(to: app.support.appendingPathComponent("Recovery.skitchredux"), options: .atomic) }
+            if let nativeRecovery { try nativeRecovery.write(to: app.support.appendingPathComponent("Recovery.opensnap"), options: .atomic) }
             // Use the real launch method to test onChange and onOpenDocument wiring.
             app.applicationDidFinishLaunching(Notification(name: NSApplication.didFinishLaunchingNotification))
             app.timer?.invalidate(); app.timer = nil
@@ -364,7 +361,7 @@ enum AppSafetyTests {
             }
         }
         func file(_ stem: String) -> URL {
-            app.support.appendingPathComponent(stem + "-" + UUID().uuidString + ".skitchredux")
+            app.support.appendingPathComponent(stem + "-" + UUID().uuidString + ".opensnap")
         }
         func saveA() throws -> URL {
             let url = file("A"); app.currentURL = url
@@ -447,8 +444,8 @@ enum AppSafetyTests {
         let original = app.canvas.onChange; var changes = 0
         app.canvas.onChange = { changes += 1; original?() }
         app.saveRecovery()
-        let data = try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))
-        let recovered = try SkitchFile.decode(data).document
+        let data = try Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap"))
+        let recovered = try OpenSnapFile.decode(data).document
         try expect(recovered.elements.first?.text == text.string, "Recovery must include uncommitted text")
         try expect(app.canvas.document == before && changes == 0, "Recovery must not mutate the live document or notify changes")
         try expect(text.superview === app.canvas && app.window.firstResponder === text && text.selectedRange() == caret,
@@ -457,7 +454,7 @@ enum AppSafetyTests {
                    "Recovery must not create canvas undo or replace typing history")
         text.insertText("!", replacementRange: NSRange(location: text.string.utf16.count, length: 0))
         app.saveRecovery()
-        try expect(try SkitchFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))).document.elements.first?.text == text.string,
+        try expect(try OpenSnapFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap"))).document.elements.first?.text == text.string,
                    "Typing must continue and reach the next recovery snapshot")
     }
     static func pendingTextFallback() throws {
@@ -470,7 +467,7 @@ enum AppSafetyTests {
         let before = app.canvas.document
         try expect(app.canvas.hasPendingTextChanges, "Canvas must expose pending text independently of the dirty flag")
         app.saveRecovery()
-        let recovered = try SkitchFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))).document
+        let recovered = try OpenSnapFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap"))).document
         try expect(recovered.elements.first?.text == text.string && app.canvas.document == before,
                    "Recovery must retain pending text even when dirty is false")
         answer(.alertSecondButtonReturn)
@@ -489,10 +486,8 @@ enum AppSafetyTests {
         try expect(!preferences.isVisible, "Accepted Snap dismisses Preferences before showing the replacement drawing")
     }
     static func originalMetadataRecovery() throws {
-        let brushMetadata = LegacyBridge.Metadata(root: ["skitchBrushColor": "0.2 0.4 0.6 1", "skitchBrushSize": "6"], elements: [:])
-        var fallback = SketchDocument(size: CGSize(width: 71, height: 53)); fallback.backgroundColor = SketchColor(.green)
-        let fallbackBytes = try fallback.encoded()
-        let saved: (bytes: Data, document: SketchDocument, metadata: LegacyBridge.Metadata) = try autoreleasepool {
+        let brushMetadata = DrawingDefaults(values: ["brushColor": "0.2 0.4 0.6 1", "brushSize": "6"])
+        let saved: (bytes: Data, document: SketchDocument, drawingDefaults: DrawingDefaults) = try autoreleasepool {
             let fixture = try Fixture(), app = fixture.app
             var seed = SketchDocument(size: CGSize(width: 200, height: 120))
             for index in 0..<3 {
@@ -502,44 +497,33 @@ enum AppSafetyTests {
             var label = SketchElement(kind: .text); label.text = "Seed"; label.rect = CGRect(x: 20, y: 80, width: 100, height: 30)
             seed.elements.append(label)
             app.canvas.document = seed
-            app.legacyMetadata = brushMetadata
-            let metadata = app.legacyMetadata
+            app.drawingDefaults = brushMetadata
+            let metadata = app.drawingDefaults
             let text = try editor(app, text: "Pending recovery annotation")
             let before = app.canvas.document, pending = try SketchDocument.decode(app.canvas.snapshotDocumentData())
             let typing = text.undoManager, caret = text.selectedRange()
             app.saveRecovery()
-            let recovery = app.support.appendingPathComponent("Recovery.skitch"), bytes = try Data(contentsOf: recovery)
-            let decoded = try SkitchFile.decode(bytes), visible = try LegacySkitch.decode(bytes)
-            try expect(decoded.document == pending && decoded.metadata == metadata && metadata.root["skitchBrushSize"] == "6",
+            let recovery = app.support.appendingPathComponent("Recovery.opensnap"), bytes = try Data(contentsOf: recovery)
+            let decoded = try OpenSnapFile.decode(bytes)
+            try expect(decoded.document == pending && decoded.drawingDefaults == metadata && metadata.values["brushSize"] == "6",
                        "Native recovery must retain pending edits and brush metadata together")
-            try expect(visible.attributes["skitchBrushColor"] == "0.2 0.4 0.6 1" && visible.attributes["skitchBrushSize"] == "6" && visible.paths.count == 3,
-                       "Recovery's visible SVG must retain the seeded brush settings and three editable paths")
+            try expect(decoded.document.elements.filter { $0.kind == .brush }.count == 3, "Recovery must retain the three seeded brush strokes")
             try expect(app.canvas.document == before && text.superview === app.canvas && app.window.firstResponder === text &&
-                       text.undoManager === typing && text.selectedRange() == caret && app.legacyMetadata == metadata,
+                       text.undoManager === typing && text.selectedRange() == caret && app.drawingDefaults == metadata,
                        "Metadata recovery must not commit or replace the live editor, model, caret or metadata")
             app.saveRecovery()
             try expect(try Data(contentsOf: recovery) == bytes, "Repeated native recovery must be stable")
             return (bytes, pending, metadata)
         }
         try autoreleasepool {
-            let restored = try Fixture(nativeRecovery: saved.bytes, legacyRecovery: fallbackBytes), app = restored.app
-            try expect(app.canvas.document == saved.document && app.legacyMetadata == saved.metadata && app.dirty && app.window.isDocumentEdited,
-                       "Actual startup must prefer native recovery over legacy JSON and restore original metadata")
+            let restored = try Fixture(nativeRecovery: saved.bytes), app = restored.app
+            try expect(app.canvas.document == saved.document && app.drawingDefaults == saved.drawingDefaults && app.dirty && app.window.isDocumentEdited,
+                       "Actual startup must restore native recovery with its drawing defaults")
             try expect(app.currentURL == nil && app.nameField.stringValue == "Recovered drawing", "Recovered work must remain unsaved rather than retain a fixture destination")
             app.saveRecovery()
-            let recovered = try SkitchFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch")))
-            try expect(recovered.document == saved.document && recovered.metadata == saved.metadata &&
-                       !FileManager.default.fileExists(atPath: app.support.appendingPathComponent("Recovery.skitchredux").path),
-                       "Recovery after restart must retain metadata and replace the obsolete JSON recovery")
-        }
-        try autoreleasepool {
-            let restored = try Fixture(legacyRecovery: fallbackBytes), app = restored.app
-            try expect(app.canvas.document == fallback && app.legacyMetadata == .init() && app.dirty,
-                       "Actual startup must still restore old JSON recovery when native recovery is absent")
-            app.saveRecovery()
-            let decoded = try SkitchFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch")))
-            try expect(decoded.document == fallback && !FileManager.default.fileExists(atPath: app.support.appendingPathComponent("Recovery.skitchredux").path),
-                       "Legacy JSON recovery must migrate to native recovery without changing the drawing")
+            let recovered = try OpenSnapFile.decode(Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap")))
+            try expect(recovered.document == saved.document && recovered.drawingDefaults == saved.drawingDefaults,
+                       "Recovery after restart must retain the drawing defaults")
         }
     }
     static func firstLaunchBlankCanvas() throws {
@@ -552,7 +536,7 @@ enum AppSafetyTests {
             let saved = try Fixture()
             saved.app.canvas.setBackgroundColor(.yellow)
             saved.app.saveRecovery()
-            let data = try Data(contentsOf: saved.app.support.appendingPathComponent("Recovery.skitch"))
+            let data = try Data(contentsOf: saved.app.support.appendingPathComponent("Recovery.opensnap"))
             let restored = try Fixture(nativeRecovery: data)
             try expect(restored.app.nameField.stringValue == "Recovered drawing", "Recovery still wins on launch")
         }
@@ -660,7 +644,7 @@ enum AppSafetyTests {
             throw Failure(description: "Frame preview fixture requires a real canvas scroll view and PNG export")
         }
         let opaque = app.window.isOpaque, background = app.window.backgroundColor, drawsBackground = scroll.drawsBackground
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery(); let recovered = try Data(contentsOf: recovery)
         try expect(history.canUndo && history.canRedo, "Preview fixture must contain both Undo and Redo history")
         app.frameSnap()
@@ -728,9 +712,9 @@ enum AppSafetyTests {
         app.vanish()
         try expect(!window.shown, "Fixture must start with the editor hidden")
         show()
-        try expect(window.shown && NSApp.windows.count == windows && AppSafetyAlert.seen.isEmpty, "Show Skitch must restore the hidden editor without a second window or prompt")
+        try expect(window.shown && NSApp.windows.count == windows && AppSafetyAlert.seen.isEmpty, "Show OpenSnap must restore the hidden editor without a second window or prompt")
         show()
-        try expect(window.shown && NSApp.windows.count == windows, "Show Skitch on a visible editor must stay a no-op reopen")
+        try expect(window.shown && NSApp.windows.count == windows, "Show OpenSnap on a visible editor must stay a no-op reopen")
         // Snap & Upload: cancellation never publishes.
         AppSafetyCaptureCoordinator.holdCapture = true; AppSafetyCaptureCoordinator.captureCallbacks = []
         AppSafetyCaptureCoordinator.requests = []
@@ -850,7 +834,7 @@ enum AppSafetyTests {
         try expect(try Data(contentsOf: a) == savedA, "Normal Frame replacement must not overwrite the old saved document")
     }
     static func oversizedImageFixture() throws -> URL {
-        let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!)
+        let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["OPENSNAP_APP_SUPPORT"]!)
         // A high-DPI TIFF can have legal point dimensions but excessive pixels.
         // Grayscale keeps the fixture small without mocking AppKit's decoder.
         let oversized = support.appendingPathComponent("oversized-high-dpi.tiff")
@@ -880,10 +864,10 @@ enum AppSafetyTests {
         return oversized
     }
     static func failedOpenAfterDiscard() throws {
-        let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"]!)
+        let support = URL(fileURLWithPath: ProcessInfo.processInfo.environment["OPENSNAP_APP_SUPPORT"]!)
         let corrupt = support.appendingPathComponent("invalid-image.png")
         try Data("This is not an image".utf8).write(to: corrupt)
-        let invalid = support.appendingPathComponent("invalid-version.skitchredux")
+        let invalid = support.appendingPathComponent("invalid-version.opensnap")
         var invalidDocument = SketchDocument(size: CGSize(width: 123, height: 99))
         invalidDocument.version = 99
         // Bypass validated serialization deliberately to create a rejected file.
@@ -905,7 +889,7 @@ enum AppSafetyTests {
             let name = app.nameField.stringValue, zoom = app.canvas.zoom
             try expect(history.canUndo && history.canRedo && typing?.canUndo == true, "Rejected-open fixture must have both canvas and typing history")
             app.saveRecovery()
-            let recovery = app.support.appendingPathComponent("Recovery.skitch"), recovered = try Data(contentsOf: recovery)
+            let recovery = app.support.appendingPathComponent("Recovery.opensnap"), recovered = try Data(contentsOf: recovery)
             answer(.alertThirdButtonReturn)
             AppSafetyAlert.answers.append(.init(title: errorTitle, response: .alertFirstButtonReturn))
             app.openURL(url)
@@ -943,7 +927,7 @@ enum AppSafetyTests {
                 let name = app.nameField.stringValue, zoom = app.canvas.zoom
                 let framed = app.frameMode, keepsAnnotations = app.frameKeepsAnnotations
                 app.saveRecovery()
-                let recovery = app.support.appendingPathComponent("Recovery.skitch"), recovered = try Data(contentsOf: recovery)
+                let recovery = app.support.appendingPathComponent("Recovery.opensnap"), recovered = try Data(contentsOf: recovery)
                 guard let image = NSImage(contentsOf: oversized) else { throw Failure(description: "Oversized capture fixture decoding") }
                 let prompts = AppSafetyAlert.seen.count
                 AppSafetyAlert.answers.append(.init(title: "This capture is too large or cannot be decoded safely.", response: .alertFirstButtonReturn))
@@ -976,10 +960,8 @@ enum AppSafetyTests {
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         let text = try editor(app, text: "Explicitly discard pending text at termination")
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery()
-        let oldRecovery = app.support.appendingPathComponent("Recovery.skitchredux")
-        try before.encoded().write(to: oldRecovery)
         try expect(FileManager.default.fileExists(atPath: recovery.path) && app.canvas.hasPendingTextChanges,
                    "Termination fixture must contain both recovery and uncommitted text")
         let prompts = AppSafetyAlert.seen.count
@@ -1007,8 +989,8 @@ enum AppSafetyTests {
         try expect(!app.dirty && app.canvas.hasPendingTextChanges && app.canvas.document == before && text.superview === app.canvas,
                    "Discard approval must leave the pending editor intact until the simulated termination callback")
         app.applicationWillTerminate(Notification(name: NSApplication.willTerminateNotification))
-        try expect(!FileManager.default.fileExists(atPath: recovery.path) && !FileManager.default.fileExists(atPath: oldRecovery.path),
-                   "Termination must remove both recovery formats instead of resurrecting discarded pending text")
+        try expect(!FileManager.default.fileExists(atPath: recovery.path),
+                   "Termination must remove the recovery file instead of resurrecting discarded pending text")
         try expect(try app.canvas.snapshotDocumentData() == pending && Data(contentsOf: a) == savedA,
                    "Termination Discard must not commit pending text or alter the saved document")
         try expect(text.superview === app.canvas && app.canvas.hasPendingTextChanges, "Recovery removal must be explicit even while pending text still exists")
@@ -1023,7 +1005,7 @@ enum AppSafetyTests {
         (app.window as! AppSafetyWindow).simulatesVisibility = true
         (app.window as! AppSafetyWindow).shown = true
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery()
         let recovered = try Data(contentsOf: recovery)
         app.showHistory()
@@ -1049,7 +1031,7 @@ enum AppSafetyTests {
         let historyID = try store.archive(historySnapshot, name: "History B", action: .archived)
         let historyPrompts = AppSafetyAlert.seen.count, prior = try app.historyEditorState()
         app.openHistory(historyID)
-        try expect(try app.canvas.snapshotDocumentData() == SkitchFile.decode(historySnapshot.native).canvasData &&
+        try expect(try app.canvas.snapshotDocumentData() == OpenSnapFile.decode(historySnapshot.native).canvasData &&
                    app.currentArchiveID == historyID && app.currentURL == nil && app.dirty &&
                    AppSafetyAlert.seen.count == historyPrompts,
                    "History UUID Open after cancelled Close is undoable and does not prompt to discard the prior draft")
@@ -1096,7 +1078,7 @@ enum AppSafetyTests {
         app.canvas.setBackgroundColor(.yellow)
         _ = try editor(app, text: "Persist pending text before Quit")
         let expected = try SketchDocument.decode(app.canvas.snapshotDocumentData())
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery()
         try expect(FileManager.default.fileExists(atPath: recovery.path), "Quit Save fixture must start with recovery")
         answer(.alertFirstButtonReturn)
@@ -1116,7 +1098,7 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         _ = try editor(app, text: "Discard only when deferred shutdown completes")
-        let pending = try app.canvas.snapshotDocumentData(), recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let pending = try app.canvas.snapshotDocumentData(), recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery(); let recovered = try Data(contentsOf: recovery)
         let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in }
         app.timer = timer
@@ -1148,7 +1130,7 @@ enum AppSafetyTests {
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         let text = try editor(app, text: "Recover after deferred cleanup failure")
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery(); let recovered = try Data(contentsOf: recovery)
         let timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in }
         app.timer = timer
@@ -1184,7 +1166,7 @@ enum AppSafetyTests {
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         let text = try editor(app, text: "Preserve draft after synchronous cleanup failure")
         let before = app.canvas.document, pending = try app.canvas.snapshotDocumentData()
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         app.saveRecovery(); let recovered = try Data(contentsOf: recovery)
         let failure = NSError(domain: "AppSafety", code: 2, userInfo: [NSLocalizedDescriptionKey: "Fake synchronous capture cleanup failure"])
         AppSafetyCaptureCoordinator.shutdownResult = .failure(failure)
@@ -1236,7 +1218,7 @@ enum AppSafetyTests {
         }
     }
     static func pannedSaveReopenRecovery() throws {
-        let saved: (recovery: Data, original: SketchDocument, png: Data, panned: SketchDocument, metadata: LegacyBridge.Metadata) = try autoreleasepool {
+        let saved: (recovery: Data, original: SketchDocument, png: Data, panned: SketchDocument, drawingDefaults: DrawingDefaults) = try autoreleasepool {
             let fixture = try Fixture(), app = fixture.app
             let size = CGSize(width: 100, height: 80)
             guard let bitmap = SketchRenderer.bitmap(size: size, draw: {
@@ -1249,8 +1231,8 @@ enum AppSafetyTests {
             var element = SketchElement(kind: .rectangle)
             element.rect = CGRect(x: 35, y: 30, width: 12, height: 15); element.color = SketchColor(.red)
             app.canvas.document.elements = [element]
-            let metadata = LegacyBridge.Metadata(root: ["futurePanSetting": "retained"], originalSize: size)
-            app.legacyMetadata = metadata
+            let metadata = DrawingDefaults(values: ["futurePanSetting": "retained"])
+            app.drawingDefaults = metadata
             app.canvas.editingUndoManager.removeAllActions()
             let original = app.canvas.document
             guard let png = app.canvas.imageData(format: "png") else { throw Failure(description: "Pan fixture PNG") }
@@ -1260,18 +1242,18 @@ enum AppSafetyTests {
             try expect(state["canvasPanBackground"] != nil && panned != original && app.dirty,
                        "Actual Space drag must create hidden source pixels and a dirty translated annotation")
             app.saveRecovery()
-            let recovery = try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))
-            let recovered = try SkitchFile.decode(recovery)
-            try expect(try recovered.canvasData == snapshot && recovered.metadata == metadata,
+            let recovery = try Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap"))
+            let recovered = try OpenSnapFile.decode(recovery)
+            try expect(try recovered.canvasData == snapshot && recovered.drawingDefaults == metadata,
                        "App recovery must preserve the full pan source alongside original metadata")
-            let destination = fixture.file("Panned").deletingPathExtension().appendingPathExtension("skitch")
+            let destination = fixture.file("Panned").deletingPathExtension().appendingPathExtension("opensnap")
             app.currentURL = destination
             try expect(app.save(), "Actual app native Save of a panned canvas")
-            let disk = try SkitchFile.read(destination)
-            try expect(try disk.canvasData == snapshot && disk.metadata == metadata && !app.dirty,
+            let disk = try OpenSnapFile.read(destination)
+            try expect(try disk.canvasData == snapshot && disk.drawingDefaults == metadata && !app.dirty,
                        "App Save must retain hidden pan state instead of only the visible clipped background")
             app.openURL(destination)
-            try expect(app.currentURL == destination && app.canvas.document == panned && app.legacyMetadata == metadata,
+            try expect(app.currentURL == destination && app.canvas.document == panned && app.drawingDefaults == metadata,
                        "Actual app reopen must restore the panned document and its destination/metadata")
             try pan(app, from: CGPoint(x: 90, y: 20), to: CGPoint(x: 20, y: 20))
             try expect(app.canvas.document == original && app.canvas.imageData(format: "png") == png && app.dirty,
@@ -1280,7 +1262,7 @@ enum AppSafetyTests {
         }
         try autoreleasepool {
             let fixture = try Fixture(nativeRecovery: saved.recovery), app = fixture.app
-            try expect(app.canvas.document == saved.panned && app.legacyMetadata == saved.metadata && app.currentURL == nil && app.dirty,
+            try expect(app.canvas.document == saved.panned && app.drawingDefaults == saved.drawingDefaults && app.currentURL == nil && app.dirty,
                        "Actual recovery startup must restore the full panned unsaved document and metadata")
             try pan(app, from: CGPoint(x: 90, y: 20), to: CGPoint(x: 20, y: 20))
             try expect(app.canvas.document == saved.original && app.canvas.imageData(format: "png") == saved.png,
@@ -1293,7 +1275,7 @@ enum AppSafetyTests {
         let text = try editor(app, text: "Draft protected while operations drain")
         let before = app.canvas.document, snapshot = try app.canvas.snapshotDocumentData()
         let caret = text.selectedRange(), typingUndo = text.undoManager
-        app.saveRecovery(); let recoveryURL = app.support.appendingPathComponent("Recovery.skitch")
+        app.saveRecovery(); let recoveryURL = app.support.appendingPathComponent("Recovery.opensnap")
         let recovery = try Data(contentsOf: recoveryURL)
         let photoURL = app.support.appendingPathComponent("LatePhoto-\(UUID().uuidString).png")
         let captureImage = try image(color: .green)
@@ -1384,7 +1366,7 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app
         _ = try fixture.saveA()
         app.canvas.setBackgroundColor(.yellow); app.saveRecovery()
-        let recovery = app.support.appendingPathComponent("Recovery.skitch")
+        let recovery = app.support.appendingPathComponent("Recovery.opensnap")
         let older = try Data(contentsOf: recovery)
         app.canvas.setBackgroundColor(.blue)
         let current = app.canvas.document
@@ -1393,7 +1375,7 @@ enum AppSafetyTests {
         try expect(app.applicationShouldTerminate(NSApp) == .terminateLater && !app.dirty && app.discardedForTermination,
                    "Non-text Discard must wait for cleanup rather than terminate immediately")
         let protected = try Data(contentsOf: recovery)
-        try expect(try protected != older && SkitchFile.decode(protected).document == current,
+        try expect(try protected != older && OpenSnapFile.decode(protected).document == current,
                    "Quit must snapshot the latest non-text edit before its temporary Discard flag")
         app.saveRecovery(); app.newFile()
         try expect(try Data(contentsOf: recovery) == protected && app.canvas.document == current,
@@ -1403,7 +1385,7 @@ enum AppSafetyTests {
         AppSafetyCaptureCoordinator.shutdownCallbacks.removeFirst()(.failure(error))
         try expect(app.dirty && !app.terminationStarted && !app.discardedForTermination && AppSafetyTermination.replies == [false],
                    "Cleanup rejection must restore non-text discard protection")
-        try expect(try SkitchFile.decode(Data(contentsOf: recovery)).document == current,
+        try expect(try OpenSnapFile.decode(Data(contentsOf: recovery)).document == current,
                    "Recovery must exist immediately after rejected Quit, without waiting for another timer tick")
         try waitForMain("Non-text cleanup error must be delivered") { AppSafetyAlert.seen.contains(error.localizedDescription) }
         answer(.alertSecondButtonReturn); app.newFile()
@@ -1426,9 +1408,9 @@ enum AppSafetyTests {
                     switch replacement {
                     case "new": app.newFile()
                     case "native":
-                        let url = fixture.file("B").deletingPathExtension().appendingPathExtension("skitch")
-                        try SkitchFile(document: SketchDocument(size: CGSize(width: 230, height: 150)),
-                                       metadata: .init(root: ["replacementMetadata": "B"])).write(to: url)
+                        let url = fixture.file("B").deletingPathExtension().appendingPathExtension("opensnap")
+                        try OpenSnapFile(document: SketchDocument(size: CGSize(width: 230, height: 150)),
+                                       drawingDefaults: DrawingDefaults(values: ["replacementMetadata": "B"])).write(to: url)
                         app.openURL(url)
                     case "raster":
                         let url = fixture.file("PhotoB").deletingPathExtension().appendingPathExtension("png")
@@ -1437,11 +1419,11 @@ enum AppSafetyTests {
                     default: app.receiveCapture(.success(try image(color: .yellow)))
                     }
                     let before = try app.canvas.snapshotDocumentData(), destination = app.currentURL
-                    let metadata = app.legacyMetadata, zoom = app.canvas.zoom, dirty = app.dirty
+                    let metadata = app.drawingDefaults, zoom = app.canvas.zoom, dirty = app.dirty
                     let history = app.canvas.editingUndoManager, undo = history.undoActionName
                     completion(.success(try image(color: .green)))
                     try expect(try app.canvas.snapshotDocumentData() == before && app.currentURL == destination &&
-                               app.legacyMetadata == metadata && app.canvas.zoom == zoom && app.dirty == dirty &&
+                               app.drawingDefaults == metadata && app.canvas.zoom == zoom && app.dirty == dirty &&
                                history.undoActionName == undo && !app.frameCaptureInProgress && AppSafetyAlert.seen.isEmpty,
                                "A stale \(keeps ? "Resnap" : "Frame") callback must preserve the \(replacement) replacement's pixels, metadata, URL, zoom and history")
                 }
@@ -1517,7 +1499,7 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app
         let a = try fixture.saveA(), savedA = try Data(contentsOf: a)
         let text = try editor(app, text: "Old annotations must be replaced")
-        app.legacyMetadata = .init(root: ["oldDocumentMetadata": "remove"])
+        app.drawingDefaults = DrawingDefaults(values: ["oldDocumentMetadata": "remove"])
         guard let bitmap = SketchRenderer.bitmap(size: CGSize(width: 16, height: 16), draw: {
             NSColor.blue.setFill(); CGRect(x: 0, y: 0, width: 16, height: 16).fill()
         }) else { throw Failure(description: "Small TIFF pixels") }
@@ -1532,7 +1514,7 @@ enum AppSafetyTests {
         answer(.alertThirdButtonReturn); app.openURL(url)
         try expect(app.canvas.canvasSize == CGSize(width: 16, height: 16) && app.canvas.document.elements.isEmpty &&
                    app.canvas.document.backgroundPNG != nil && text.superview == nil &&
-                   app.legacyMetadata == .init() && app.currentURL == nil && !app.dirty,
+                   app.drawingDefaults == .init() && app.currentURL == nil && !app.dirty,
                    "Raster Open must replace the old document using validated pixels and clear old annotations/editor/metadata")
         try expect(try Data(contentsOf: a) == savedA, "Normalized raster Open must preserve the prior saved file")
     }
@@ -1617,7 +1599,7 @@ enum AppSafetyTests {
         text.text = title; text.rect = CGRect(x: 10, y: 40, width: 100, height: 40)
         document.elements = [shape, text]
         return try HistoryStore.Snapshot(canvasData: document.encoded(),
-            metadata: .init(root: ["futureHistorySetting": title], originalSize: document.size), preview: nil)
+            drawingDefaults: DrawingDefaults(values: ["futureHistorySetting": title]), preview: nil)
     }
     static func preparePannedHistory(_ app: AppDelegate) throws -> Data {
         let size = CGSize(width: 100, height: 80)
@@ -1627,7 +1609,7 @@ enum AppSafetyTests {
         var shape = SketchElement(kind: .rectangle)
         shape.rect = CGRect(x: 15, y: 20, width: 18, height: 22); shape.color = SketchColor(.red)
         app.canvas.document.elements = [shape]
-        app.legacyMetadata = .init(root: ["futureHistorySetting": "A with hidden pixels"], originalSize: size)
+        app.drawingDefaults = DrawingDefaults(values: ["futureHistorySetting": "A with hidden pixels"])
         app.canvas.editingUndoManager.removeAllActions()
         let unpanned = try app.canvas.snapshotDocumentData()
         try pan(app, from: CGPoint(x: 20, y: 20), to: CGPoint(x: 85, y: 20))
@@ -1637,7 +1619,7 @@ enum AppSafetyTests {
         return unpanned
     }
     static func expectHistoryState(_ app: AppDelegate, _ state: AppDelegate.HistoryEditorState, _ message: String) throws {
-        try expect(try app.canvas.snapshotDocumentData() == state.data && app.legacyMetadata == state.metadata &&
+        try expect(try app.canvas.snapshotDocumentData() == state.data && app.drawingDefaults == state.drawingDefaults &&
                    app.nameField.stringValue == state.name && app.currentURL == state.url &&
                    app.currentArchiveID == state.archiveID && app.dirty == state.dirty && app.window.isDocumentEdited == state.dirty,
                    message)
@@ -1659,8 +1641,8 @@ enum AppSafetyTests {
         app.undo()
 
         var documentB = SketchDocument(size: CGSize(width: 123, height: 99)); documentB.backgroundColor = SketchColor(.blue)
-        let b = fixture.file("Open-B").deletingPathExtension().appendingPathExtension("skitch")
-        try SkitchFile(document: documentB, metadata: .init()).write(to: b)
+        let b = fixture.file("Open-B").deletingPathExtension().appendingPathExtension("opensnap")
+        try OpenSnapFile(document: documentB, drawingDefaults: .init()).write(to: b)
         answer(.alertThirdButtonReturn); app.openURL(b)
         try expect(app.currentURL == b && app.canvas.document.size == CGSize(width: 123, height: 99) && !app.dirty,
                    "Open must load the fixture")
@@ -1676,7 +1658,7 @@ enum AppSafetyTests {
         let beforeColor = try app.canvas.snapshotDocumentData()
         app.canvas.setBackgroundColor(.yellow)
         app.nameField.stringValue = "A original filename"
-        let destination = fixture.file("History-A").deletingPathExtension().appendingPathExtension("skitch")
+        let destination = fixture.file("History-A").deletingPathExtension().appendingPathExtension("opensnap")
         app.currentURL = destination
         try expect(app.save(), "Panned A must save successfully before History Open")
         let prior = try app.historyEditorState(), disk = try Data(contentsOf: destination)
@@ -1685,14 +1667,14 @@ enum AppSafetyTests {
         let snapshotB = try historyDrawing("B archived metadata", color: .green)
         let idB = try store.archive(snapshotB, name: "B filename", action: .archived)
         app.openHistory(idB)
-        let opened = try app.historyEditorState(), fileB = try SkitchFile.decode(snapshotB.native)
-        try expect(try opened.data == fileB.canvasData && opened.metadata == fileB.metadata && opened.name == "B filename" &&
+        let opened = try app.historyEditorState(), fileB = try OpenSnapFile.decode(snapshotB.native)
+        try expect(try opened.data == fileB.canvasData && opened.drawingDefaults == fileB.drawingDefaults && opened.name == "B filename" &&
                    opened.url == nil && opened.archiveID == idB && opened.dirty,
                    "History Open restores B's full native state as an unsaved independent destination")
         app.undo(); try expectHistoryState(app, prior, "Undo History Open restores A's raw pan, metadata, filename, URL, archive and clean flags")
         app.redo(); try expectHistoryState(app, opened, "Redo History Open restores B's complete identity and dirty flags")
         app.undo(); app.undo()
-        try expect(try app.canvas.snapshotDocumentData() == beforeColor && app.legacyMetadata == prior.metadata &&
+        try expect(try app.canvas.snapshotDocumentData() == beforeColor && app.drawingDefaults == prior.drawingDefaults &&
                    app.currentURL == destination && app.currentArchiveID == prior.archiveID && app.dirty,
                    "History Open must retain prior canvas Undo actions without redirecting Save or metadata")
         app.redo(); app.redo()
@@ -1703,21 +1685,21 @@ enum AppSafetyTests {
     static func historyOpenPendingText() throws {
         let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
         let destination = try fixture.saveA(), original = try Data(contentsOf: destination)
-        app.nameField.stringValue = "Pending A"; app.legacyMetadata = .init(root: ["futureHistorySetting": "pending A"])
+        app.nameField.stringValue = "Pending A"; app.drawingDefaults = DrawingDefaults(values: ["futureHistorySetting": "pending A"])
         let text = try editor(app, text: "Uncommitted before History Open")
         text.string += " without notification"
         app.dirty = false; app.window.isDocumentEdited = false
-        let pending = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
+        let pending = try app.canvas.snapshotDocumentData(), metadata = app.drawingDefaults
         let id = try store.archive(historyDrawing("Pending B"), name: "B", action: .archived)
         app.openHistory(id); app.undo()
-        try expect(try app.canvas.snapshotDocumentData() == pending && app.legacyMetadata == metadata &&
+        try expect(try app.canvas.snapshotDocumentData() == pending && app.drawingDefaults == metadata &&
                    app.currentURL == destination && app.nameField.stringValue == "Pending A" && app.currentArchiveID == nil &&
                    app.dirty && app.window.isDocumentEdited,
                    "History Undo must retain the entire previously pending annotation and mark it unsaved even with a stale dirty flag")
         try expect(app.canvas.editingUndoManager.canUndo, "Committing pending text for History must retain its own older Undo action")
         app.undo(); try expect(app.canvas.document.elements.isEmpty, "Older Undo still removes the newly committed annotation")
         app.redo(); try expect(try app.canvas.snapshotDocumentData() == pending, "Redo restores exact text from the pending snapshot")
-        app.redo(); try expect(app.currentArchiveID == id && app.currentURL == nil && app.legacyMetadata.root["futureHistorySetting"] == "Pending B",
+        app.redo(); try expect(app.currentArchiveID == id && app.currentURL == nil && app.drawingDefaults.values["futureHistorySetting"] == "Pending B",
                                "Redo History after typing Undo restores B's metadata and save destination policy")
         try expect(try Data(contentsOf: destination) == original && AppSafetyAlert.seen.isEmpty,
                    "Undoable History Open neither silently saves the prior file nor asks to discard its recoverable edits")
@@ -1748,22 +1730,22 @@ enum AppSafetyTests {
                 try expect(text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
                            "Following History must not commit the live annotation editor or replace its typing history")
                 app.saveRecovery()
-                try expect(try SkitchFile.read(app.support.appendingPathComponent("Recovery.skitch")).canvasData == followed &&
+                try expect(try OpenSnapFile.read(app.support.appendingPathComponent("Recovery.opensnap")).canvasData == followed &&
                            text.superview === app.canvas && text.undoManager === typing && app.canvas.hasPendingTextChanges,
                            "Recovery of an associated archive must retain pending text without ending the live editor")
                 text.string += " final before replacement"
-                let latest = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
+                let latest = try app.canvas.snapshotDocumentData(), metadata = app.drawingDefaults
                 answer(.alertThirdButtonReturn)
                 switch replacement {
                 case "new": app.newFile()
                 case "native":
-                    let url = fixture.file("Follow-B").deletingPathExtension().appendingPathExtension("skitch")
+                    let url = fixture.file("Follow-B").deletingPathExtension().appendingPathExtension("opensnap")
                     try historyDrawing("Native replacement B").native.write(to: url)
                     app.openURL(url)
                 default: app.receiveCapture(.success(try image()))
                 }
                 try expect(try app.currentArchiveID == nil && store.entries.count == 1 && store.read(id).canvasData == latest &&
-                           store.read(id).metadata == metadata && AppSafetyAlert.answers.isEmpty,
+                           store.read(id).drawingDefaults == metadata && AppSafetyAlert.answers.isEmpty,
                            "\(replacement) replacement must flush A's latest immutable copy before detaching it")
                 app.canvas.setBackgroundColor(.green); app.followHistory()
                 try expect(try store.read(id).canvasData == latest && store.entries.count == 1,
@@ -1791,7 +1773,7 @@ enum AppSafetyTests {
                    Set(FileManager.default.contentsOfDirectory(atPath: store.directory.path)) == files,
                    "Failed index commit preserves every prior byte and cleans only the uncommitted revision")
         let reloaded = try HistoryStore(directory: store.directory)
-        try expect(try reloaded.entries == [entry] && reloaded.read(id).canvasData == SkitchFile.decode(native).canvasData,
+        try expect(try reloaded.entries == [entry] && reloaded.read(id).canvasData == OpenSnapFile.decode(native).canvasData,
                    "A fresh store must still read the previous full drawing after the failed update")
         try expect(try !app.archive(app.historySnapshot(), name: "Rejected action", action: .exported, destination: "local-test", generation: app.documentGeneration) &&
                    app.currentArchiveID == id && store.entries == [entry],
@@ -1803,18 +1785,18 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
         _ = try preparePannedHistory(app); app.nameField.stringValue = "Saved History A"
         _ = try editor(app, text: "Saved pending text")
-        let snapshot = try app.canvas.snapshotDocumentData(), metadata = app.legacyMetadata
-        let destination = fixture.file("History-save").deletingPathExtension().appendingPathExtension("skitch")
+        let snapshot = try app.canvas.snapshotDocumentData(), metadata = app.drawingDefaults
+        let destination = fixture.file("History-save").deletingPathExtension().appendingPathExtension("opensnap")
         app.currentURL = destination
         try expect(app.save(), "Successful native Save")
         let id = app.currentArchiveID!, entry = store.entry(id)!, exported = try Data(contentsOf: destination)
         try expect(try store.entries.count == 1 && entry.action == .exported && entry.destination == destination.path &&
-                   entry.name == "Saved History A" && store.read(id).canvasData == snapshot && store.read(id).metadata == metadata &&
-                   SkitchFile.decode(exported).canvasData == snapshot && !app.dirty,
+                   entry.name == "Saved History A" && store.read(id).canvasData == snapshot && store.read(id).drawingDefaults == metadata &&
+                   OpenSnapFile.decode(exported).canvasData == snapshot && !app.dirty,
                    "Only a successful Save creates an Exported archive with exact saved pending text, pan source and metadata")
         let text = try editor(app, text: "Unsaved after successful export"), pending = try app.canvas.snapshotDocumentData()
-        let invalid = app.support.appendingPathComponent("missing-parent-" + UUID().uuidString).appendingPathComponent("failed.skitch")
-        let proposed = try SkitchFile(document: CanvasView.validatedDocumentData(pending), metadata: metadata, canvasData: pending)
+        let invalid = app.support.appendingPathComponent("missing-parent-" + UUID().uuidString).appendingPathComponent("failed.opensnap")
+        let proposed = try OpenSnapFile(document: CanvasView.validatedDocumentData(pending), drawingDefaults: metadata, canvasData: pending)
         let errorTitle: String
         do { try proposed.write(to: invalid); throw Failure(description: "Missing directory write unexpectedly succeeded") }
         catch let failure as Failure { throw failure }
@@ -1832,16 +1814,16 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app, store = try isolatedHistory(app)
         _ = try preparePannedHistory(app); app.nameField.stringValue = "Captured output A"
         let captured = try app.historySnapshot(), generation = app.documentGeneration, name = app.safeName()
-        let exported = fixture.file("Immutable-output").deletingPathExtension().appendingPathExtension("skitch")
+        let exported = fixture.file("Immutable-output").deletingPathExtension().appendingPathExtension("opensnap")
         try captured.native.write(to: exported)
         answer(.alertThirdButtonReturn); app.newFile()
-        try app.canvas.loadDocument(data: SkitchFile.decode(historyDrawing("Current B").native).canvasData)
-        app.legacyMetadata = .init(root: ["futureHistorySetting": "Current B"])
+        try app.canvas.loadDocument(data: OpenSnapFile.decode(historyDrawing("Current B").native).canvasData)
+        app.drawingDefaults = DrawingDefaults(values: ["futureHistorySetting": "Current B"])
         app.currentURL = fixture.file("Current-B"); app.nameField.stringValue = "Current B"
         let text = try editor(app, text: "Pending current B"), typing = text.undoManager
         // Seed B's existing association through the store so this regression
         // exercises the stale callback independently of preview-generation bugs.
-        let snapshotB = try HistoryStore.Snapshot(canvasData: app.canvas.snapshotDocumentData(), metadata: app.legacyMetadata, preview: nil)
+        let snapshotB = try HistoryStore.Snapshot(canvasData: app.canvas.snapshotDocumentData(), drawingDefaults: app.drawingDefaults, preview: nil)
         let idB = try store.archive(snapshotB, name: app.safeName(), action: .archived)
         app.currentArchiveID = idB
         let current = try app.historyEditorState(), entryB = store.entry(idB)!
@@ -1853,8 +1835,8 @@ enum AppSafetyTests {
         try waitForMain("Captured archive callback did not complete", until: { completed })
         try expect(archived && store.entries.count == 2 && store.entry(idB) == entryB, "Stale success creates A's record without following or changing B's record")
         guard let entryA = store.entries.first(where: { $0.id != idB }) else { throw Failure(description: "Missing old-generation archive") }
-        let fileA = try store.read(entryA.id), capturedFile = try SkitchFile.decode(captured.native)
-        try expect(try fileA.canvasData == capturedFile.canvasData && fileA.metadata == capturedFile.metadata &&
+        let fileA = try store.read(entryA.id), capturedFile = try OpenSnapFile.decode(captured.native)
+        try expect(try fileA.canvasData == capturedFile.canvasData && fileA.drawingDefaults == capturedFile.drawingDefaults &&
                    entryA.name == name && entryA.action == .exported && entryA.destination == exported.path && Data(contentsOf: exported) == captured.native,
                    "A delayed success archives only the captured immutable bytes/metadata/name, never the replacement drawing")
         try expectHistoryState(app, current, "An old-generation completion must not attach its archive or change the current drawing's identity")
@@ -1921,8 +1903,8 @@ enum AppSafetyTests {
         let svg = String(decoding: try app.exportData(format: "svg", originalSize: false, jpegQuality: 0.7), as: UTF8.self)
         try expect(svg.contains("viewBox=\"0 0 300.000000 180.000000\"") && svg.contains("width=\"150.000000\""),
                    "Ordinary SVG output uses independent dimensions and source viewBox")
-        let native = try SkitchFile.decode(app.exportData(format: "skitch", originalSize: false, jpegQuality: 0.7))
-        let nativeFull = try SkitchFile.decode(app.exportData(format: "skitch", originalSize: true, jpegQuality: 0.7))
+        let native = try OpenSnapFile.decode(app.exportData(format: "opensnap", originalSize: false, jpegQuality: 0.7))
+        let nativeFull = try OpenSnapFile.decode(app.exportData(format: "opensnap", originalSize: true, jpegQuality: 0.7))
         try expect(native.document.outputSize == CGSize(width: 150, height: 90) && nativeFull.document.outputSize == CGSize(width: 300, height: 180) &&
                    native.document.elements == nativeFull.document.elements && native.document.backgroundPNG == nativeFull.document.backgroundPNG,
                    "Native original-size export changes only the exported copy's output dimensions")
@@ -1985,7 +1967,7 @@ enum AppSafetyTests {
     }
     static func generalPreferencesIntegration() throws {
         let defaults = UserDefaults.standard
-        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "skitchInSnap", "statusMenu", "disableOverlay", "disableModtips"]
+        let keys = ["fittingPrecision", "PencilSmoothing", "arrowHead", "opensnapInSnap", "statusMenu", "disableOverlay", "disableModtips"]
         let previous = keys.map { defaults.object(forKey: $0) }
         defer { for (key, value) in zip(keys, previous) { if let value { defaults.set(value, forKey: key) } else { defaults.removeObject(forKey: key) } } }
         for key in keys { defaults.removeObject(forKey: key) }
@@ -1993,7 +1975,7 @@ enum AppSafetyTests {
         let editor = try editor(app, text: "Keep pending typing")
         let data = try app.canvas.snapshotDocumentData(), history = app.canvas.editingUndoManager
         let undo = history.undoActionName, redo = history.redoActionName, dirty = app.dirty
-        let menu = NSApp.mainMenu!.items.compactMap(\.submenu).first { $0.title == "OpenSkitch" }!
+        let menu = NSApp.mainMenu!.items.compactMap(\.submenu).first { $0.title == "OpenSnap" }!
         let command = menu.items.first { $0.title == "Preferences…" }!
         try expect(command.keyEquivalent == "," && command.action == #selector(AppDelegate.showPreferences), "Command-comma opens real Preferences")
         app.showPreferences()
@@ -2003,7 +1985,7 @@ enum AppSafetyTests {
                    "Opening Preferences does not finish or lose pending text or its Undo branch")
         var choices = app.generalPreferences.state
         choices.showToolTips = true; choices.showKeyboardTips = true
-        choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeSkitch = true; choices.statusMenu = 1
+        choices.drawingPrecision = .loose; choices.arrowHead = 1; choices.includeApp = true; choices.statusMenu = 1
         form.onChange?(choices)
         try expect(app.generalPreferences.state == choices && app.canvas.strokeSmoothing == .loose && app.canvas.arrowHeadPreference == 1,
                    "Form routes immediate original preference writes and future drawing defaults")
@@ -2090,7 +2072,7 @@ enum AppSafetyTests {
                    "Cancelling pending typing and clearing hints retain the original document and Undo branch")
     }
     static func capturePreferenceRouting() throws {
-        let defaults = UserDefaults.standard, key = "skitchInSnap", previous = UserDefaults.standard.object(forKey: "skitchInSnap")
+        let defaults = UserDefaults.standard, key = "opensnapInSnap", previous = UserDefaults.standard.object(forKey: "opensnapInSnap")
         defer { if let previous { defaults.set(previous, forKey: key) } else { defaults.removeObject(forKey: key) }; AppSafetyEvents.current = nil; AppSafetyAlert.beforeReply = nil }
         let fixture = try Fixture(), app = fixture.app
         for include in [false, true] {
@@ -2245,7 +2227,7 @@ enum AppSafetyTests {
                    "No-alternate checks cover actual tool and Cancel controls rather than fabricated buttons")
         try expect(!actionButtons(app.window.contentView!).contains { $0.title.lowercased().contains("cam") || $0.action == NSSelectorFromString("cameraSnap") } &&
                    !app.responds(to: NSSelectorFromString("cameraSnap")),
-                   "The window has no Cam or Camera button; OpenSkitch is screen capture only")
+                   "The window has no Cam or Camera button; OpenSnap is screen capture only")
         let otherRequests = AppSafetyCaptureCoordinator.screenRequests.count
         let selectedTool = app.canvas.tool, selectedElements = app.canvas.selection
         for button in others {
@@ -2444,7 +2426,7 @@ enum AppSafetyTests {
         return (split, family, detail)
     }
     static func recordedFontPanelPaneWidths(_ app: AppDelegate) throws -> [CGFloat] {
-        let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? app.support.path
+        let folder = ProcessInfo.processInfo.environment["OPENSNAP_EVIDENCE_DIR"] ?? app.support.path
         let data = try Data(contentsOf: URL(fileURLWithPath: folder).appendingPathComponent("layout.json"))
         let evidence = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         let layout = (evidence?["fontPanel"] as? [String: Any])?["layout"] as? [[String: Any]] ?? []
@@ -2602,14 +2584,14 @@ enum AppSafetyTests {
         guard let session = app.makeResizeSession() else { throw Failure(description: "Resize save session") }
         session.state.edit(.width, text: "75"); _ = try session.preview()
         session.state.edit(.width, text: "90")
-        app.currentURL = fixture.file("resize-preview-save").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = fixture.file("resize-preview-save").deletingPathExtension().appendingPathExtension("opensnap")
         try expect(app.save() && session.isFinished && app.activeResizeSession == nil && app.canvas.outputSize == CGSize(width: 90, height: 54),
                    "Native Save accepts the latest Resize field values, commits the preview and finishes the session")
         let saved = try app.canvas.snapshotDocumentData()
         session.cancel()
         try expect(try app.canvas.snapshotDocumentData() == saved && !app.dirty,
                    "Cancel after Save cannot restore older preview state with a false clean flag")
-        try expect(try SkitchFile.decode(Data(contentsOf: app.currentURL!)).canvasData == saved,
+        try expect(try OpenSnapFile.decode(Data(contentsOf: app.currentURL!)).canvasData == saved,
                    "Saved native state matches the committed resize after late Cancel")
         guard let interrupted = app.makeResizeSession() else { throw Failure(description: "Interrupted Resize") }
         interrupted.state.edit(.width, text: "45"); _ = try interrupted.preview()
@@ -2626,23 +2608,23 @@ enum AppSafetyTests {
         app.saveHistory(); app.saveRecovery()
         guard let id = app.currentArchiveID else { throw Failure(description: "Resize baseline History") }
         let baseline = try app.canvas.snapshotDocumentData()
-        let recovered = try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch"))
+        let recovered = try Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap"))
         let entry = store.entry(id), archive = try store.read(id).canvasData
         guard let session = app.makeResizeSession() else { throw Failure(description: "Resize recovery preview") }
         session.state.setMode(.crop); session.state.edit(.width, text: "60"); session.state.edit(.height, text: "40")
         _ = try session.preview()
         try expect(try app.canvas.snapshotDocumentData() != baseline, "Recovery test must have a real preview")
         app.saveRecovery(); app.followHistory()
-        try expect(try Data(contentsOf: app.support.appendingPathComponent("Recovery.skitch")) == recovered
+        try expect(try Data(contentsOf: app.support.appendingPathComponent("Recovery.opensnap")) == recovered
                    && store.entry(id) == entry && store.read(id).canvasData == archive,
                    "Timer recovery and History follow cannot persist an unaccepted Resize preview")
         session.cancel()
-        try expect(try app.canvas.snapshotDocumentData() == baseline && SkitchFile.decode(recovered).canvasData == baseline,
+        try expect(try app.canvas.snapshotDocumentData() == baseline && OpenSnapFile.decode(recovered).canvasData == baseline,
                    "Cancel and crash recovery both retain the first-Apply baseline")
         guard let next = app.makeResizeSession() else { throw Failure(description: "Resize before History Open") }
         next.state.edit(.width, text: "75"); _ = try next.preview()
-        let target = try SkitchFile.decode(historyDrawing("Replacement").native)
-        try app.restoreHistoryEditorState(.init(data: target.canvasData, metadata: target.metadata, name: "Replacement",
+        let target = try OpenSnapFile.decode(historyDrawing("Replacement").native)
+        try app.restoreHistoryEditorState(.init(data: target.canvasData, drawingDefaults: target.drawingDefaults, name: "Replacement",
                                                url: nil, archiveID: nil, dirty: false))
         try expect(next.isFinished && app.activeResizeSession == nil, "History Open cancels Resize before inverse capture")
         app.undo()
@@ -2677,24 +2659,24 @@ enum AppSafetyTests {
         app.newFile()
         try expect(session.isFinished && app.activeResizeSession == nil && app.canvas.canvasSize == CGSize(width: 1000, height: 700),
                    "New before first Apply clears the stale Resize session")
-        app.currentURL = fixture.file("new-before-preview-save").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = fixture.file("new-before-preview-save").deletingPathExtension().appendingPathExtension("opensnap")
         try expect(app.save(), "New before first Apply cannot leave Save blocked by an old generation")
     }
     static func actualSaveThenNormal() throws {
         let fixture = try Fixture(), app = fixture.app
         try viewportFixture(app)
         let normal = app.canvas.document
-        let target = fixture.file("ActualSave").deletingPathExtension().appendingPathExtension("skitch")
+        let target = fixture.file("ActualSave").deletingPathExtension().appendingPathExtension("opensnap")
         app.currentURL = target; app.toggleActualSize()
         try expect(app.save() && !app.dirty && app.actualView?.savedWhileActive == true, "Save while Actual records its presentation")
-        let saved = try SkitchFile.read(target)
+        let saved = try OpenSnapFile.read(target)
         try expect(saved.document.outputSize == normal.size && saved.document.backgroundPNG == normal.backgroundPNG &&
                    saved.document.elements == normal.elements, "Actual Save preserves source and editable geometry")
         app.leaveActualSize()
         try expect(app.canvas.document == normal && app.currentURL == target && app.dirty && app.window.isDocumentEdited &&
                    !app.canvas.editingUndoManager.canUndo,
                    "Restoring normal output after Actual Save marks the output difference dirty without a mode Undo")
-        try expect(app.save() && SkitchFile.read(target).document == normal, "Normal-size subsequent Save persists restored output")
+        try expect(app.save() && OpenSnapFile.read(target).document == normal, "Normal-size subsequent Save persists restored output")
     }
     static func actualRejectedReplacement() throws {
         let fixture = try Fixture(), app = fixture.app
@@ -2735,8 +2717,8 @@ enum AppSafetyTests {
                 case "native":
                     var document = SketchDocument(size: CGSize(width: 123, height: 99))
                     document.renderSize = CGSize(width: 61, height: 49)
-                    let target = fixture.file("ActualNative").deletingPathExtension().appendingPathExtension("skitch")
-                    try SkitchFile(document: document, metadata: .init()).write(to: target)
+                    let target = fixture.file("ActualNative").deletingPathExtension().appendingPathExtension("opensnap")
+                    try OpenSnapFile(document: document, drawingDefaults: .init()).write(to: target)
                     app.openURL(target)
                     try expect(app.canvas.document == document, "Native Open retains saved output instead of applying raster fit")
                 case "raster":
@@ -3011,12 +2993,12 @@ enum AppSafetyTests {
         let fixture = try Fixture(), app = fixture.app
         try viewportFixture(app)
         let before = try app.canvas.snapshotDocumentData()
-        app.currentURL = fixture.file("BorderSave").deletingPathExtension().appendingPathExtension("skitch")
+        app.currentURL = fixture.file("BorderSave").deletingPathExtension().appendingPathExtension("opensnap")
         try expect(app.beginWindowGesture(.corner(.bottomRight)), "Begin border edit before Save")
         app.previewBorderGesture(delta: CGPoint(x: 40, y: 100), flags: [])
         let preview = try app.canvas.snapshotDocumentData()
         try expect(preview != before && app.save(), "Save must accept the current viewport preview")
-        let saved = try SkitchFile.read(app.currentURL!)
+        let saved = try OpenSnapFile.read(app.currentURL!)
         try expect(app.windowGesture == nil && saved.canvasData == preview && !app.dirty,
                    "Save closes/commits border transaction before serializing the exact live state")
         app.endWindowGesture(cancelled: true)
@@ -3124,7 +3106,7 @@ enum AppSafetyTests {
     }
     static func main() {
         guard let evidence = ProcessInfo.processInfo.environment["APP_SAFETY_EVIDENCE"],
-              ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] != nil else {
+              ProcessInfo.processInfo.environment["OPENSNAP_APP_SUPPORT"] != nil else {
             fputs("Run tools/test-app-safety.sh for isolated execution.\n", stderr); exit(2)
         }
         NSFontManager.setFontPanelFactory(AppSafetyFontPanel.self)
@@ -3175,7 +3157,7 @@ enum AppSafetyTests {
             ("pending text remains protected with a stale dirty flag", pendingTextFallback),
             ("First launch opens a blank canvas, and a recovered drawing still wins", firstLaunchBlankCanvas),
             ("an accepted capture dismisses Preferences and a cancelled one leaves it visible", captureDismissesPreferences),
-            ("original metadata survives native recovery, startup preference and legacy JSON migration", originalMetadataRecovery),
+            ("drawing defaults survive native recovery and startup", originalMetadataRecovery),
             ("accepted document drop saves to B and preserves A", acceptedDrop),
             ("cancelled document drop preserves pending typing", cancelledDrop),
             ("capture start cancellation and completion Cancel preserve edits", captureCancellation),
@@ -3183,7 +3165,7 @@ enum AppSafetyTests {
             ("capture completion Save persists pending text first", captureSave),
             ("Frame preview enter, switch and Cancel preserve document, recovery and history", framePreviewCancellation),
             ("Frame mode drops the window shadow, raises the level and sets alpha 0.8 from the recovered setSnapMode:, and leaving restores the pre-Frame values", frameWindowShadowLevelAlpha),
-            ("Show Skitch and Snap & Upload global shortcuts restore the hidden editor without a second window and never publish a cancelled capture", showAndUploadHotkeys),
+            ("Show OpenSnap and Snap & Upload global shortcuts restore the hidden editor without a second window and never publish a cancelled capture", showAndUploadHotkeys),
             ("A new Snap during a running capture cancels it and starts the new snap", newSnapCancelsRunningCapture),
             ("Resnap preserves annotations, destination and usable Undo/Redo", resnapPreservesAnnotations),
             ("normal Frame picker and completion cancellation; Discard prompts exactly once", normalFrameDiscard),
@@ -3541,8 +3523,8 @@ enum AppSafetyTests {
                 try expect(text.superview === app.canvas && text.string == "Palette pending text" && text.selectedRange() == caret,
                            "Color keeps pending typing and caret")
                 let raw = try app.canvas.snapshotDocumentData(), document = try CanvasView.validatedDocumentData(raw)
-                let encoded = try SkitchFile(document: document, metadata: app.legacyMetadata, canvasData: raw).encoded()
-                let snapshot = try SkitchFile.decode(encoded).document
+                let encoded = try OpenSnapFile(document: document, drawingDefaults: app.drawingDefaults, canvasData: raw).encoded()
+                let snapshot = try OpenSnapFile.decode(encoded).document
                 try expect(snapshot.elements.last?.color == SketchColor(OriginalDrawingControls.presets[9].color), "Pending highlighter alpha reaches native save snapshot")
                 app.canvas.commitPendingTextEditing(); app.undo()
                 try expect(app.canvas.document.elements == [shape], "One text transaction removes typing plus its staged color")
@@ -3650,17 +3632,16 @@ enum AppSafetyTests {
                 try expect(expected.red == CGFloat(Float(0.17)) && expected.green == CGFloat(Float(0.43)) && expected.alpha == CGFloat(Float(0.23)),
                            "Native panel calibrated components become original raw float storage without device conversion")
                 let raw = try app.canvas.snapshotDocumentData()
-                let file = SkitchFile(document: try CanvasView.validatedDocumentData(raw), metadata: app.legacyMetadata, canvasData: raw)
-                let native = try file.encoded(), decoded = try SkitchFile.decode(native)
-                let visible = try LegacySkitch.decode(native)
-                try expect(visible.attributes["skitchBrushSize"] == "9.375" &&
-                           SketchColor(OriginalDrawingControls.legacyColor(visible.attributes["skitchBrushColor"], alpha: visible.attributes["skitchBrushColorAlpha"])!) == SketchColor(original),
-                           "Visible original SVG defaults match the actual brush instead of stale export constants")
-                let url = fixture.file("Drawing-defaults").deletingPathExtension().appendingPathExtension("skitch")
+                let file = OpenSnapFile(document: try CanvasView.validatedDocumentData(raw), drawingDefaults: app.drawingDefaults, canvasData: raw)
+                let native = try file.encoded(), decoded = try OpenSnapFile.decode(native)
+                try expect(decoded.drawingDefaults.values["brushSize"] == "9.375" &&
+                           SketchColor(OriginalDrawingControls.legacyColor(decoded.drawingDefaults.values["brushColor"], alpha: decoded.drawingDefaults.values["brushColorAlpha"])!) == SketchColor(original),
+                           "Saved drawing defaults match the actual brush")
+                let url = fixture.file("Drawing-defaults").deletingPathExtension().appendingPathExtension("opensnap")
                 try native.write(to: url)
                 let clean = try Fixture(), restored = clean.app
                 restored.openURL(url)
-                try expect(restored.legacyMetadata == decoded.metadata && restored.canvas.strokeWidth == 9.375 &&
+                try expect(restored.drawingDefaults == decoded.drawingDefaults && restored.canvas.strokeWidth == 9.375 &&
                            restored.widthControl.doubleValue == 9.375 && SketchColor(restored.canvas.strokeColor) == SketchColor(original),
                            "Native Open restores future brush size/color and the visible controls")
                 try expect(SketchColor(OriginalDrawingControls.drawingColor(from: restored.customDrawingColor)!) == expected &&
@@ -3703,7 +3684,7 @@ enum AppSafetyTests {
                 try expect(actual == expected, "Original common commands are direct Toolbox items in original group order")
                 func menuTitles(_ menu: NSMenu) -> [String] { menu.items.flatMap { [$0.title] + ($0.submenu.map(menuTitles) ?? []) } }
                 try expect(!menuTitles(choices).contains { $0.lowercased().contains("cam") },
-                           "No Cam or Camera item exists anywhere in the Toolbox menus; OpenSkitch is screen capture only")
+                           "No Cam or Camera item exists anywhere in the Toolbox menus; OpenSnap is screen capture only")
                 // AppKit assigns its own popup-cell actions to the title and separators.
                 // Only the recovered commands belong to our application target.
                 for item in choices.items {
@@ -3780,7 +3761,7 @@ enum AppSafetyTests {
                 try expect(GlassChromeButton.textColor(on: .blue) == .white, "Dark blue needs a light selected label")
             })
         ]
-        let tests = sharedCases + Self.modernCases + Self.webpostCases
+        let tests = sharedCases + Self.modernCases + Self.webpostCases + Self.retiredFormatCases
         var results: [[String: Any]] = [], failures = 0
         for (name, test) in tests {
             AppSafetyAlert.answers = []; AppSafetyAlert.seen = []; AppSafetyAlert.unexpected = []

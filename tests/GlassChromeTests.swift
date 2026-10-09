@@ -1,8 +1,8 @@
 // Offscreen controls, glass views and a never-ordered window only; no desktop windows and no input.
-// Set OPENSKITCH_FA_FONT_DIR (or keep build/fonts) to also run the layout with the Font Awesome glyph branch.
+// Set OPENSNAP_FA_FONT_DIR (or keep build/fonts) to also run the layout with the Font Awesome glyph branch.
 // xcrun swiftc -swift-version 5 -warnings-as-errors -strict-concurrency=complete -target arm64-apple-macosx26.0 -D GLASS_CHROME_TESTS \
 //   Sources/OriginalActionButton.swift Sources/FontAwesomeIcons.swift Sources/ChromeIcons.swift \
-//   Sources/BezelDrawingControls.swift Sources/LegacySkitch.swift Sources/DocumentModel.swift Sources/GlassChrome.swift Sources/ModernEditorChrome.swift \
+//   Sources/BezelDrawingControls.swift Sources/SVGPath.swift Sources/DocumentModel.swift Sources/GlassChrome.swift Sources/ModernEditorChrome.swift \
 //   tests/GlassChromeTests.swift -o build/glass-chrome-tests
 // build/glass-chrome-tests
 #if GLASS_CHROME_TESTS
@@ -95,7 +95,7 @@ private enum GlassChromeTests {
                 chromeTests(glyphs: true)
                 FontAwesomeFont.resetForTesting()
             } else {
-                notes.append("glyph branch (no OPENSKITCH_FA_FONT_DIR or build/fonts)")
+                notes.append("glyph branch (no OPENSNAP_FA_FONT_DIR or build/fonts)")
             }
         }
         let note = notes.isEmpty ? "" : "; SKIPPED: " + notes.joined(separator: ", ")
@@ -106,7 +106,7 @@ private enum GlassChromeTests {
 
     private static func fontDirectory() -> URL? {
         var candidates: [URL] = []
-        if let path = ProcessInfo.processInfo.environment["OPENSKITCH_FA_FONT_DIR"], !path.isEmpty {
+        if let path = ProcessInfo.processInfo.environment["OPENSNAP_FA_FONT_DIR"], !path.isEmpty {
             candidates.append(URL(fileURLWithPath: path, isDirectory: true))
         }
         var parent = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
@@ -578,7 +578,7 @@ private enum GlassChromeTests {
         format.font = .systemFont(ofSize: 20)
         format.setAccessibilityLabel("Image format")
         let toolbox = NSPopUpButton(frame: .zero, pullsDown: true)
-        toolbox.addItems(withTitles: ["Toolbox", "About OpenSkitch", "Quit OpenSkitch"])
+        toolbox.addItems(withTitles: ["Toolbox", "About OpenSnap", "Quit OpenSnap"])
         toolbox.font = .systemFont(ofSize: 20)
         toolbox.setAccessibilityLabel("Toolbox")
         let palette = BezelHoverButton(title: "Color…", target: nil, action: nil)
@@ -707,7 +707,7 @@ private enum GlassChromeTests {
             }
         }
         // Order: header left to right, tools top to bottom in archive order, footer left to right.
-        expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSkitchBrand" }, "\(label): the logo is not in the header (no room at minimum width)")
+        expect(!chrome.header.subviews.contains { $0.identifier?.rawValue == "OpenSnapBrand" }, "\(label): the logo is not in the header (no room at minimum width)")
         let headerOrder = [chrome.hideButton, rig.controls.toolbox, chrome.photosButton].map { rect($0, in: rig).minX }
         expect(headerOrder == headerOrder.sorted(), "\(label): Hide, Toolbox, Photos run left to right")
         expect(rect(chrome.saveButton, in: rig).minX < rect(chrome.historyButton, in: rig).minX, "\(label): Save precedes History")
@@ -776,7 +776,7 @@ private enum GlassChromeTests {
         let sliderBottom = rect(chrome.surface(for: rig.controls.widthControl)!, in: rig).minY
         let undoTop = rect(chrome.surface(for: chrome.undoButton)!, in: rig).maxY
         expect(sliderBottom - undoTop >= 0 && sliderBottom - undoTop <= GlassChrome.Metrics.groupSpacing + 0.5, "\(label): Undo sits directly under the slider, not pushed to the bottom")
-        let footer = descendants(chrome).first { $0.identifier?.rawValue == "OpenSkitchFooter" }
+        let footer = descendants(chrome).first { $0.identifier?.rawValue == "OpenSnapFooter" }
         expect(footer != nil, "\(label): the footer row exists")
         if let footer {
             let parts = [rig.controls.zoomControl, rig.controls.status, rig.controls.dragFormatControl, rig.controls.dragExportView, chrome.shareButton] as [NSView]
@@ -814,7 +814,7 @@ private enum GlassChromeTests {
 
     private static func semantics(_ rig: Rig, _ label: String) {
         let chrome = rig.chrome
-        expect(chrome.header.identifier?.rawValue == "OpenSkitchHeader", "\(label): header identifier")
+        expect(chrome.header.identifier?.rawValue == "OpenSnapHeader", "\(label): header identifier")
         expect(chrome.toolButtons.count == 10 && Set(chrome.toolButtons.keys) == Set(toolOrder), "\(label): ten tool buttons, crop included")
         for id in toolOrder {
             guard let button = chrome.toolButtons[id] else { continue }

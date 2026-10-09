@@ -2,8 +2,8 @@ import AppKit
 import CoreFoundation
 import Darwin
 
-// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift tests/PublishingShutdownTests.swift -o /tmp/skitch-publishing-shutdown-tests
-// /tmp/skitch-publishing-shutdown-tests --test
+// xcrun swiftc -swift-version 5 -framework AppKit -framework Security Sources/Publishing.swift tests/PublishingShutdownTests.swift -o /tmp/opensnap-publishing-shutdown-tests
+// /tmp/opensnap-publishing-shutdown-tests --test
 // Real local fake processes, no uploads, network, Keychain, clipboard access or preview windows.
 private final class Locked<Value> {
     private let lock = NSLock()
@@ -125,7 +125,7 @@ enum PublishingShutdownTests {
         var voidAcks = 0
         let coordinator = PublishingCoordinator(workController: PublishingWorkController(), clipboardWriter: { _ in copies += 1 })
         coordinator.beginTransfer(copiesPublicURL: true, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownFake-")
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownFake-")
             directory.set(root)
             try Data("private fake screenshot".utf8).write(to: root.appendingPathComponent("image"))
             // Both shell and child ignore TERM, forcing the real group-stop escalation path.
@@ -159,7 +159,7 @@ enum PublishingShutdownTests {
         var result: Result<URL, Error>?, acknowledged = false
         let coordinator = PublishingCoordinator(workController: PublishingWorkController(), clipboardWriter: { _ in })
         coordinator.beginTransfer(copiesPublicURL: false, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownOrphan-"); directory.set(root)
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownOrphan-"); directory.set(root)
             // Parent exits immediately; its child keeps stdout open and ignores TERM.
             let script = "trap '' TERM; /bin/sleep 60 & printf '%s\\n' \"$!\" > \"$1\"; exit 0"
             _ = try PublishingProcess.run(executable: "/bin/sh", arguments: ["-c", script, "fake-transfer", root.appendingPathComponent("child.pid").path], timeout: 60, cancellation: context)
@@ -183,7 +183,7 @@ enum PublishingShutdownTests {
         var result: Result<URL, Error>?, ack: Result<Void, Error>?, copies: [URL] = []
         let coordinator = PublishingCoordinator(workController: PublishingWorkController(queue: queue), clipboardWriter: { copies.append($0) })
         coordinator.beginTransfer(copiesPublicURL: true, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownCompleted-")
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownCompleted-")
             directory.set(root); try Data([1,2,3]).write(to: root.appendingPathComponent("image"))
             return resultURL
         }) { result = $0 }
@@ -211,7 +211,7 @@ enum PublishingShutdownTests {
         var result: Result<URL, Error>?, copies = 0
         let coordinator = PublishingCoordinator(workController: PublishingWorkController(), clipboardWriter: { _ in copies += 1 })
         coordinator.beginTransfer(copiesPublicURL: true, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownTimeout-"); directory.set(root)
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownTimeout-"); directory.set(root)
             _ = try PublishingProcess.run(executable: "/bin/sleep", arguments: ["60"], timeout: 0.05, cancellation: context)
             return resultURL
         }) { result = $0 }
@@ -234,7 +234,7 @@ enum PublishingShutdownTests {
         var result: Result<URL, Error>?, copies = 0
         let coordinator = PublishingCoordinator(workController: worker, clipboardWriter: { _ in copies += 1 })
         coordinator.beginTransfer(copiesPublicURL: true, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownRetry-"); directory.set(root)
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownRetry-"); directory.set(root)
             try Data([1]).write(to: root.appendingPathComponent("image")); return resultURL
         }) { result = $0 }
         try pump(until: { result != nil })
@@ -271,7 +271,7 @@ enum PublishingShutdownTests {
         var result: Result<URL, Error>?, copies = 0
         let coordinator = PublishingCoordinator(workController: PublishingWorkController(), clipboardWriter: { _ in copies += 1 })
         coordinator.beginTransfer(copiesPublicURL: true, work: { context in
-            let root = try context.makeTemporaryDirectory(prefix: "SkitchShutdownNativeQuit-"); directory.set(root)
+            let root = try context.makeTemporaryDirectory(prefix: "OpenSnapShutdownNativeQuit-"); directory.set(root)
             try Data([1,2,3]).write(to: root.appendingPathComponent("image"))
             let script = "trap '' TERM; /bin/sleep 60 & printf '%s\\n' \"$!\" > \"$1\"; wait"
             _ = try PublishingProcess.run(executable: "/bin/sh", arguments: ["-c", script, "fake-transfer", root.appendingPathComponent("child.pid").path], timeout: 60, cancellation: context)

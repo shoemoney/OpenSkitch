@@ -98,7 +98,7 @@ public enum WindowSizingPolicy {
     /// Deltas are screen points in the same right/down convention as cornerOutput.
     /// Divide by (output/source * zoom) to obtain source-space movement. Expansion
     /// may have a negative origin. Option's symmetric crop moves the opposite edge
-    /// equally (original skitchHelp/skitch_resizing.html:88); unrelated delta is ignored.
+    /// equally (original help page "resizing", line 88); unrelated delta is ignored.
     /// Fractional dimensions are preserved; pixel rounding belongs to the caller.
     public static func cropPreview(source: CGSize, output: CGSize, delta: CGPoint,
                                    edge: CanvasEdge, symmetric: Bool, zoom: CGFloat) -> CanvasCropPreview? {
@@ -159,7 +159,7 @@ public enum WindowSizingPolicy {
         return (table[row].0, table[row].1)
     }
 
-    /// SkitchCropView.mouseDragged passes `centered = modifierFlags >> 19 & 1` (decompiled.c:9990);
+    /// OriginalCropView.mouseDragged passes `centered = modifierFlags >> 19 & 1` (decompiled.c:9990);
     /// bit 19 (0x80000) is NSEventModifierFlagOption.
     public static func isCenteredCrop(modifierFlags: UInt) -> Bool { modifierFlags >> 19 & 1 == 1 }
 
@@ -187,12 +187,12 @@ public enum WindowSizingPolicy {
         return CGSize(width: floor(initial.width / initial.height + 0.5), height: 1)
     }
 
-    /// SkitchBorderView.maxViewSize (decompiled.c:13944): bounds plus DAT_002606a8 = -8 on each axis.
+    /// OriginalBorderView.maxViewSize (decompiled.c:13944): bounds plus DAT_002606a8 = -8 on each axis.
     public static func maxViewSize(bounds: CGSize) -> CGSize {
         CGSize(width: bounds.width - 8, height: bounds.height - 8)
     }
 
-    /// SkitchBorderView.awakeFromNib (decompiled.c:14164-14175) builds the 12 crop views only when
+    /// OriginalBorderView.awakeFromNib (decompiled.c:14164-14175) builds the 12 crop views only when
     /// inActualMode is false.
     public static func cropViewsExist(inActualMode: Bool) -> Bool { !inActualMode }
 }

@@ -104,12 +104,12 @@ final class DragExportView: NSView, NSDraggingSource, NSFilePromiseProviderDeleg
     static func fileExtension(forFormat format: String) -> String { format == "jpeg" ? "jpg" : format }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String {
         let payload = payloads[ObjectIdentifier(filePromiseProvider)]?.payload
-        return (payload?.name ?? "Skitch") + "." + Self.fileExtension(forFormat: payload?.format ?? "png")
+        return (payload?.name ?? "OpenSnap") + "." + Self.fileExtension(forFormat: payload?.format ?? "png")
     }
     func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL, completionHandler: @escaping (Error?) -> Void) {
         let export = payloads.removeValue(forKey: ObjectIdentifier(filePromiseProvider))
         do {
-            guard let export else { throw NSError(domain: "SkitchRedux", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }
+            guard let export else { throw NSError(domain: "OpenSnap", code: 1, userInfo: [NSLocalizedDescriptionKey: "The dragged image is no longer available."]) }
             try export.payload.data.write(to: url, options: .atomic)
             export.payload.delivered(url); completionHandler(nil)
         } catch {
@@ -172,7 +172,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var window: NSWindow!
     let canvas = CanvasView(frame: NSRect(x: 0, y: 0, width: 1000, height: 700))
     let capture = CaptureCoordinator()
-    /// One store for Webpost and remote deletion, derived from the same SKITCH_APP_SUPPORT the rest of the app honours.
+    /// One store for Webpost and remote deletion, derived from the same OPENSNAP_APP_SUPPORT the rest of the app honours.
     /// It exists before buildWindow, which loads it while building the Webpost menu.
     static let publishingStore = PublishingDestinationStore.forEnvironment(ProcessInfo.processInfo.environment)
     let publishing: PublishingCoordinator = { let coordinator = PublishingCoordinator(); coordinator.store = AppDelegate.publishingStore; return coordinator }()
@@ -252,7 +252,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var modernChrome: NSView?
     var currentURL: URL?
     var documentGeneration = UUID()
-    var legacyMetadata = LegacyBridge.Metadata()
+    var drawingDefaults = DrawingDefaults()
     var dirty = false
     var restoring = false
     var discardedForTermination = false
@@ -288,8 +288,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var frameScrollDrewBackground = true
     var frameTitlebarBackdrop: FrameChromeView?
     let support: URL = {
-        if let isolated = ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] { return URL(fileURLWithPath: isolated, isDirectory: true) }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("SkitchRedux", isDirectory: true)
+        if let isolated = ProcessInfo.processInfo.environment["OPENSNAP_APP_SUPPORT"] { return URL(fileURLWithPath: isolated, isDirectory: true) }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("OpenSnap", isDirectory: true)
     }()
 
 
@@ -315,16 +315,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         canvas.onColorChange = { [weak self] color in self?.colorWell.color = color; self?.rememberDrawingDefaults(); self?.syncDrawingControls() }
         try? FileManager.default.createDirectory(at: support.appendingPathComponent("History"), withIntermediateDirectories: true)
-        let nativeRecovery = support.appendingPathComponent("Recovery.skitch")
-        let recovery = FileManager.default.fileExists(atPath: nativeRecovery.path) ? nativeRecovery : support.appendingPathComponent("Recovery.skitchredux")
-        let recoveryData = try? Data(contentsOf: recovery)
+        let recoveryData = try? Data(contentsOf: support.appendingPathComponent(Self.recoveryName))
         if let data = recoveryData {
-            do { let restored = try SkitchFile.decode(data); restoring = true; try canvas.loadDocument(data: restored.canvasData); legacyMetadata = restored.metadata; restoreDrawingDefaults(); restoring = false; dirty = true; window.isDocumentEdited = true; nameField.stringValue = "Recovered drawing" }
+            do { let restored = try OpenSnapFile.decode(data); restoring = true; try canvas.loadDocument(data: restored.canvasData); drawingDefaults = restored.drawingDefaults; restoreDrawingDefaults(); restoring = false; dirty = true; window.isDocumentEdited = true; nameField.stringValue = "Recovered drawing" }
             catch { restoring = false; status.stringValue = "Previous session could not be restored." }
         }
-        let fixturePath = ProcessInfo.processInfo.environment["SKITCH_FIXTURE"]
+        let fixturePath = ProcessInfo.processInfo.environment["OPENSNAP_FIXTURE"]
         if let fixture = fixturePath { openURL(URL(fileURLWithPath: fixture)) }
         updateStatus(); updateWipeButton()
+        if let notice = OpenSnapMigration.launchNotice { status.stringValue = notice }
         timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in Task { @MainActor in self?.saveRecovery() } }
         window.center(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas); NSApp.activate(ignoringOtherApps: true)
         window.contentView?.layoutSubtreeIfNeeded(); updateViewportChrome()
@@ -385,18 +384,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
         if let button = item.button {
-            let symbol = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "OpenSkitch")
+            let symbol = NSImage(systemSymbolName: "camera.viewfinder", accessibilityDescription: "OpenSnap")
             symbol?.isTemplate = true
             button.image = symbol
-            button.toolTip = "Click to show/hide OpenSkitch"
-            button.setAccessibilityLabel("Show or hide OpenSkitch")
+            button.toolTip = "Click to show/hide OpenSnap"
+            button.setAccessibilityLabel("Show or hide OpenSnap")
             button.target = self; button.action = #selector(showHide)
         }
     }
     func applyPresencePolicy() {
         let presence = generalPreferences.state.statusMenu
         // Modern AppKit changes Dock presence without rewriting the signed app
-        // bundle or restarting with pending drawings, unlike original Skitch.
+        // bundle or restarting with pending drawings, unlike the original app.
         NSApp.setActivationPolicy(presence == 1 ? .accessory : .regular)
         if presence == 2, let item = statusItem {
             NSStatusBar.system.removeStatusItem(item); statusItem = nil
@@ -541,7 +540,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         panel.hasShadow = true; panel.level = .statusBar; panel.isFloatingPanel = true; panel.hidesOnDeactivate = false
         let view = DragThumbnailView(frame: NSRect(origin: .zero, size: rect.size)); view.image = image
         view.setAccessibilityElement(true); view.setAccessibilityRole(.button)
-        view.setAccessibilityLabel("Restore Skitch editor")
+        view.setAccessibilityLabel("Restore OpenSnap editor")
         view.restore = { [weak self] in self?.restoreDragThumbnail(id) }
         panel.contentView = view; dragThumbnailWindow = panel; dragThumbnailID = id
         saveRecovery(); timer?.fireDate = .distantFuture
@@ -628,7 +627,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let choices = NSMenu(title: "Toolbox"); choices.font = .systemFont(ofSize: 20)
         choices.addItem(withTitle: "Toolbox", action: nil, keyEquivalent: "")
         let groups: [[(String, Selector)]] = [
-            [("About OpenSkitch", #selector(about)), ("Preferences…", #selector(showPreferences)), ("Quit OpenSkitch", #selector(quit))],
+            [("About OpenSnap", #selector(about)), ("Preferences…", #selector(showPreferences)), ("Quit OpenSnap", #selector(quit))],
             [("New", #selector(newFile)), ("Open...", #selector(openFile)), ("Browse Photos", #selector(showPhotos)),
              ("Save to History", #selector(saveHistory)), ("Export...", #selector(exportFile)), ("Save As...", #selector(saveAs)), ("Print...", #selector(printImage))],
             [("Cut", #selector(cut)), ("Copy", #selector(copyArtwork)), ("Paste", #selector(paste)),
@@ -665,7 +664,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func buildWindow() {
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1024, height: 740), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "OpenSkitch"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
+        window.title = "OpenSnap"; window.delegate = self; window.minSize = NSSize(width: 900, height: 640)
         buildModernWindowContent()
     }
     func configureDragExport(_ drag: DragExportView) {
@@ -722,8 +721,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func buildMenus() {
         let bar = NSMenu()
-        let appMenu = menu("OpenSkitch", items: [("About OpenSkitch", #selector(about), ""), ("Preferences…", #selector(showPreferences), ","), ("Sharing Settings…", #selector(sharingSettings), ""), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit OpenSkitch", #selector(quit), "q")])
-        appMenu.insertItem(NSMenuItem(title: "Hide OpenSkitch", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
+        let appMenu = menu("OpenSnap", items: [("About OpenSnap", #selector(about), ""), ("Preferences…", #selector(showPreferences), ","), ("Sharing Settings…", #selector(sharingSettings), ""), ("Capture Shortcuts…", #selector(shortcutSettings), ""), ("-", nil, ""), ("Quit OpenSnap", #selector(quit), "q")])
+        appMenu.insertItem(NSMenuItem(title: "Hide OpenSnap", action: #selector(toggleVisible), keyEquivalent: "h"), at: appMenu.numberOfItems - 1)
         appMenu.item(at: appMenu.numberOfItems - 2)?.target = self
         let quitIndex = appMenu.numberOfItems - 1
         let hideOthers = NSMenuItem(title: "Hide Others", action: #selector(NSApplication.hideOtherApplications(_:)), keyEquivalent: "h")
@@ -741,7 +740,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         rename.target = self; file.insertItem(rename, at: (file.items.firstIndex { $0.title == "Save As…" } ?? 3) + 1)
         let edit = menu("Edit", items: [("Undo", #selector(undo), "z"), ("Redo", #selector(redo), "Z"), ("-", nil, ""), ("Cut", #selector(cut), "x"), ("Copy", #selector(copyArtwork), "c"), ("Copy Image", #selector(copyImage), ""), ("Paste", #selector(paste), "v"), ("Delete", #selector(deleteSelection), ""), ("Select All", #selector(selectAll), "a"), ("Duplicate", #selector(duplicate), "d"), ("Wipe", #selector(wipe), ""), ("Wipe Snap Only", #selector(wipeSnap), ""), ("Clear Annotations", #selector(clear), "")])
         let image = menu("Image", items: [("Actual Size", #selector(toggleActualSize), ""), ("Resize…", #selector(resize), ""), ("Crop Selection", #selector(crop), ""), ("Crop Snap at Current Edges", #selector(trimSnap), ""), ("Set Snap to Normal Size", #selector(normalSize), ""), ("Rotate Clockwise", #selector(rotateCW), ""), ("Rotate Counterclockwise", #selector(rotateCCW), ""), ("Flip Horizontal", #selector(flipH), ""), ("Flip Vertical", #selector(flipV), ""), ("Transparent Background", #selector(transparent), ""), ("White Background", #selector(white), ""), ("Flatten", #selector(flatten), ""), ("Add Shadow", #selector(addShadow), ""), ("Bring to Front", #selector(front), ""), ("Send to Back", #selector(back), ""), ("Group", #selector(group), ""), ("Ungroup", #selector(ungroup), "")])
-        let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Skitch Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
+        let text = menu("Text", items: [("Font…", #selector(chooseFont), ""), ("Default Text Style", #selector(defaultTextStyle), ""), ("Toggle Text Outline", #selector(toggleOutline), ""), ("Toggle Text Shadow", #selector(toggleTextShadow), "")])
         let spelling = NSMenu(title: "Spelling"); spelling.font = .systemFont(ofSize: 20)
         for (title, action, key) in [("Spelling…", "showGuessPanel:", ":"), ("Check Spelling", "checkSpelling:", ";"), ("Check Spelling as You Type", "toggleContinuousSpellChecking:", "")] {
             // Original MainMenu.nib connects these directly to the text responder.
@@ -947,22 +946,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func rememberDrawingDefaults() {
         let color = SketchColor(canvas.strokeColor)
         let custom = OriginalDrawingControls.drawingColor(from: customDrawingColor) ?? OriginalDrawingControls.presets[0].color
-        legacyMetadata.root["skitchBrushColor"] = OriginalDrawingControls.legacyRGB(canvas.strokeColor)
-        legacyMetadata.root["skitchBrushColorAlpha"] = String(Double(color.alpha))
-        legacyMetadata.root["skitchBrushSize"] = String(Double(canvas.strokeWidth))
-        legacyMetadata.root["skitchCustomColor"] = OriginalDrawingControls.legacyRGB(custom)
-        legacyMetadata.root["skitchCustomColorAlpha"] = String(Double(SketchColor(custom).alpha))
+        drawingDefaults.values["brushColor"] = OriginalDrawingControls.legacyRGB(canvas.strokeColor)
+        drawingDefaults.values["brushColorAlpha"] = String(Double(color.alpha))
+        drawingDefaults.values["brushSize"] = String(Double(canvas.strokeWidth))
+        drawingDefaults.values["customColor"] = OriginalDrawingControls.legacyRGB(custom)
+        drawingDefaults.values["customColorAlpha"] = String(Double(SketchColor(custom).alpha))
     }
     func restoreDrawingDefaults() {
         closeDrawingColors()
-        if let color = OriginalDrawingControls.legacyColor(legacyMetadata.root["skitchBrushColor"], alpha: legacyMetadata.root["skitchBrushColorAlpha"]) {
+        if let color = OriginalDrawingControls.legacyColor(drawingDefaults.values["brushColor"], alpha: drawingDefaults.values["brushColorAlpha"]) {
             canvas.strokeColor = color
         }
-        if let custom = OriginalDrawingControls.legacyColor(legacyMetadata.root["skitchCustomColor"], alpha: legacyMetadata.root["skitchCustomColorAlpha"]) {
+        if let custom = OriginalDrawingControls.legacyColor(drawingDefaults.values["customColor"], alpha: drawingDefaults.values["customColorAlpha"]) {
             let rgba = SketchColor(custom)
             customDrawingColor = NSColor(calibratedRed: rgba.red, green: rgba.green, blue: rgba.blue, alpha: rgba.alpha)
         }
-        if let size = Double(legacyMetadata.root["skitchBrushSize"] ?? ""), size.isFinite {
+        if let size = Double(drawingDefaults.values["brushSize"] ?? ""), size.isFinite {
             canvas.strokeWidth = CGFloat(OriginalDrawingControls.size(size, continuous: true))
             canvas.fontSize = OriginalDrawingControls.readableFontSize(Double(canvas.strokeWidth), displayFontScale: canvas.outputSize.height / canvas.canvasSize.height)
         }
@@ -1049,7 +1048,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         feedCanvasBleed()
     }
-    func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "Skitch" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
+    func safeName() -> String { let s = nameField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines); return (s.isEmpty ? "OpenSnap" : s).replacingOccurrences(of: "/", with: "-").replacingOccurrences(of: ":", with: "-") }
     func applyFrameWindowValues() {
         window.hasShadow = false
         window.alphaValue = CGFloat(Float32(bitPattern: 0x3f4ccccd))
@@ -1081,30 +1080,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         do {
             // The original loads the replacement and registers one transaction (loadFromFileTA, decompiled.c:314172-314243).
             let scratch = CanvasView(frame: .zero); scratch.newBlank(size: NSSize(width: 1000, height: 700))
-            try restoreHistoryEditorState(HistoryEditorState(data: try scratch.snapshotDocumentData(), metadata: .init(), name: "Untitled",
+            try restoreHistoryEditorState(HistoryEditorState(data: try scratch.snapshotDocumentData(), drawingDefaults: .init(), name: "Untitled",
                 url: nil, archiveID: nil, dirty: false), actionName: "New", resetDrawingDefaults: false)
             replaceDragPresentation()
         } catch { self.error(error) }
     }
-    @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = [.image, .pdf, .data]; p.allowsMultipleSelection = false; if withFrameWindowValuesSuspended({ p.runModal() }) == .OK, let u = p.url { openURL(u) } }
+    @objc func openFile() { let p = NSOpenPanel(); p.allowedContentTypes = Self.openPanelContentTypes; p.allowsMultipleSelection = false; if withFrameWindowValuesSuspended({ p.runModal() }) == .OK, let u = p.url { openURL(u) } }
+    static let documentType = UTType(exportedAs: OpenSnapFile.typeIdentifier, conformingTo: .data)
+    /// The only documents the app opens: pictures it can edit and its own .opensnap drawings.
+    static let openPanelContentTypes: [UTType] = [.image, .pdf, documentType]
+    static let savePanelContentTypes: [UTType] = [documentType]
+    static let recoveryName = "Recovery." + OpenSnapFile.fileExtension
     func openURL(_ url: URL) {
         guard !terminationStarted else { return }
         guard allowDiscard() else { return }
         do {
-            let state: HistoryEditorState, native = ["skitchredux", "skitch"].contains(url.pathExtension.lowercased())
+            let state: HistoryEditorState, native = url.pathExtension.lowercased() == OpenSnapFile.fileExtension
             if native {
-                let file = try SkitchFile.read(url)
+                let file = try OpenSnapFile.read(url)
                 // Bundled samples stay intact; ordinary drawings save in place.
-                state = HistoryEditorState(data: try file.canvasData, metadata: file.metadata, name: url.deletingPathExtension().lastPathComponent,
+                state = HistoryEditorState(data: try file.canvasData, drawingDefaults: file.drawingDefaults, name: url.deletingPathExtension().lastPathComponent,
                     url: url.path.contains(".app/Contents/Resources/") ? nil : url, archiveID: nil, dirty: false)
             } else {
-                guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "SkitchRedux", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; var proposed = CGRect(origin: .zero, size: image.size)
+                guard SketchDocument.isPictureFile(url) else {
+                    throw NSError(domain: "OpenSnap", code: 3, userInfo: [NSLocalizedDescriptionKey: "OpenSnap opens pictures, PDFs and its own .opensnap drawings, but not this kind of file."])
+                }
+                guard let image = NSImage(contentsOf: url) else { throw NSError(domain: "OpenSnap", code: 3, userInfo: [NSLocalizedDescriptionKey: "The file could not be read as an image."]) }; var proposed = CGRect(origin: .zero, size: image.size)
                 guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
-                    throw NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
+                    throw NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "This image is too large or cannot be decoded safely."])
                 }
                 let scratch = CanvasView(frame: .zero)
                 scratch.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); scratch.setBackground(image)
-                state = HistoryEditorState(data: try scratch.snapshotDocumentData(), metadata: .init(), name: url.deletingPathExtension().lastPathComponent,
+                state = HistoryEditorState(data: try scratch.snapshotDocumentData(), drawingDefaults: .init(), name: url.deletingPathExtension().lastPathComponent,
                     url: nil, archiveID: nil, dirty: false)
             }
             try restoreHistoryEditorState(state, actionName: "Open", resetDrawingDefaults: native, rasterViewport: !native)
@@ -1118,15 +1125,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         endWindowGesture()
         var url = forceChoose ? nil : currentURL
-        if url == nil { let p = NSSavePanel(); p.nameFieldStringValue = safeName()+".skitch"; p.allowedContentTypes = [UTType(filenameExtension: "skitch") ?? .data, UTType(filenameExtension: "skitchredux") ?? .data]; if p.runModal() != .OK { return false }; url = p.url }
+        if url == nil { let p = NSSavePanel(); p.nameFieldStringValue = safeName()+"."+OpenSnapFile.fileExtension; p.allowedContentTypes = Self.savePanelContentTypes; if p.runModal() != .OK { return false }; url = p.url }
         do {
             guard let url else { return false }
             let snapshot = try canvas.snapshotDocumentData(); let document = try CanvasView.validatedDocumentData(snapshot)
-            try SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).write(to: url)
+            try OpenSnapFile(document: document, drawingDefaults: drawingDefaults, canvasData: snapshot).write(to: url)
             canvas.commitPendingTextEditing(); currentURL = url; dirty = false; window.isDocumentEdited = false; updateStatus()
             status.stringValue = "Saved " + url.lastPathComponent
             if isActualSize { actualView?.savedWhileActive = true }
-            archive(try HistoryStore.Snapshot(canvasData: snapshot, metadata: legacyMetadata, preview: canvas.imageData(format: "png")), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
+            archive(try HistoryStore.Snapshot(canvasData: snapshot, drawingDefaults: drawingDefaults, preview: canvas.imageData(format: "png")), name: safeName(), action: .exported, destination: url.path, generation: documentGeneration)
             return true
         } catch { self.error(error); return false }
     }
@@ -1138,37 +1145,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         guard !terminationStarted || finalizingTermination else { return }
         guard activeResizeSession?.lastPreview == nil else { return }
         followHistory()
-        let url = support.appendingPathComponent("Recovery.skitch")
+        let url = support.appendingPathComponent(Self.recoveryName)
         guard dirty || canvas.hasPendingTextChanges else { removeRecovery(); return }
-        guard let snapshot = try? canvas.snapshotDocumentData(), let document = try? CanvasView.validatedDocumentData(snapshot), let data = try? SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot).encoded() else { return }
+        guard let snapshot = try? canvas.snapshotDocumentData(), let document = try? CanvasView.validatedDocumentData(snapshot), let data = try? OpenSnapFile(document: document, drawingDefaults: drawingDefaults, canvasData: snapshot).encoded() else { return }
         do {
             try data.write(to: url, options: .atomic)
-            try? FileManager.default.removeItem(at: support.appendingPathComponent("Recovery.skitchredux"))
         } catch { return }
     }
     func removeRecovery() {
-        for name in ["Recovery.skitch", "Recovery.skitchredux"] { try? FileManager.default.removeItem(at: support.appendingPathComponent(name)) }
+        try? FileManager.default.removeItem(at: support.appendingPathComponent(Self.recoveryName))
     }
     func archiveStore() throws -> HistoryStore {
         if let historyStore { return historyStore }
         let store = try HistoryStore(directory: support.appendingPathComponent("History"))
         historyStore = store
-        let home = URL(fileURLWithPath: NSHomeDirectory())
-        let legacyIndex = home.appendingPathComponent("Library/Application Support/Skitch/history")
-        if ProcessInfo.processInfo.environment["SKITCH_APP_SUPPORT"] == nil,
-           FileManager.default.fileExists(atPath: legacyIndex.path) {
-            do {
-                guard (try legacyIndex.resourceValues(forKeys: [.isSymbolicLinkKey])).isSymbolicLink != true else { throw HistoryStore.Failure.unsafePath }
-                _ = try store.importLegacy(indexData: Data(contentsOf: legacyIndex), archiveDirectory: home.appendingPathComponent("Pictures/Skitch"))
-            } catch { status.stringValue = "Old Skitch History could not be imported; originals were kept: " + error.localizedDescription }
-        }
         return store
     }
     func historySnapshot() throws -> HistoryStore.Snapshot {
         let raw = try canvas.snapshotDocumentData()
         let document = try CanvasView.validatedDocumentData(raw)
         let preview = ImageExport.encode(document: document, size: document.outputSize, format: "png")
-        return try HistoryStore.Snapshot(canvasData: raw, metadata: legacyMetadata, preview: preview)
+        return try HistoryStore.Snapshot(canvasData: raw, drawingDefaults: drawingDefaults, preview: preview)
     }
     @discardableResult
     func archive(_ snapshot: HistoryStore.Snapshot, name: String, action: HistoryStore.Action,
@@ -1234,11 +1231,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } catch { self.error(error) }
     }
     struct HistoryEditorState {
-        let data: Data; let metadata: LegacyBridge.Metadata; let name: String
+        let data: Data; let drawingDefaults: DrawingDefaults; let name: String
         let url: URL?; let archiveID: UUID?; let dirty: Bool
     }
     func historyEditorState() throws -> HistoryEditorState {
-        HistoryEditorState(data: try canvas.snapshotDocumentData(), metadata: legacyMetadata, name: nameField.stringValue,
+        HistoryEditorState(data: try canvas.snapshotDocumentData(), drawingDefaults: drawingDefaults, name: nameField.stringValue,
                            url: currentURL, archiveID: currentArchiveID, dirty: dirty)
     }
     /// The whole document identity participates in the same Undo operation as
@@ -1253,7 +1250,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         restoring = true
         defer { restoring = false }
         try canvas.loadDocument(data: state.data, clearingUndo: false)
-        legacyMetadata = state.metadata; if resetDrawingDefaults { restoreDrawingDefaults() }; nameField.stringValue = state.name; currentURL = state.url
+        drawingDefaults = state.drawingDefaults; if resetDrawingDefaults { restoreDrawingDefaults() }; nameField.stringValue = state.name; currentURL = state.url
         currentArchiveID = state.archiveID; dirty = state.dirty; documentGeneration = UUID()
         let manager = canvas.editingUndoManager
         let grouping = !manager.isUndoing && !manager.isRedoing
@@ -1271,7 +1268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         do {
             let store = try archiveStore(), file = try store.read(id)
             guard let entry = store.entry(id) else { throw HistoryStore.Failure.missing }
-            try restoreHistoryEditorState(HistoryEditorState(data: file.canvasData, metadata: file.metadata,
+            try restoreHistoryEditorState(HistoryEditorState(data: file.canvasData, drawingDefaults: file.drawingDefaults,
                 name: entry.name, url: nil, archiveID: id, dirty: true))
             historyBrowser?.window?.orderOut(nil)
             replaceDragPresentation(); window.makeKeyAndOrderFront(nil); window.makeFirstResponder(canvas)
@@ -1279,8 +1276,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func historyExport(_ id: UUID, format: String) throws -> Data {
         let file = try archiveStore().read(id)
-        if format == "skitch" { return try file.encoded() }
-        if format == "svg" { return try file.encoded(includeSupplementalState: false) }
+        if format == OpenSnapFile.fileExtension { return try file.encoded() }
+        if format == "svg" { return try SVGExport.encode(file.document) }
         let view = CanvasView(frame: .zero); try view.loadDocument(data: file.canvasData)
         guard let data = view.imageData(format: format, jpegQuality: historyJPEGQuality) else { throw HistoryStore.Failure.missing }
         return data
@@ -1295,7 +1292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard let png = view.imageData(format: "png") else { throw HistoryStore.Failure.missing }
             let board = NSPasteboard.general; board.clearContents()
             board.setData(png, forType: .png)
-            board.setData(native, forType: NSPasteboard.PasteboardType("com.shoemoney.skitch-redux.native"))
+            board.setData(native, forType: NSPasteboard.PasteboardType("com.shoemoney.opensnap.native"))
             if let tiff = view.renderedImage().tiffRepresentation { board.setData(tiff, forType: .tiff) }
         } catch { self.error(error) }
     }
@@ -1342,20 +1339,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         photoBrowser.show(relativeTo: window) { [weak self] url in self?.openURL(url) }
     }
     func exportData(format: String, originalSize: Bool, jpegQuality: Double) throws -> Data {
-        if ["svg", "skitch"].contains(format.lowercased()) {
+        if ["svg", OpenSnapFile.fileExtension].contains(format.lowercased()) {
             var snapshot = try canvas.snapshotDocumentData(), document = try CanvasView.validatedDocumentData(snapshot)
-            if format.lowercased() == "skitch", originalSize, document.backgroundPNG != nil {
+            if format.lowercased() == OpenSnapFile.fileExtension, originalSize, document.backgroundPNG != nil {
                 var raw = try JSONSerialization.jsonObject(with: snapshot) as! [String: Any]
                 raw.removeValue(forKey: "renderSize")
                 snapshot = try JSONSerialization.data(withJSONObject: raw, options: [.sortedKeys])
                 document = try CanvasView.validatedDocumentData(snapshot)
             }
-            let file = SkitchFile(document: document, metadata: legacyMetadata, canvasData: snapshot)
-            if format.lowercased() == "skitch" { return try file.encoded() }
-            return try file.exportedSVG(size: originalSize && document.backgroundPNG != nil ? document.size : document.outputSize)
+            if format.lowercased() == OpenSnapFile.fileExtension { return try OpenSnapFile(document: document, drawingDefaults: drawingDefaults, canvasData: snapshot).encoded() }
+            return try SVGExport.encode(document, outputSize: originalSize && document.backgroundPNG != nil ? document.size : document.outputSize)
         }
         guard let encoded = canvas.imageData(format: format, originalSize: originalSize, jpegQuality: jpegQuality) else {
-            throw NSError(domain: "SkitchRedux", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."])
+            throw NSError(domain: "OpenSnap", code: 4, userInfo: [NSLocalizedDescriptionKey: "That export format could not be encoded."])
         }
         return encoded
     }
@@ -1619,7 +1615,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         switch result { case .success(let image):
             var proposed = CGRect(origin: .zero, size: image.size)
             guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
-                self.error(NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This capture is too large or cannot be decoded safely."]))
+                self.error(NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "This capture is too large or cannot be decoded safely."]))
                 return
             }
             // Captures may finish after editing resumes. Recheck pending changes
@@ -1627,7 +1623,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             guard discardAlreadyApproved || allowDiscard() else { return }
             guard !terminationStarted, expectedGeneration == nil || expectedGeneration == documentGeneration else { return }
             preferencesWindow?.orderOut(nil)
-            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); legacyMetadata = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; adoptRasterViewport(); nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
+            followHistory(); currentArchiveID = nil; activeResizeSession?.cancel(); endWindowGesture(cancelled: true); leaveActualSize(); canvas.newBlank(size: NSSize(width: pixels.width, height: pixels.height)); canvas.setBackground(image); documentGeneration = UUID(); drawingDefaults = .init(); canvas.editingUndoManager.removeAllActions(); currentURL = nil; adoptRasterViewport(); nameField.stringValue = "Screenshot"; dirty = true; replaceDragPresentation(); window.makeKeyAndOrderFront(nil); updateStatus()
             afterInstalling?()
         case .failure(let error): if (error as NSError).code != NSUserCancelledError { self.error(error) } }
     }
@@ -1765,12 +1761,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         case .success(let image):
             var proposed = CGRect(origin: .zero, size: image.size)
             guard let pixels = image.cgImage(forProposedRect: &proposed, context: nil, hints: nil), SketchDocument.validSize(NSSize(width: pixels.width, height: pixels.height)) else {
-                error(NSError(domain: "SkitchRedux", code: 5, userInfo: [NSLocalizedDescriptionKey: "This capture is too large or cannot be decoded safely."]))
+                error(NSError(domain: "OpenSnap", code: 5, userInfo: [NSLocalizedDescriptionKey: "This capture is too large or cannot be decoded safely."]))
                 return
             }
             if keepingAnnotations {
                 guard canvas.replaceSnapPreservingAnnotations(image) else {
-                    error(NSError(domain: "SkitchRedux", code: 6, userInfo: [NSLocalizedDescriptionKey: "The frame snapshot could not be decoded safely."]))
+                    error(NSError(domain: "OpenSnap", code: 6, userInfo: [NSLocalizedDescriptionKey: "The frame snapshot could not be decoded safely."]))
                     return
                 }
                 leaveFrame(); updateStatus()
@@ -1952,23 +1948,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc func transparent() { canvas.setBackgroundColor(.clear) }; @objc func white() { canvas.setBackgroundColor(.white) }; @objc func flatten() { canvas.flatten() }; @objc func addShadow() { canvas.addShadow(); updateStatus() }
     @objc func front() { canvas.bringSelectionToFront() }; @objc func back() { canvas.sendSelectionToBack() }; @objc func group() { canvas.groupSelection() }; @objc func ungroup() { canvas.ungroupSelection() }
     @objc func quit() { NSApp.terminate(nil) }
-    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "OpenSkitch", .credits: NSAttributedString(string: "Native 64-bit reconstruction for personal use. Feature parity with Skitch 1.0.12 is still in progress.")]) }
+    @objc func about() { NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "OpenSnap", .credits: NSAttributedString(string: "Native screen capture and annotation for macOS.")]) }
     func runSmokeTest() {
-        let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? NSTemporaryDirectory())
+        let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["OPENSNAP_EVIDENCE_DIR"] ?? NSTemporaryDirectory())
         do {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
             let snapshot = try canvas.snapshotDocumentData()
             let expected = try CanvasView.validatedDocumentData(snapshot)
-            try snapshot.write(to: dir.appendingPathComponent("smoke.skitchredux"))
-            let nativeURL = dir.appendingPathComponent("smoke.skitch")
-            try SkitchFile(document: expected, metadata: legacyMetadata, canvasData: snapshot).write(to: nativeURL)
-            let reopened = try SkitchFile.read(nativeURL)
-            guard reopened.document == expected, reopened.metadata == legacyMetadata else { throw NSError(domain: "Smoke", code: 2) }
+            let nativeURL = dir.appendingPathComponent("smoke." + OpenSnapFile.fileExtension)
+            try OpenSnapFile(document: expected, drawingDefaults: drawingDefaults, canvasData: snapshot).write(to: nativeURL)
+            let reopened = try OpenSnapFile.read(nativeURL)
+            guard reopened.document == expected, reopened.drawingDefaults == drawingDefaults else { throw NSError(domain: "Smoke", code: 2) }
             try canvas.loadDocument(data: reopened.canvasData)
             guard let png = canvas.imageData(format: "png"), !png.isEmpty else { throw NSError(domain: "Smoke", code: 1) }
             try png.write(to: dir.appendingPathComponent("smoke.png"))
             try JSONSerialization.data(withJSONObject: appearanceEvidence(), options: [.sortedKeys]).write(to: dir.appendingPathComponent("smoke-appearance.json"))
-            try Data("native startup, original-format editable save/load, PNG export succeeded\n".utf8).write(to: dir.appendingPathComponent("smoke-result.txt"))
+            try Data("native startup, .opensnap editable save/load, PNG export succeeded\n".utf8).write(to: dir.appendingPathComponent("smoke-result.txt"))
             dirty = false; NSApp.terminate(nil)
         } catch {
             try? Data("FAILED: \(error)\n".utf8).write(to: dir.appendingPathComponent("smoke-result.txt"))
@@ -1976,7 +1971,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
     func writeLayoutEvidence() {
-        let folder = ProcessInfo.processInfo.environment["SKITCH_EVIDENCE_DIR"] ?? support.path
+        let folder = ProcessInfo.processInfo.environment["OPENSNAP_EVIDENCE_DIR"] ?? support.path
         window.contentView?.layoutSubtreeIfNeeded()
         let rect = window.convertToScreen(canvas.convert(canvas.visibleRect, to: nil))
         let top = NSScreen.screens.first?.frame.maxY ?? rect.maxY
@@ -2025,8 +2020,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                            "popoverShown": colorPopover?.isShown ?? false, "sizeUndoGrouping": sizeUndoGrouping,
                                            "hoverOpened": colorOpenedByHover, "controlHovered": colorControlHovered, "paletteHovered": colorPaletteHovered]
             evidence["bezelLayout"] = ["contentSize": NSStringFromSize(content.bounds.size), "minimumWindowSize": NSStringFromSize(window.minSize)]
-            if let header = (modernChrome ?? content).subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchHeader" }),
-               let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSkitchBrand" }) {
+            if let header = (modernChrome ?? content).subviews.first(where: { $0.identifier?.rawValue == "OpenSnapHeader" }),
+               let brand = header.subviews.first(where: { $0.identifier?.rawValue == "OpenSnapBrand" }) {
                 let frame = brand.convert(brand.bounds, to: content)
                 evidence["bezelHeader"] = ["brandFrame": NSStringFromRect(frame), "windowCenterX": content.bounds.midX,
                                            "brandCenterOffset": frame.midX - content.bounds.midX,
@@ -2049,8 +2044,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
 @main
 @MainActor
-enum OpenSkitchMain {
+enum OpenSnapMain {
     static func main() {
+        OpenSnapMigration.runAtLaunch()
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let delegate = AppDelegate()

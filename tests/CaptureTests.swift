@@ -6,8 +6,8 @@ import CoreFoundation
 
 // xcrun swiftc -swift-version 6 -D CAPTURE_TESTS -target arm64-apple-macosx13.0
 // Sources/{OriginalCaptureTiming,OriginalCaptureMagnifier,OriginalCapturePicker,OriginalCaptureCountdown,OriginalCaptureFlash,Capture}.swift
-// tests/CaptureTests.swift -o /tmp/skitch-capture-tests
-// /tmp/skitch-capture-tests
+// tests/CaptureTests.swift -o /tmp/opensnap-capture-tests
+// /tmp/opensnap-capture-tests
 // The same test executable acts as a controllable, local fake capture helper.
 // Pure checks use no screen-recording permissions, network or NSApplication.
 // --termination-probe runs a separate headless NSApplication with no windows.
@@ -304,7 +304,7 @@ private enum CaptureTests {
     static var checks = 0
     static var coordinators: [CaptureCoordinator] = []
     static var root = FileManager.default.temporaryDirectory
-        .appendingPathComponent("skitch-capture-tests-" + UUID().uuidString, isDirectory: true)
+        .appendingPathComponent("opensnap-capture-tests-" + UUID().uuidString, isDirectory: true)
     static var fixture: URL { root.appendingPathComponent("retina.png") }
 
     struct Rig {
@@ -998,7 +998,7 @@ private enum CaptureTests {
         let missingRecord = start(missing)
         try await wait { missingRecord.results.count == 1 }
         if case .failure(let error) = missingRecord.results[0] {
-            try expect((error as NSError).domain != "SkitchRedux.Capture", "launch failure must preserve the actual Foundation error")
+            try expect((error as NSError).domain != "OpenSnap.Capture", "launch failure must preserve the actual Foundation error")
         } else { try expect(false, "missing helper must fail") }
         try expect(directories(missing).isEmpty, "launch failure must clean its directory")
         let timed = try make("stubborn", timeout: 0.8)
@@ -1106,7 +1106,7 @@ private enum CaptureTests {
                                 try expect(errorCode(record.results.first) == nil, "visibility success must return an image")
                             } else if ending == "launch" {
                                 if case .failure(let error) = record.results[0] {
-                                    try expect((error as NSError).domain != "SkitchRedux.Capture",
+                                    try expect((error as NSError).domain != "OpenSnap.Capture",
                                                "visibility launch failure must preserve Foundation's actual error")
                                 } else { try expect(false, "missing helper must fail after hiding") }
                             } else {

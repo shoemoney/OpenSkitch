@@ -1,4 +1,5 @@
 import AppKit
+import UniformTypeIdentifiers
 
 /// Document coordinates are pixels with a top-left origin, independent of display zoom.
 enum SketchTool: String, CaseIterable, Codable {
@@ -172,18 +173,23 @@ enum SketchDocumentError: LocalizedError {
     case unsupportedFormat, unsupportedVersion, invalidDocument, invalidImage
     var errorDescription: String? {
         switch self {
-        case .unsupportedFormat: return "This is not a supported Skitch document."
-        case .unsupportedVersion: return "This OpenSkitch document uses an unsupported format version."
+        case .unsupportedFormat: return "This is not a supported OpenSnap document."
+        case .unsupportedVersion: return "This OpenSnap document uses an unsupported format version."
         case .invalidDocument: return "The document contains invalid dimensions, colors, or drawing data."
         case .invalidImage: return "The image could not be decoded."
         }
     }
 }
 
-/// Versioned JSON + embedded PNGs. This is explicitly distinct from the original .skitch format.
+/// The native .opensnap document: versioned JSON with embedded PNGs.
 struct SketchDocument: Codable, Equatable {
-    static let formatIdentifier = "com.skitch-redux.editable-document"
-    static let fileExtension = "skitchredux"
+    /// Pictures and PDFs by their file type. Anything else, whatever its bytes look like, is not opened or dropped.
+    static func isPictureFile(_ url: URL) -> Bool {
+        let type = (try? url.resourceValues(forKeys: [.contentTypeKey]))?.contentType ?? UTType(filenameExtension: url.pathExtension)
+        return type.map { $0.conforms(to: .image) || $0.conforms(to: .pdf) } ?? false
+    }
+    static let formatIdentifier = "com.shoemoney.opensnap.document"
+    static let fileExtension = "opensnap"
     static let maximumDimension: CGFloat = 16384
     static let maximumPixelCount: CGFloat = 32_000_000
     var format = Self.formatIdentifier
@@ -310,7 +316,7 @@ extension NSShadow {
     }
 }
 
-/// SkitchTextFieldEditor updateFrameSize (0x1c1e6): natural string width
+/// OriginalTextFieldEditor updateFrameSize (0x1c1e6): natural string width
 /// plus four points and two outline margins; glyph height plus eight points.
 /// Explicit line breaks determine rows, independently of a historical box width.
 enum OriginalTextGeometry {
@@ -376,7 +382,7 @@ enum SketchRenderer {
             document.canvasRect.fill()
             if let image = document.backgroundImage { drawImage(image, in: document.canvasRect) }
         }
-        // Original Skitch text always floats above the drawing shapes.
+        // Original text always floats above the drawing shapes.
         for element in document.elements where element.kind != .text { draw(element, inFlippedView: inFlippedView) }
         for element in document.elements where element.kind == .text { draw(element, inFlippedView: inFlippedView) }
         NSGraphicsContext.restoreGraphicsState()

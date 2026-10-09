@@ -1,9 +1,9 @@
 // Executable regression suite, deliberately gated to avoid an App.swift @main conflict.
 // Run (excluding App.swift):
-// swiftc -D CANVAS_TESTS -target arm64-apple-macosx13.0 Sources/LegacySkitch.swift Sources/LegacyBridge.swift Sources/DocumentModel.swift Sources/VectorGeometry.swift Sources/StrokeFitting.swift Sources/ImageExport.swift Sources/Canvas.swift tests/CanvasTests.swift -o /tmp/skitch-redux-canvas-tests
-// /tmp/skitch-redux-canvas-tests
-// Fixture-only check without windows/captures: /tmp/skitch-redux-canvas-tests --fixture-only
-// tools/test.py runs the live-view visual proof. Manual escape hatch without it: /tmp/skitch-redux-canvas-tests --skip-visual-proof
+// swiftc -D CANVAS_TESTS -target arm64-apple-macosx13.0 Sources/SVGPath.swift Sources/LegacyBridge.swift Sources/DocumentModel.swift Sources/VectorGeometry.swift Sources/StrokeFitting.swift Sources/ImageExport.swift Sources/Canvas.swift tests/CanvasTests.swift -o /tmp/opensnap-canvas-tests
+// /tmp/opensnap-canvas-tests
+// Fixture-only check without windows/captures: /tmp/opensnap-canvas-tests --fixture-only
+// tools/test.py runs the live-view visual proof. Manual escape hatch without it: /tmp/opensnap-canvas-tests --skip-visual-proof
 //
 // Fidelity checklist: vectors/text/zoom/crop/background transforms, independent erased
 // line and freehand fragments, raster pixel erasing, text above shapes/protected from
@@ -188,7 +188,6 @@ struct CanvasTests {
             ("native text edit, doubleclick and text undo", textEditing),
             ("clipboard editable selection and image paste", clipboard),
             ("editable cubic paths, font flags and old version-1 fields", paths),
-            ("original firstlaunch import stays editable", originalImport),
             ("native image/document drag acceptance", drop),
             ("pending typing dirty notifications, recovery snapshots and active undo", pendingTextRecovery),
             ("pending text deletion/cancel recovery", pendingTextDeletion),
@@ -197,7 +196,7 @@ struct CanvasTests {
             ("text-only font changes fit natural width while preserving colors and shapes", textStyleSelection),
             ("text-only style safely commits pending typing with separate undo", pendingTextStyle),
             ("text style shadow changes preserve non-text artwork and separate typing Undo", textShadowStyle),
-            ("Default Skitch Style restores face and effects while preserving mixed sizes", defaultTextStyle),
+            ("Default Text Style restores face and effects while preserving mixed sizes", defaultTextStyle),
             ("text context routes Font without disrupting Control eraser", textContextStyle),
             ("text grip preserves typing focus and commits movement with one Undo", textGripEditing),
             ("recovered native text completion keys preserve pending edits and history", textCompletionKeys),
@@ -987,7 +986,7 @@ struct CanvasTests {
         let provider = CGDataProvider(data: pdf as CFData)!
         let doc = CGPDFDocument(provider)!
         try expect(doc.numberOfPages == 1 && doc.page(at: 1)!.getBoxRect(.mediaBox).size == c.canvasSize, "Real PDF page")
-        try expect(c.imageData(format: "skitch") == nil, "Unsupported original format must not masquerade as image export")
+        try expect(c.imageData(format: "opensnap") == nil, "Unsupported original format must not masquerade as image export")
         c.setBackgroundColor(.clear)
         let jpeg = NSBitmapImageRep(data: c.imageData(format: "jpg")!)!
         try expect(jpeg.colorAt(x: 90, y: 60)!.usingColorSpace(.deviceRGB)!.redComponent > 0.95, "JPEG alpha composites white")
@@ -1316,36 +1315,6 @@ struct CanvasTests {
         try expect(try SketchDocument.decode(c.documentData()).elements[0].fontSize == 12,
                    "Historical typography survives import; new tool text minimum remains 18")
     }
-    static func originalImport() throws {
-        let url = URL(fileURLWithPath: "original/Skitch.app/Contents/Resources/firstlaunch.skitch")
-        guard FileManager.default.fileExists(atPath: url.path) else { throw Skip(description: "original fixture \(url.path) not present (original/ is git-ignored)") }
-        let original = try LegacySkitch.read(url)
-        try expect(original.paths.count == 3 && original.texts.count == 1, "Original fixture must contain exactly three paths and one text")
-        try expect(original.texts[0].lines.count == 3 && original.texts[0].content == "Snap\nyour\nscreen",
-                   "Original fixture must retain all three text lines")
-        let converted = try LegacyBridge.convert(original)
-        let importedPaths = converted.elements.filter { $0.kind == .path }
-        let importedTexts = converted.elements.filter { $0.kind == .text }
-        try expect(importedPaths.count == 3 && importedTexts.count == 1, "Bridge preserves exactly three editable paths and one text")
-        try expect(importedPaths.allSatisfy { $0.filled && $0.strokeWidth == 0 }, "Filled legacy paths accept their original zero stroke width")
-        for (native, legacy) in zip(importedPaths, original.paths) {
-            try expect(native.pathCommands == legacy.commands, "Every cubic/control coordinate is preserved without flattening")
-        }
-        try expect(importedTexts[0].text.components(separatedBy: "\n") == ["Snap", "your", "screen"], "Bridge preserves all three lines")
-        try expect(importedTexts[0].fontName == original.texts[0].fontName &&
-                   importedTexts[0].fontSize == original.texts[0].fontSize &&
-                   importedTexts[0].outlined == original.texts[0].hasOutline &&
-                   importedTexts[0].shadowed == original.texts[0].hasShadow, "Bridge preserves font and outline/shadow flags")
-        _ = try converted.validated()
-        let c = canvas(); try c.loadDocument(data: converted.encoded())
-        try expect(c.document == converted, "Imported editable document roundtrip")
-        try expect(c.imageData(format: "png") != nil, "Imported original renders and exports")
-        let reloaded = try SketchDocument.decode(c.documentData())
-        try expect(reloaded.elements.filter { $0.kind == .path }.count == 3 &&
-                   reloaded.elements.filter { $0.kind == .text }.map(\.text) == ["Snap\nyour\nscreen"],
-                   "Serialization and Canvas load preserve three paths, one text, three lines")
-        print("Fixture verified: 3 editable paths, 1 text, 3 lines; filled path strokeWidth=0 accepted")
-    }
     static func drop() throws {
         let c = canvas()
         c.document.elements = [rectangle(CGRect(x: 10, y: 10, width: 20, height: 20))]
@@ -1360,7 +1329,7 @@ struct CanvasTests {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let file = directory.appendingPathComponent("drawing.skitchredux")
+        let file = directory.appendingPathComponent("drawing.opensnap")
         try c.documentData().write(to: file)
         board.clearContents(); board.writeObjects([file as NSURL])
         let loaded = canvas()
@@ -1372,10 +1341,6 @@ struct CanvasTests {
         try expect(loaded.draggingEntered(drag) == .copy && loaded.performDragOperation(drag) && opened == [file],
                    "File-URL document drop is routed to the parent callback")
         try expect(loaded.document == untouched && !loaded.editingUndoManager.canUndo, "Document drop itself cannot replace model/history")
-        let legacy = URL(fileURLWithPath: "original/Skitch.app/Contents/Resources/firstlaunch.skitch").standardizedFileURL
-        board.clearContents(); board.writeObjects([legacy as NSURL])
-        try expect(loaded.performDragOperation(drag) && opened.last == legacy && loaded.document == untouched,
-                   "Original .skitch drops also route through parent open handling")
         let photo = directory.appendingPathComponent("image.png")
         try image.write(to: photo)
         board.clearContents(); board.writeObjects([photo as NSURL])
@@ -1496,7 +1461,7 @@ struct CanvasTests {
         let pending = try c.snapshotDocumentData(), model = c.document
         let board = NSPasteboard.withUniqueName(); defer { board.releaseGlobally() }
         // No file exists: the canvas must route the URL without reading/parsing it.
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".SKITCHREDUX")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".OPENSNAP")
         board.writeObjects([url as NSURL])
         let drag = CanvasTestDrag(board: board)
         var opened: [URL] = [], preservedAtCallback = false
@@ -1632,7 +1597,7 @@ struct CanvasTests {
         let before = c.document
         let event = try mouse(c, .rightMouseDown, CGPoint(x: 20, y: 20))
         guard let menu = c.menu(for: event) else { throw Failure(description: "Text context menu") }
-        try expect(menu.items.map(\.title) == ["Skitch Text Style…", "Default Skitch Style"], "Original reachable text font/default controls")
+        try expect(menu.items.map(\.title) == ["Text Style…", "Default Text Style"], "Original reachable text font/default controls")
         try expect(c.selection == [text.id] && c.tool == .brush && c.document == before && !c.editingUndoManager.canUndo, "Context selects text without document or tool mutation")
         var requests = 0; c.onTextStyleRequested = { requests += 1 }
         try expect(NSApp.sendAction(menu.items[0].action!, to: menu.items[0].target, from: menu.items[0]) && requests == 1, "Font context callback")
@@ -2566,7 +2531,7 @@ struct CanvasTests {
             return bytes
         }
         let screenshot = try capture()
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("skitch-redux-canvas-proof.png")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("opensnap-canvas-proof.png")
         try screenshot.representation(using: .png, properties: [:])!.write(to: url)
         print("Visual proof: \(url.path)")
         let live = try rgba(screenshot), offscreen = try rgba(SketchRenderer.bitmap(document: c.document))

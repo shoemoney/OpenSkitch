@@ -1,8 +1,8 @@
 // Pure geometry tests: no NSApplication, windows, images, desktop input, or permissions.
 // rtk proxy xcrun swiftc -swift-version 5 -warnings-as-errors -target arm64-apple-macosx13.0 \
 //   -D WINDOW_SIZING_TESTS Sources/WindowSizing.swift tests/WindowSizingTests.swift \
-//   -o /tmp/skitch-window-sizing-tests
-// rtk proxy /tmp/skitch-window-sizing-tests
+//   -o /tmp/opensnap-window-sizing-tests
+// rtk proxy /tmp/opensnap-window-sizing-tests
 #if WINDOW_SIZING_TESTS
 import Foundation
 import CoreGraphics
@@ -314,7 +314,7 @@ private enum WindowSizingTests {
         try expect(about?.x == 1 && about?.y == 1, "id -1 reads row 4")
         try expect(WindowSizingPolicy.cropDirection(id: 9) == nil && WindowSizingPolicy.cropDirection(id: -2) == nil,
                    "directionVector has exactly rows 0...8")
-        // centered = modifierFlags >> 19 & 1 (SkitchCropView.mouseDragged)
+        // centered = modifierFlags >> 19 & 1 (OriginalCropView.mouseDragged)
         try expect(WindowSizingPolicy.isCenteredCrop(modifierFlags: 1 << 19), "Option (bit 19) centres the crop")
         for bit in [16, 17, 18, 20, 23] {
             try expect(!WindowSizingPolicy.isCenteredCrop(modifierFlags: 1 << UInt(bit)), "bit \(bit) does not centre")
@@ -353,11 +353,11 @@ private enum WindowSizingTests {
                    corner: .bottomRight) == nil, "ActionCropResize wide canvas below its minimum width 4")
         try size(WindowSizingPolicy.cornerOutput(initial: CGSize(width: 400, height: 100), delta: CGPoint(x: -396, y: 0),
                  corner: .bottomRight), CGSize(width: 4, height: 1), "ActionCropResize wide canvas at its minimum width")
-        // SkitchBorderView
+        // OriginalBorderView
         try size(WindowSizingPolicy.maxViewSize(bounds: CGSize(width: 640, height: 480)),
-                 CGSize(width: 632, height: 472), "SkitchBorderView.maxViewSize is bounds - 8")
+                 CGSize(width: 632, height: 472), "OriginalBorderView.maxViewSize is bounds - 8")
         try expect(WindowSizingPolicy.cropViewsExist(inActualMode: false) && !WindowSizingPolicy.cropViewsExist(inActualMode: true),
-                   "SkitchBorderView.awakeFromNib builds crop views only outside actual mode")
+                   "OriginalBorderView.awakeFromNib builds crop views only outside actual mode")
         print("WindowSizingTests: \(checks) checks passed (pure geometry; no desktop UI)")
     }
 }

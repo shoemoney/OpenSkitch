@@ -2,8 +2,8 @@
 // library scans, desktop input or general clipboard. Run the resulting executable.
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -framework AppKit 
 //   -framework PhotosUI -framework ImageIO Sources/PhotoBrowser.swift 
-//   tests/PhotoBrowserTests.swift -o /tmp/skitch-photo-browser-tests
-// /tmp/skitch-photo-browser-tests
+//   tests/PhotoBrowserTests.swift -o /tmp/opensnap-photo-browser-tests
+// /tmp/opensnap-photo-browser-tests
 import AppKit
 import CoreFoundation
 import ImageIO

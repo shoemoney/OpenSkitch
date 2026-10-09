@@ -154,7 +154,7 @@ enum ResizePresetKeys {
     static let limitSize = "SKPresetResizeLimitSizeKey"
     // Optional forward-compatible extension: original initWithSettings ignores it.
     // Kept in the same array so identity and edits commit in one defaults write.
-    static let id = "SkitchReduxResizePresetID"
+    static let id = "OpenSnapResizePresetID"
 }
 
 /// Foundation-only store. Loading never writes defaults. Mutations commit one

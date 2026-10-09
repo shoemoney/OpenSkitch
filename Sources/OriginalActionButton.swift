@@ -1,13 +1,13 @@
 import AppKit
 
-/// SkitchButton secondary routing (decompiled.c:33924–34162), with the
+/// OriginalButton secondary routing (decompiled.c:33924–34162), with the
 /// SKBezelButton left-menu policy (80667–80735, 81166–81416).
 @MainActor
 class OriginalActionButton: NSButton {
     @objc var alternateAction: Selector?
     @objc weak var alternateTarget: AnyObject?
     /// SKBezelButton defaults this to true in both frame and coder initializers.
-    /// Setting false restores SkitchButton's primary-left/secondary-Control split.
+    /// Setting false restores OriginalButton's primary-left/secondary-Control split.
     @objc var showMenuOnLeftClick = true
 
     /// The only presentation seam: tests can inspect the actual menu, relocated

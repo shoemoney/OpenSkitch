@@ -1,7 +1,7 @@
 // xcrun swiftc -swift-version 5 -target arm64-apple-macosx13.0 -D WINDOW_ZOOM_TESTS \
 //   Sources/WindowZoom.swift \
-//   tests/WindowZoomTests.swift -o /tmp/skitch-window-zoom-tests
-// /tmp/skitch-window-zoom-tests
+//   tests/WindowZoomTests.swift -o /tmp/opensnap-window-zoom-tests
+// /tmp/opensnap-window-zoom-tests
 #if WINDOW_ZOOM_TESTS
 import AppKit
 
@@ -80,7 +80,7 @@ enum WindowZoomTests {
         let (warped, _) = view.renderedFrame(scale: 1)!
         let cornerAlpha = [(0, 0), (warped.width-1, 0), (0, warped.height-1), (warped.width-1, warped.height-1)].map { pixel(warped, $0.0, $0.1)[3] }
         try expect(cornerAlpha.contains(0), "Projection clears space outside the warped quadrilateral")
-        if let folder = ProcessInfo.processInfo.environment["SKITCH_ZOOM_TEST_EVIDENCE"] {
+        if let folder = ProcessInfo.processInfo.environment["OPENSNAP_ZOOM_TEST_EVIDENCE"] {
             let destination = URL(fileURLWithPath: folder, isDirectory: true)
             try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
             try NSBitmapImageRep(cgImage: warped).representation(using: .png, properties: [:])!.write(to: destination.appendingPathComponent("projected-quadrants.png"))
