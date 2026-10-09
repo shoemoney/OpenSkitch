@@ -1,6 +1,8 @@
 # ADR 0001: Original crop/resize rules (ActionCropResize)
 
-Status: accepted. Source of truth: `analysis/decompiled.c` (Ghidra i386 decompile of Skitch 1.x). Line numbers below are lines in that file. Where the decompile is ambiguous this ADR says so instead of inventing a rule.
+Status: accepted. **Historical note:** this ADR records the rules the crop/resize behavior was built from; the decompile it cites is no longer tracked or distributed (`analysis/` is git-ignored), so the line references below cannot be re-checked from a clone. The behavior itself is covered by `tests/WindowSizingTests.swift`.
+
+Original source of the rules: a decompile of the app this project was inspired by. Line numbers below are lines in that file. Where the decompile is ambiguous this ADR says so instead of inventing a rule.
 
 ## The action: `skitch::ActionCropResize`
 

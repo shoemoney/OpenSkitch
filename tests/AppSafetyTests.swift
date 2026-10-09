@@ -2049,12 +2049,12 @@ enum AppSafetyTests {
         let both = app.maximumNormalCanvas!
         try expect(both.width == base.width - 170 && both.height == tips.height, "Combined original preferences retain width reserve and 80-point height reserve")
         app.setTool(.arrow); app.hintModifiers([.shift])
-        try expect(app.helpBevel?.displayedMessage == "option = Arrow in reverse direction. shift = 45º arrows" && app.helpBevel?.panel is AppSafetyHelpPanel,
+        try expect(app.helpBevel?.displayedMessage == "Option reverses the arrow. Shift snaps to 45°." && app.helpBevel?.panel is AppSafetyHelpPanel,
                    "Native shell routes recovered immediate text through a nonordering test panel")
         app.setTool(.fill); app.hintModifiers([.control])
-        try expect(app.helpBevel?.displayedMessage == "shift = less smoothing", "Local monitor resolves the arriving Control flags before Canvas receives the event")
+        try expect(app.helpBevel?.displayedMessage == "Shift smooths less.", "Local monitor resolves the arriving Control flags before Canvas receives the event")
         app.setTool(.text); app.hintModifiers([.control])
-        try expect(app.helpBevel?.displayedMessage == "just type at any time, when using any tool!", "Text retains original Control exception in live hints")
+        try expect(app.helpBevel?.displayedMessage == "Just start typing, with any tool.", "Text retains original Control exception in live hints")
         app.setTool(.arrow); app.hintModifiers([.shift])
         let oldFrame = host.frame
         app.setWindowFrame(NSRect(x: oldFrame.minX, y: oldFrame.minY, width: oldFrame.width + 60, height: oldFrame.height))
@@ -2072,7 +2072,7 @@ enum AppSafetyTests {
         let event = NSEvent.keyEvent(with: .flagsChanged, location: .zero, modifierFlags: [.option], timestamp: 0, windowNumber: 0,
                                     context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58)!
         app.canvas.flagsChanged(with: event)
-        try expect(app.helpBevel?.displayedMessage == "option = Arrow in reverse direction. shift = 45º arrows", "Real Canvas flagsChanged callback reaches shell hint routing")
+        try expect(app.helpBevel?.displayedMessage == "Option reverses the arrow. Shift snaps to 45°.", "Real Canvas flagsChanged callback reaches shell hint routing")
         try expect(try app.canvas.snapshotDocumentData() == data && app.dirty == dirty && app.canvas.editingUndoManager.undoActionName == undo,
                    "Hint events and fit preferences preserve the saved document and Undo state")
         let pending = try editor(app, text: "Keep typing during hints")
