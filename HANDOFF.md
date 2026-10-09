@@ -14,6 +14,7 @@ Resume document, October 9, 2026, America/Chicago. Describes branch `opensnap/in
 | Upload | SFTP, FTP/FTPS, WebDAV and S3-compatible destinations; one default; right-click the upload button to switch. |
 | Reconstruction evidence retired | `analysis/*.json` is untracked and `analysis/` is git-ignored (files stay on disk). `tools/check-dispositions.py`, `tools/decompile.sh` and `tools/ExportDecompiled.java` are deleted. No history rewrite. |
 | Hint copy | `Sources/OriginalHintMessages.swift` holds our own wording for every hint and tooltip; `tests/OriginalHintMessagesTests.swift` is a plain table test. |
+| Rename and migration | Done on `opensnap/w3-rename`: bundle `OpenSnap.app`, `.opensnap` documents (ADR `docs/adr/0002-opensnap-document-format.md`), one-time copy-never-move migration in `Sources/Migration.swift` (report and `.migrated-from-skitchredux` marker in the new folder), `tools/check-skitch-strings.py` gate. |
 | Docs | README rewritten for OpenSnap; the crop-resize ADR is kept as history. |
 
 ## Decisions (2026-10-09)
@@ -27,7 +28,7 @@ Resume document, October 9, 2026, America/Chicago. Describes branch `opensnap/in
 
 ## Remaining work
 
-1. **Rename and migration package** (in flight, `Sources/`): bundle id, Application Support `OpenSnap`, `.opensnap` documents, env prefix, migration with fixtures, then a read-only or copy-based check against the owner's real store.
+1. **Landing the rename and migration package:** point `~/Applications/OpenSnap.app` at `build/OpenSnap.app` (the old `OpenSkitch.app` symlink target no longer exists after a rebuild), launch once and read `~/Library/Application Support/OpenSnap/migration-report.txt`. Expect 58 History documents, 2 destinations (default "AWS cdn"), and a Keychain prompt per upload credential on an ad-hoc-signed build.
 2. **Fresh-clone verification:** clone, `tools/build.sh`, `python3 tools/test.py`, `tools/test-native-startup.py` with no `original/` and no Font Awesome token.
 3. **0.4.0 release:** bump `Info.plist`, `sh tools/release.sh 0.4.0`, startup smoke on the release bundle, tag, push, GitHub release with the zip SHA-256. Builds are ad-hoc signed, not notarized.
 4. **Repo rename:** GitHub `shoemoney/OpenSkitch`, the Forgejo mirror and the local path become OpenSnap only after explicit owner approval.
